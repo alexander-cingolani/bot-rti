@@ -1,0 +1,11 @@
+.venv
+*.todo
+__pycache__
+screenshots
+todo.txt
+*test*
+*.db
+.vscode
+*pdf
+*docker*
+*Docker*
