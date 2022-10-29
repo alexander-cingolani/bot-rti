@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import os
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -14,10 +15,14 @@ from components import config
 from components.reportdoc import ReportDocument
 from components.models import Category, Driver, Report
 from components.queries import (
+    delete_report,
     get_championship,
     get_driver,
+    get_last_report_by,
     get_latest_report_number,
+    get_reports,
     save_object,
+    update_object,
 )
 
 (
@@ -493,8 +498,15 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         report_document_name = ReportDocument(report).generate_document()
         with open(report_document_name, "rb") as document:
-            await context.bot.send_document(chat_id=channel, document=document)
-            os.remove(report_document_name)
+            message = await context.bot.send_document(
+                chat_id=channel, document=document
+            )
+
+        report.channel_message_id = message.message_id
+        update_object()
+
+        os.remove(report_document_name)
+
         reply_markup = InlineKeyboardMarkup(
             [
                 [
@@ -513,6 +525,7 @@ Ricorda che creando una nuova segnalazione perderai la possibilità di ritirare 
         )
     elif update.callback_query.data == "cancel":
         user_data.clear()
+    return UNSEND
 
 
 async def change_state_rep_creation(
@@ -564,15 +577,25 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return ConversationHandler.END
 
 
-async def delete_report(_: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Deletes all data collected during the current report."""
-    context.user_data.clear()
-    return ConversationHandler.END
-
-
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
-    context.bot.delete_message()
+
+    reporting_team_id = (
+        get_driver(telegram_id=update.effective_user.id).current_team().team_id
+    )
+    report = get_last_report_by(reporting_team_id)
+    if report:
+        if (report.report_time - datetime.now()) < timedelta(minutes=30):
+
+            await context.bot.delete_message(
+                chat_id=config.REPORT_CHANNEL, message_id=report.channel_message_id
+            )
+            text = "Segnalazione ritirata."
+
+            delete_report(report)
+        else:
+            text = "Troppo tardi, adesso ti attacchi!"
+        await update.callback_query.edit_message_text(text)
 
 
 report_creation = ConversationHandler(
@@ -626,7 +649,7 @@ report_creation = ConversationHandler(
             ),
         ],
         SEND: [CallbackQueryHandler(send, "confirm")],
-        UNSEND: [CallbackQueryHandler(delete_report, "unsend")],
+        UNSEND: [CallbackQueryHandler(withdraw_report, "withdraw_report")],
     },
     fallbacks=[
         CommandHandler("esci", exit_conversation),

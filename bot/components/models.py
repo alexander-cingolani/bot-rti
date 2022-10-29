@@ -10,6 +10,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -56,6 +57,7 @@ class Report(Base):
         is_queued (bool): True if the reviewed report is in queue to be sent out
             to the reports channel.
         report_time (datetime): Timestamp indicating when the report was made.
+        channel_message_id: ID of the message the report was sent by the user with.
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
@@ -94,6 +96,7 @@ class Report(Base):
     report_time: datetime = Column(
         DateTime, default=dt.now().astimezone(ZoneInfo("Europe/Rome"))
     )
+    channel_message_id: int = Column(BigInteger)
 
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
     round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
@@ -102,8 +105,8 @@ class Report(Base):
     # reporting_driver_id and reporting_team_id are nullable because admins can decide
     # to assign penalties for reasons other than contact between two drivers
     reporting_driver_id: str = Column(ForeignKey("drivers.psn_id"))
-    reported_team_id: int = Column(ForeignKey("teams.name"), nullable=False)
-    reporting_team_id: int = Column(ForeignKey("teams.name"))
+    reported_team_id: int = Column(ForeignKey("teams.team_id"), nullable=False)
+    reporting_team_id: int = Column(ForeignKey("teams.team_id"))
 
     category: Category = relationship("Category")
     round: Round = relationship("Round")

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import sqlalchemy as sa
 
-from sqlalchemy import desc
+from sqlalchemy import delete, desc
 from sqlalchemy.future import create_engine, select
 from sqlalchemy.orm import joinedload, sessionmaker
 
@@ -92,6 +92,19 @@ def get_reports(
 
     result = _session.execute(statement.order_by(Report.number)).all()
     return [res[0] for res in result]
+
+
+def get_last_report_by(reporting_team_id: int) -> Report | None:
+    """Returns the last report made by the given leader."""
+
+    result = _session.execute(
+        select(Report)
+        .where(Report.reporting_team_id == reporting_team_id)
+        .order_by(desc(Report.report_time))
+    ).first()
+    if result:
+        return result[0]
+    return result
 
 
 def get_driver(psn_id: str = None, telegram_id: str | int = None) -> Driver | None:
@@ -215,6 +228,10 @@ def get_max_races() -> Driver | None:
     return _session.execute(
         """SELECT driver_id, COUNT(DISTINCT(rr.round_id))  from race_results rr WHERE rr.finishing_position != 0 GROUP BY rr.driver_id ORDER BY COUNT(rr.round_id) DESC LIMIT 1"""
     ).one_or_none()[0]
+
+
+def delete_report(report: Report) -> None:
+    _session.execute(delete(Report).where(Report.report_id == report.report_id))
 
 
 if __name__ == "__main__":

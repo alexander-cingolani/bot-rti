@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import sqlalchemy as sa
 
-from sqlalchemy import desc
+from sqlalchemy import delete, desc
 from sqlalchemy.future import create_engine, select
 from sqlalchemy.orm import joinedload, sessionmaker
 
@@ -94,13 +94,26 @@ def get_reports(
     return [res[0] for res in result]
 
 
+def get_last_report_by(reporting_team_id: int) -> Report | None:
+    """Returns the last report made by the given leader."""
+
+    result = _session.execute(
+        select(Report)
+        .where(Report.reporting_team_id == reporting_team_id)
+        .order_by(desc(Report.report_time))
+    ).first()
+    if result:
+        return result[0]
+    return result
+
+
 def get_driver(psn_id: str = None, telegram_id: str | int = None) -> Driver | None:
     """Returns corresponding Driver object to the given psn_id or telegram_id."""
     statement = select(Driver)
     if psn_id:
         statement = statement.where(Driver.psn_id == psn_id)
     if telegram_id:
-        statement = statement.where(Driver.telegram_id == str(telegram_id))
+        statement = statement.where(Driver.telegram_id == telegram_id)
 
     result = _session.execute(statement).one_or_none()
     return result[0] if result else None
@@ -111,9 +124,7 @@ def get_similar_driver(psn_id: str) -> Driver | None:
     result = _session.execute(
         select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.2)
     ).first()
-    # result = _session.execute(
-    #         f"SELECT driver_id, psn_id FROM drivers where similarity(psn_id, '{psn_id}') > 0.2"
-    #     ).first()
+
     if result:
         return result[0]
     else:
@@ -217,6 +228,10 @@ def get_max_races() -> Driver | None:
     return _session.execute(
         """SELECT driver_id, COUNT(DISTINCT(rr.round_id))  from race_results rr WHERE rr.finishing_position != 0 GROUP BY rr.driver_id ORDER BY COUNT(rr.round_id) DESC LIMIT 1"""
     ).one_or_none()[0]
+
+
+def delete_report(report: Report) -> None:
+    _session.execute(delete(Report).where(Report.report_id == report.report_id))
 
 
 if __name__ == "__main__":
