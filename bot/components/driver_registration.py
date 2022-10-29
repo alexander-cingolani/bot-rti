@@ -30,9 +30,7 @@ async def driver_registration_entry_point(
             [
                 [
                     InlineKeyboardButton("Sì, sono io.", callback_data="correct_id"),
-                    InlineKeyboardButton(
-                        "No, non sono io.", callback_data="change_id"
-                    ),
+                    InlineKeyboardButton("No, non sono io.", callback_data="change_id"),
                 ],
             ]
         )
@@ -57,7 +55,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         text = "Scrivimi il tuo <i>PlayStation ID</i>:"
         await update.callback_query.edit_message_text(text)
         return CHECK_ID
-    
+
     if driver := get_driver(psn_id=update.message.text):
         # Checks that no other telegram_id is already registered to that driver.
         if driver.telegram_id:

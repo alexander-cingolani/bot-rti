@@ -154,15 +154,15 @@ def recognize_race_results(
         driver = image_to_string(name_box, config="--psm 8").strip()
         seconds = string_to_seconds(image_to_string(laptime_box, config="--psm 8"))
         matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
-        
+
         if matches and len(driver) >= 3:
             race_res = Result(matches[0], seconds)
             race_res.car_class = get_driver(race_res.driver).current_class()
             results.append(race_res)
             remaining_drivers.remove(matches[0])
         elif seconds:
-                success = False
-                results.append(Result("[NON_RICONOSCIUTO]", seconds))
+            success = False
+            results.append(Result("[NON_RICONOSCIUTO]", seconds))
         top += increment
         bottom += increment
 
@@ -170,7 +170,7 @@ def recognize_race_results(
         race_res = Result(driver, None)
         race_res.car_class = get_driver(driver).current_class()
         results.append(race_res)
-        
+
     return success, results
 
 

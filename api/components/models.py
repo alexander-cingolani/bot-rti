@@ -320,6 +320,7 @@ class Driver(Base):
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
 
+
 class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.
 
@@ -408,7 +409,7 @@ class CarClass(Base):
     def __init__(self, name: str, game: Game):
         self.name = name
         self.game = game
-        
+
     def __repr__(self) -> str:
         return f"CarClass(car_class_id={self.car_class_id}, name={self.name})"
 
@@ -974,7 +975,10 @@ class Championship(Base):
     def reporting_category(self) -> Category | None:
         """Returns the category which can create reports today."""
         for category in self.categories:
-            if category.round_weekday == (datetime.datetime.now() - timedelta(days=1)).weekday():
+            if (
+                category.round_weekday
+                == (datetime.datetime.now() - timedelta(days=1)).weekday()
+            ):
                 return category
         return None
 

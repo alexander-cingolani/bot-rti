@@ -358,7 +358,6 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return SAVE_RACE_1_RESULTS
 
 
-
 async def save_race_1_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:

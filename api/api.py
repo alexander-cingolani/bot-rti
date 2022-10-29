@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI, Form, HTTPException
 from pydantic import BaseModel
-from api.components.json_formatting import get_calendar, get_categories, get_standings
+from components.json_formatting import get_calendar, get_categories, get_standings
 
 
 class Item(BaseModel):
@@ -17,9 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+app = FastAPI()
+
 
 @app.post("/")
-def root(
+async def root(
     action: str = Form(),
     id: int = Form(default=None),
     idCampionato: int = Form(default=None),

@@ -96,7 +96,7 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     )
     tb_string = "".join(tb_list)
     update_str = update.to_dict() if isinstance(update, Update) else str(update)
-    
+
     message = (
         "An exception was raised while handling an update\n"
         f"update = {json.dumps(update_str, indent=2, ensure_ascii=False)}"
@@ -105,12 +105,13 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
         f"context.user_data = {str(context.user_data)}\n\n"
         f"{tb_string}"
     )
-    
-    
+
     with open("traceback.txt", "w") as file:
         file.write(message)
         caption = "An error occured."
-    await context.bot.send_document(chat_id=config.DEVELOPER_CHAT, caption=caption, document="traceback.txt")  
+    await context.bot.send_document(
+        chat_id=config.DEVELOPER_CHAT, caption=caption, document="traceback.txt"
+    )
 
 
 async def start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:

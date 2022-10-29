@@ -156,7 +156,7 @@ class ReportDocument:
         pdf.drawString(50, 400, "Sessione")
         pdf.drawString(50, 375, "Fatto")
         pdf.setFont("arial", 10)
-    
+
         pdf.drawString(75, 619, f"Scuderia {self.reporting_driver.current_team().name}")
         pdf.drawString(75, 599, "Safety Commission")
         pdf.drawString(480, 619, str(self.report.number))

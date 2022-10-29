@@ -40,10 +40,10 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data["championship"] = championship
     user_data["categories"] = {}
     reply_markup = []
-    
-    user_data["leader"] =  get_driver(telegram_id=update.effective_user.id)
+
+    user_data["leader"] = get_driver(telegram_id=update.effective_user.id)
     if user_data["leader"].current_team().leader != user_data["leader"]:
-        
+
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
         reply_markup = InlineKeyboardMarkup(
             [
@@ -56,9 +56,8 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ]
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
-        return ConversationHandler.END    
-    
-    
+        return ConversationHandler.END
+
     for i, category in enumerate(championship.categories):
         if category.first_non_completed_round():
             category_alias = f"c{i}"
@@ -77,8 +76,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
-    
-    
+
     context.user_data["late_report"] = True
     return CATEGORY
 
@@ -88,9 +86,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data = context.user_data
     if not update.callback_query.data.isdigit():
-        category: Category = context.user_data["categories"][
-            update.callback_query.data
-        ]
+        category: Category = context.user_data["categories"][update.callback_query.data]
         user_data["category"] = category
     user_data["sessions"] = {}
     user_data["sessions"] = {}
@@ -110,7 +106,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             )
         ]
     )
-    
+
     circuit = user_data["category"].first_non_completed_round().circuit
     text = f"""
 <b>{user_data["category"].name}</b> - {circuit} 
@@ -132,11 +128,13 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     user_data = context.user_data
 
-    user_data["leader"] =  get_driver(telegram_id=user.id)
+    user_data["leader"] = get_driver(telegram_id=user.id)
     if not user_data["leader"]:
-        await update.message.reply_text("Non sei ancora registrato, puoi farlo tramite /registrami")
-        return ConversationHandler.END    
-    
+        await update.message.reply_text(
+            "Non sei ancora registrato, puoi farlo tramite /registrami"
+        )
+        return ConversationHandler.END
+
     if user_data["leader"].current_team().leader != user_data["leader"]:
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
         reply_markup = InlineKeyboardMarkup(
@@ -151,13 +149,13 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
         return ConversationHandler.END
-        
+
     user_data["championship"] = get_championship()
     if not user_data["championship"]:
         text = "Il campionato è terminato! Non puoi più fare segnalazioni."
         await update.message.reply_text(text)
         return ConversationHandler.END
-    
+
     user_data["category"] = user_data["championship"].reporting_category()
     if not user_data["category"]:
         text = """
@@ -215,10 +213,8 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             for i, driver in enumerate(user_data["leader"].current_team().drivers):
                 driver: Driver = driver.driver
                 driver_alias = f"d{i}"
-                
-                if (
-                    driver.current_category() == user_data["category"]
-                ):
+
+                if driver.current_category() == user_data["category"]:
                     user_data["drivers"][driver_alias] = driver
                     reply_markup.append(
                         InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
@@ -488,19 +484,25 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         report.reporting_team = report.reporting_driver.current_team()
         report.number = get_latest_report_number(category.category_id) + 1
         save_object(report)
-        
+
         channel = (
             config.TEST_CHANNEL
             if user_data.get("late_report")
             else config.REPORT_CHANNEL
         )
-        
+
         report_document_name = ReportDocument(report).generate_document()
         with open(report_document_name, "rb") as document:
             await context.bot.send_document(chat_id=channel, document=document)
             os.remove(report_document_name)
         reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Ritira segnalazione ↩", callback_data="withdraw_report")]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "Ritira segnalazione ↩", callback_data="withdraw_report"
+                    )
+                ]
+            ]
         )
         await update.callback_query.edit_message_text(
             text="""
@@ -567,11 +569,10 @@ async def delete_report(_: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     return ConversationHandler.END
 
+
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
     context.bot.delete_message()
-
-
 
 
 report_creation = ConversationHandler(

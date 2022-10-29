@@ -182,27 +182,30 @@ def save_multiple_objects(objs: list) -> None:
 def save_and_apply_report(report: Report) -> None:
     if not report.time_penalty:
         update_object()
-        
+
     rows = _session.execute(
-        select(RaceResult).where(
+        select(RaceResult)
+        .where(
             (RaceResult.category_id, RaceResult.round_id, report.session_id)
             == (report.category_id, report.round_id, report.session_id)
-        ).order_by(RaceResult.finishing_position)
+        )
+        .order_by(RaceResult.finishing_position)
     ).all()
-    
+
     race_results = [row[0] for row in rows]
     for race_result in race_results:
         if race_result.driver_id == report.reported_driver_id:
             race_result.gap_to_first += report.time_penalty
             break
-        
+
     race_results.sort(key=lambda x: x.gap_to_first)
-    
+
     for i, race_result in enumerate(race_results):
         if race_result.finishing_position:
             race_result.finishing_position = i + 1
-    
+
     update_object()
+
 
 def update_object() -> None:
     """Calls Session.commit()"""
