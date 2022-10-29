@@ -1,7 +1,6 @@
 """
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
-import html
 import json
 import logging
 from datetime import time
@@ -34,7 +33,7 @@ from telegram.ext import (
 )
 
 from components import config
-from components.models import Category
+from components.models import Category, Championship
 from components.queries import (
     get_championship,
     get_driver,
@@ -59,15 +58,18 @@ CATEGORY_NAMES: list[str] = [category.name for category in CATEGORIES]
 
 
 async def post_init(application: Application) -> None:
+
     bot = application.bot
+
     await bot.set_my_commands(
         config.ADMIN_CHAT_COMMANDS,
         BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
     )
+
     await bot.set_my_commands(
         config.PRIVATE_CHAT_COMMANDS, BotCommandScopeAllPrivateChats()
     )
-    # Set admin commands
+
     for admin in config.ADMINS:
         await bot.set_my_commands(config.ADMIN_COMMANDS, BotCommandScopeChat(admin))
 
@@ -193,6 +195,31 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.inline_query.answer(race_results)
 
 
+async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
+    championship = get_championship()
+    if category := championship.reporting_category():
+        round = category.first_non_completed_round()
+        text = (
+            f"Penalità Categoria {category.name}"
+            f"{round.number}ª Tappa / {round.circuit}"
+            f"#{championship.abbreviated_name}Tappa{round.number} #{category.name}"
+        )
+        await context.bot.send_message(
+            chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
+        )
+
+
+async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
+    championship = get_championship()
+    if championship.reporting_category():
+        with open("./images/sticker.webp") as sticker:
+            await context.bot.send_sticker(
+                chat_id=config.REPORT_CHANNEL,
+                sticker=sticker,
+                disable_notification=True,
+            )
+
+
 async def send_participation_list_command(
     _: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -305,11 +332,23 @@ def main() -> None:
         .defaults(defaults)
         .build()
     )
+    
     application.job_queue.run_daily(
         callback=send_participation_list,
         time=time(0),
-        days=(1, 2, 4),
         chat_id=config.GROUP_CHAT,
+    )
+    
+    application.job_queue.run_daily(
+        callback=announce_reports,
+        time=time(0),
+        chat_id=config.REPORT_CHANNEL,
+    )
+    
+    application.job_queue.run_daily(
+        callback=close_report_column,
+        time=time(hour=23, minute=59),
+        chat_id=config.REPORT_CHANNEL,
     )
 
     application.add_handler(CommandHandler("start", start))

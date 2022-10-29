@@ -57,6 +57,7 @@ class Report(Base):
         is_queued (bool): True if the reviewed report is in queue to be sent out
             to the reports channel.
         report_time (datetime): Timestamp indicating when the report was made.
+        channel_message_id: ID of the message the report was sent by the user with.
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
@@ -65,7 +66,6 @@ class Report(Base):
         reporting_driver_id (int): Unique ID of the driver making the report.
         reported_team_id (int): Unique ID of the team receiving the report.
         reporting_team_id (int): Unique ID of the team making the report.
-        channel_message_id: ID of the message the report was sent by the user with.
 
         category (Category): Category where the incident happened.
         round (Round): Round where the incident happened.
@@ -946,6 +946,7 @@ class Championship(Base):
 
     championship_id: int = Column(SmallInteger, primary_key=True)
     championship_name: str = Column(String(60), unique=True, nullable=False)
+
     start: datetime.date = Column(Date, nullable=False)
     end: datetime.date = Column(Date, nullable=True)
 
@@ -1003,6 +1004,10 @@ class Championship(Base):
             if not rnd.completed:
                 rounds.append(rnd)
         return rounds
+
+    @property
+    def abbreviated_name(self) -> str:
+        return "".join(i[0] for i in self.championship_name.split()).upper()
 
 
 def create_tables() -> None:

@@ -946,6 +946,7 @@ class Championship(Base):
 
     championship_id: int = Column(SmallInteger, primary_key=True)
     championship_name: str = Column(String(60), unique=True, nullable=False)
+
     start: datetime.date = Column(Date, nullable=False)
     end: datetime.date = Column(Date, nullable=True)
 
@@ -1003,6 +1004,10 @@ class Championship(Base):
             if not rnd.completed:
                 rounds.append(rnd)
         return rounds
+
+    @property
+    def abbreviated_name(self) -> str:
+        return "".join(i[0] for i in self.championship_name.split()).upper()
 
 
 def create_tables() -> None:
