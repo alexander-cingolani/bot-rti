@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -12,7 +13,6 @@ from telegram.ext import (
 )
 
 from components import config
-from components.reportdoc import ReportDocument
 from components.models import Category, Driver, Report
 from components.queries import (
     delete_report,
@@ -24,6 +24,7 @@ from components.queries import (
     save_object,
     update_object,
 )
+from components.reportdoc import ReportDocument
 
 (
     CATEGORY,
@@ -488,7 +489,6 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         report.reported_team = report.reported_driver.current_team()
         report.reporting_team = report.reporting_driver.current_team()
         report.number = get_latest_report_number(category.category_id) + 1
-        save_object(report)
 
         channel = (
             config.TEST_CHANNEL
@@ -525,6 +525,7 @@ Ricorda che creando una nuova segnalazione perderai la possibilità di ritirare 
         )
     elif update.callback_query.data == "cancel":
         user_data.clear()
+    save_object(report)
     return UNSEND
 
 
