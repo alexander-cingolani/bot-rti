@@ -14,29 +14,26 @@ services:
     networks:
       - backend
 
-  rti_bot:
+  bot:
     build: ./bot
+    image: alexcingolani/rti:rti_bot
     env_file:
       - .env
-    # environment:
-    #   - DB_URL=postgresql+pg8000://alexander:alexander@db:5432/alexander
     networks:
       - backend
     depends_on:
       - db
 
 
-  rti_api:
+  api:
     build: ./api
+    image: alexcingolani/rti:rti_api
     depends_on:
       - db
     ports:
       - 8080:8083
-
     env_file:
       - .env
-    environment:
-      - DB_URL=postgresql+pg8000://alexander:alexander@db:5432/alexander
     networks:
       - backend
 
