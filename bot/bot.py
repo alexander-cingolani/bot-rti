@@ -87,8 +87,8 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
     user_message = (
-        "⚠️ Si è verificato un errore inaspettato, lo sviluppatore è stato informato"
-        " del problema e cercherà di risolverlo a breve."
+        "⚠️ Si è verificato un errore inaspettato! Lo sviluppatore è stato informato"
+        " del problema e cercherà di risolverlo al più presto."
     )
 
     await update.effective_user.send_message(user_message)
