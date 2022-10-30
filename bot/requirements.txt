@@ -1,5 +1,4 @@
 more-itertools==9.0.0
-numpy==1.23.4
 Pillow==9.2.0
 pg8000==1.29.3
 pytesseract==0.3.10

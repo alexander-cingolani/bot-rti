@@ -1,5 +1,4 @@
-from numpy import array
-
+from statistics import stdev
 from app.components.models import Driver
 
 
@@ -12,8 +11,7 @@ def consistency(driver: Driver) -> int:
         else:
             absences += 1
 
-    arr = array(race_results)
-    return round((10 - (arr.std() * 0.7) - absences / 10) * 10)
+    return round((10 - (stdev(race_results) * 0.7) - absences / 10) * 10)
 
 
 def speed(driver: Driver) -> int:
