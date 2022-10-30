@@ -1,17 +1,19 @@
+import json
+import os
 from telegram import User
 
-DEBUG = True
+DEBUG = False
 
+REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
+TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))
+GROUP_CHAT = int(os.environ.get("GROUP_CHAT"))
+DEVELOPER_CHAT = int(os.environ.get("DEVELOPER_CHAT"))
+TEAM_LEADER_CHAT = int(os.environ.get("TEAM_LEADER_CHAT"))
+ADMINS = json.loads(os.environ.get("ADMINS"))
 
-REPORT_CHANNEL = -1001507443179
-TEST_CHANNEL = -1001507443179
-GROUP_CHAT = -781907821
-DEVELOPER_CHAT = -781907821
-
-ADMINS = [633997625, 383460444]
-OWNER_ID = 633997625
+OWNER_ID = int(os.environ.get("OWNER_ID"))
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
-TEAM_LEADER_CHAT = -781907821
+
 
 
 ADMIN_CHAT_COMMANDS = [
@@ -38,4 +40,5 @@ REASONS = [
 
 if DEBUG:
     REPORT_CHANNEL = TEST_CHANNEL
-    ADMINS = [OWNER_ID, 383460444]
+    GROUP_CHAT = DEVELOPER_CHAT
+
