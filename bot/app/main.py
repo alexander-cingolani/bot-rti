@@ -19,6 +19,7 @@ from telegram import (
     InputTextMessageContent,
     Update,
 )
+from telegram.error import BadRequest
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -53,21 +54,35 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get("BOT_TOKEN")
 
 
+async def set_admin_chat_commands(bot):
+    try:
+        await bot.set_my_commands(
+            config.ADMIN_CHAT_COMMANDS,
+            BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
+        )
+    except BadRequest:
+        pass
+
+
+async def set_admin_commands(bot):
+    for admin in config.ADMINS:
+        try:
+            await bot.set_my_commands(config.ADMIN_COMMANDS, BotCommandScopeChat(admin))
+        except BadRequest:
+            pass
+
+
 async def post_init(application: Application) -> None:
 
     bot = application.bot
 
     await bot.set_my_commands(
-        config.ADMIN_CHAT_COMMANDS,
-        BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
-    )
-
-    await bot.set_my_commands(
         config.PRIVATE_CHAT_COMMANDS, BotCommandScopeAllPrivateChats()
     )
 
-    for admin in config.ADMINS:
-        await bot.set_my_commands(config.ADMIN_COMMANDS, BotCommandScopeChat(admin))
+    await set_admin_chat_commands(bot)
+
+    await set_admin_commands(bot)
 
 
 async def post_shutdown(_: Application) -> None:
@@ -115,7 +130,7 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     os.remove("traceback.txt")
 
 
-async def start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     user = update.effective_user
     await update.message.reply_text(
@@ -127,6 +142,10 @@ Per qualsiasi problema o idea per migliorarmi puoi contattare {config.OWNER.ment
         """,
         reply_markup=ForceReply(selective=True),
     )
+
+    await set_admin_commands(context.bot)
+
+    await set_admin_chat_commands(context.bot)
 
 
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
