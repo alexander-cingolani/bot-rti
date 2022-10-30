@@ -902,7 +902,6 @@ COPY public.race_results (result_id, finishing_position, fastest_lap_points, pen
 --
 
 COPY public.reports (report_id, number, incident_time, report_reason, video_link, fact, penalty, time_penalty, championship_penalty_points, licence_penalty_points, penalty_reason, is_reviewed, is_queued, report_time, category_id, round_id, session_id, reported_driver_id, reporting_driver_id, channel_message_id, reported_team_id, reporting_team_id) FROM stdin;
-29	1	11:11	RTI_Oliver manca il punto di staccata spingendo piter-72 fuori pista.	\N	\N	\N	\N	\N	\N	\N	f	f	2022-10-30 10:40:03.729449	1	1	3	RTI_Oliver	piter-72	54	7	3
 \.
 
 
@@ -1505,4 +1504,3 @@ ALTER TABLE ONLY public.sessions
 --
 -- PostgreSQL database dump complete
 --
-
