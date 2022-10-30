@@ -134,6 +134,11 @@ async def cancel_registration(update: Update, _: ContextTypes) -> int:
     return ConversationHandler.END
 
 
+async def invalid_psn_id(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("L'ID PlayStation inserito non è valido, riprova:")
+    return CHECK_ID
+
+
 driver_registration = ConversationHandler(
     entry_points=[
         CommandHandler(
@@ -151,6 +156,7 @@ driver_registration = ConversationHandler(
         CommandHandler("annulla", cancel_registration),
         CallbackQueryHandler(cancel_registration, "exit"),
         CommandHandler("registrami", driver_registration_entry_point),
+        MessageHandler(filters.TEXT, invalid_psn_id),
     ],
     allow_reentry=True,
 )
