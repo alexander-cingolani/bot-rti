@@ -7,8 +7,8 @@ from pytesseract import image_to_string
 from PIL import Image, ImageOps, ImageFilter
 from PIL.ImageEnhance import Contrast
 
-from components.models import CarClass
-from components.queries import get_driver
+from app.components.models import CarClass
+from app.components.queries import get_driver
 
 
 @dataclass

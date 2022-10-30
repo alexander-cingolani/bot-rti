@@ -1,6 +1,6 @@
 from numpy import array
 
-from components.models import Driver
+from app.components.models import Driver
 
 
 def consistency(driver: Driver) -> int:

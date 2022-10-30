@@ -2,7 +2,6 @@ from telegram import User
 
 DEBUG = True
 
-TOKEN = "5117477612:AAHhyzwldY_kobkb5ayvXjz0AiwzfMsrL50"
 
 REPORT_CHANNEL = -1001507443179
 TEST_CHANNEL = -1001507443179

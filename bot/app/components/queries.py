@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
+import os
 import sqlalchemy as sa
 
 from sqlalchemy import delete, desc
 from sqlalchemy.future import create_engine, select
 from sqlalchemy.orm import joinedload, sessionmaker
 
-from components.models import (
+from app.components.models import (
     CarClass,
     Category,
     Championship,
@@ -16,7 +17,7 @@ from components.models import (
     Team,
 )
 
-engine = create_engine("postgresql+pg8000://alexander:alexander@localhost:5432/rti")
+engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
 _session = _Session()
 

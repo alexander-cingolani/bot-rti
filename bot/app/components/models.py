@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
-from datetime import datetime as dt
 from datetime import timedelta
 from typing import DefaultDict
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
     BigInteger,
@@ -22,6 +20,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     create_engine,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -92,9 +91,8 @@ class Report(Base):
     penalty_reason: str = Column(String(2000))
     is_reviewed: bool = Column(Boolean, default=False)
     is_queued: bool = Column(Boolean, default=False)
-    report_time: datetime = Column(
-        DateTime, default=dt.now().astimezone(ZoneInfo("Europe/Rome"))
-    )
+    report_time: datetime = Column(DateTime, server_default=func.now())
+
     channel_message_id: int = Column(BigInteger)
 
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
@@ -147,7 +145,7 @@ class DriverAssignment(Base):
     __tablename__ = "driver_assignments"
     __table_args__ = (UniqueConstraint("joined_on", "driver_id", "team_id"),)
 
-    joined_on: datetime.date = Column(Date, default=dt.now().date())
+    joined_on: datetime.date = Column(Date, server_default=func.now())
     left_on: datetime.date = Column(Date)
     bought_for: int = Column(SmallInteger)
     is_leader: bool = Column(Boolean)
@@ -195,7 +193,7 @@ class DriverCategory(Base):
 
     __table_args__ = (UniqueConstraint("joined_on", "driver_id", "category_id"),)
 
-    joined_on: datetime.date = Column(Date, default=dt.now().date())
+    joined_on: datetime.date = Column(Date, server_default=func.now())
     left_on: datetime.date = Column(Date)
     licence_points: int = Column(Integer, default=10)
     race_number: int = Column(SmallInteger)

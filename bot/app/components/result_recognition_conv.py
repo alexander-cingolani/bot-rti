@@ -13,15 +13,15 @@ from telegram.ext import (
     filters,
 )
 
-from components import config
-from components.models import CarClass, Category, QualifyingResult, RaceResult
-from components.ocr import (
+from app.components import config
+from app.components.models import CarClass, Category, QualifyingResult, RaceResult
+from app.components.ocr import (
     Result,
     recognize_quali_results,
     recognize_race_results,
     string_to_seconds,
 )
-from components.queries import (
+from app.components.queries import (
     get_championship,
     get_driver,
     save_object,

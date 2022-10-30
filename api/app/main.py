@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Form, HTTPException
 from pydantic import BaseModel
 
-from components.json_formatting import get_calendar, get_categories, get_standings
+from app.components.json_formatting import get_calendar, get_categories, get_standings
 
 
 class Item(BaseModel):

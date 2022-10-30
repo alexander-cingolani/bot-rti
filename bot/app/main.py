@@ -31,25 +31,26 @@ from telegram.ext import (
     filters,
 )
 
-from components import config
-from components.driver_registration import driver_registration
-from components.models import Category
-from components.queries import get_championship, get_driver, get_max_races
-from components.report_creation_conv import report_creation
-from components.report_processing_conv import report_processing
-from components.result_recognition_conv import save_results_conv
-from components.stats import consistency, experience, race_pace, sportsmanship, stats
+from app.components import config
+from app.components.driver_registration import driver_registration
+from app.components.queries import get_championship, get_driver, get_max_races
+from app.components.report_creation_conv import report_creation
+from app.components.report_processing_conv import report_processing
+from app.components.result_recognition_conv import save_results_conv
+from app.components.stats import (
+    consistency,
+    experience,
+    race_pace,
+    sportsmanship,
+    stats,
+)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = config.TOKEN
-CHAMPIONSHIP = get_championship()
-CATEGORIES: list[Category] = CHAMPIONSHIP.categories
-
-CATEGORY_NAMES: list[str] = [category.name for category in CATEGORIES]
+TOKEN = os.environ.get("BOT_TOKEN")
 
 
 async def post_init(application: Application) -> None:

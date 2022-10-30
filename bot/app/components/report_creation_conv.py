@@ -12,9 +12,9 @@ from telegram.ext import (
     filters,
 )
 
-from components import config
-from components.models import Category, Driver, Report
-from components.queries import (
+from app.components import config
+from app.components.models import Category, Driver, Report
+from app.components.queries import (
     delete_report,
     get_championship,
     get_driver,
@@ -23,7 +23,7 @@ from components.queries import (
     save_object,
     update_object,
 )
-from components.reportdoc import ReportDocument
+from app.components.reportdoc import ReportDocument
 
 (
     CATEGORY,

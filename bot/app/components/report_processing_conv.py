@@ -12,10 +12,10 @@ from telegram.ext import (
     filters,
 )
 
-from components import config
-from components.models import Report
-from components.queries import get_championship, get_reports, save_and_apply_report
-from components.reportdoc import ReviewedReportDocument
+from app.components import config
+from app.components.models import Report
+from app.components.queries import get_championship, get_reports, save_and_apply_report
+from app.components.reportdoc import ReviewedReportDocument
 
 CATEGORY, ASK_FACT, FACT, PENALTY, PENALTY_REASON, ADD_TO_QUEUE = range(6)
 

@@ -5,7 +5,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-from components.models import Driver, Report
+from app.components.models import Driver, Report
 
 
 class ReviewedReportDocument:
@@ -30,14 +30,14 @@ class ReviewedReportDocument:
 
     def generate_document(self) -> str:
         """Generates the report document named as the filename attribute"""
-        pdfmetrics.registerFont(TTFont("arial", "./bot/fonts/arial.ttf"))
-        pdfmetrics.registerFont(TTFont("arialB", "./bot/fonts/arialB.ttf"))
+        pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
+        pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
 
         pdf = canvas.Canvas(filename=self.filename)
         pdf.setTitle(self.filename)
 
         pdf.drawImage(
-            "./bot/images/logo_rti.jpg",
+            "./app/images/logo_rti.jpg",
             x=220,
             y=715,
             height=100,
@@ -128,11 +128,11 @@ class ReportDocument:
 
     def generate_document(self) -> str:
         pdf = canvas.Canvas(self.filename)
-        pdfmetrics.registerFont(TTFont("arial", "./bot/fonts/arial.ttf"))
-        pdfmetrics.registerFont(TTFont("arialB", "./bot/fonts/arialB.ttf"))
+        pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
+        pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
 
         pdf.setTitle(self.filename)
-        logo_rti = "./bot/images/logo_rti.jpg"
+        logo_rti = "./app/images/logo_rti.jpg"
         pdf.drawImage(
             logo_rti, x=220, y=715, height=90, width=180, preserveAspectRatio=True
         )

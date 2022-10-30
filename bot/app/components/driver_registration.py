@@ -10,9 +10,9 @@ from telegram.ext import (
     filters,
 )
 
-from components import config
-from components.models import Driver
-from components.queries import get_driver, get_similar_driver, update_object
+from app.components import config
+from app.components.models import Driver
+from app.components.queries import get_driver, get_similar_driver, update_object
 
 CHECK_ID, ID, RACE_NUMBER = range(3)
 OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)

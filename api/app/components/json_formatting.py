@@ -1,5 +1,5 @@
-from components.models import RaceResult
-from components.queries import get_championship
+from app.components.models import RaceResult
+from app.components.queries import get_championship
 
 
 def get_categories(championship_id: int):
