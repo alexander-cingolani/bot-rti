@@ -20,7 +20,6 @@ from components.queries import (
     get_driver,
     get_last_report_by,
     get_latest_report_number,
-    get_reports,
     save_object,
     update_object,
 )

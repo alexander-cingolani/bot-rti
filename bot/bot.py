@@ -3,22 +3,21 @@ This telegram bot manages racingteamitalia's leaderboards, statistics and penalt
 """
 import json
 import logging
-from datetime import time
 import os
-import traceback
+from datetime import time
 from uuid import uuid4
-import pytz
 
+import pytz
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
+    BotCommandScopeChatAdministrators,
     ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
     InputTextMessageContent,
     Update,
-    BotCommandScopeChatAdministrators,
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -33,17 +32,13 @@ from telegram.ext import (
 )
 
 from components import config
-from components.models import Category, Championship
-from components.queries import (
-    get_championship,
-    get_driver,
-    get_max_races,
-)
 from components.driver_registration import driver_registration
-from components.stats import consistency, experience, race_pace, sportsmanship, stats
-from components.report_processing_conv import report_processing
+from components.models import Category
+from components.queries import get_championship, get_driver, get_max_races
 from components.report_creation_conv import report_creation
+from components.report_processing_conv import report_processing
 from components.result_recognition_conv import save_results_conv
+from components.stats import consistency, experience, race_pace, sportsmanship, stats
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -111,9 +106,12 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     with open("traceback.txt", "w") as file:
         file.write(message)
         caption = "An error occured."
-    await context.bot.send_document(
-        chat_id=config.DEVELOPER_CHAT, caption=caption, document="traceback.txt"
-    )
+
+    with open("traceback.txt", "r") as traceback:
+        await context.bot.send_document(
+            chat_id=config.DEVELOPER_CHAT, caption=caption, document=traceback
+        )
+    os.remove("traceback.txt")
 
 
 async def start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -332,19 +330,19 @@ def main() -> None:
         .defaults(defaults)
         .build()
     )
-    
+
     application.job_queue.run_daily(
         callback=send_participation_list,
         time=time(0),
         chat_id=config.GROUP_CHAT,
     )
-    
+
     application.job_queue.run_daily(
         callback=announce_reports,
         time=time(0),
         chat_id=config.REPORT_CHANNEL,
     )
-    
+
     application.job_queue.run_daily(
         callback=close_report_column,
         time=time(hour=23, minute=59),

@@ -1,25 +1,21 @@
-from collections import defaultdict
 import os
+from collections import defaultdict
 
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
     ContextTypes,
     ConversationHandler,
-    CommandHandler,
-    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
 
 from components import config
 from components.models import Report
+from components.queries import get_championship, get_reports, save_and_apply_report
 from components.reportdoc import ReviewedReportDocument
-from components.queries import (
-    get_championship,
-    get_reports,
-    save_and_apply_report,
-)
 
 CATEGORY, ASK_FACT, FACT, PENALTY, PENALTY_REASON, ADD_TO_QUEUE = range(6)
 

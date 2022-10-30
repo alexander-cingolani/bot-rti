@@ -180,7 +180,6 @@ def delete_last_report(leader: Driver) -> None:
 
 def save_object(obj) -> None:
     """Saves the object if it doesn't already exist in the database"""
-    print(obj)
     _session.add(obj)
     _session.commit()
 
@@ -235,7 +234,6 @@ def delete_report(report: Report) -> None:
 
 
 if __name__ == "__main__":
-
     print(get_championship())
     print(get_driver("RTI_Sbinotto17").race_results)
     print(get_current_category())

@@ -34,12 +34,14 @@ from components.queries import (
     SAVE_QUALI_RESULTS,
     DOWNLOAD_RACE_1_RESULTS,
     ASK_FASTEST_LAP_1,
+    ASK_2ND_FASTEST_LAP_1,
     SAVE_RACE_1_RESULTS,
     DOWNLOAD_RACE_2_RESULTS,
     ASK_FASTEST_LAP_2,
+    ASK_2ND_FASTEST_LAP_2,
     SAVE_RACE_2_RESULTS,
     PERSIST_RESULTS,
-) = range(15, 25)
+) = range(15, 27)
 
 
 def text_to_results(text: str) -> list[list[str, float]]:
@@ -324,18 +326,30 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     category = cast(Category, user_data["category"])
 
     buttons = []
+    car_class = category.car_classes[0].car_class
     for i, driver in enumerate(category.drivers):
-        buttons.append(
-            InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
-        )
+        if driver.car_class_id == car_class.car_class_id:
+            buttons.append(
+                InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
+            )
     buttons = list(chunked(buttons, 2))
 
-    if category.has_sprint_race():
-        button_text = "Salva risultati »"
-        callback_data = "save_race_1_results"
+    if not category.multi_class:
+        text = "Chi ha segnato il giro più veloce?"
+        if category.has_sprint_race():
+            button_text = "Salva risultati »"
+            callback_data = "save_race_1_results"
+        else:
+            button_text = "Risultati gara 2 »"
+            callback_data = "save_race_1_results"
     else:
-        button_text = "Risultati gara 2 »"
-        callback_data = "save_race_1_results"
+        text = f"Chi ha segnato il giro più veloce in {car_class.name}"
+        if category.has_sprint_race():
+            button_text = f"G.V. classe {category.car_classes[1].car_class.name} »"
+            callback_data = "ask_2nd_fastest_lap_1"
+        else:
+            button_text = "Risultati gara 2 »"
+            callback_data = "save_race_1_results"
 
     buttons.append(
         [
@@ -348,13 +362,66 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     )
 
     reply_markup = InlineKeyboardMarkup(buttons)
-    text = "Chi ha segnato il giro più veloce?"
+
     # Saves corrected results if sent a message.
     if update.message:
         user_data["race_1_results"] = text_to_results(update.message.text)
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
+    if category.multi_class:
+        return ASK_2ND_FASTEST_LAP_1
+    return SAVE_RACE_1_RESULTS
+
+
+async def ask_2nd_fastest_lap_1(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    user_data = context.user_data
+    category = cast(Category, user_data["category"])
+
+    # Saves driver who scored the fastest lap if callback data contains a driver.
+    if update.callback_query.data != "save_race_1_results":
+        user_data["fastest_lap_1"] = category.drivers[
+            int(update.callback_query.data[1])
+        ].driver
+
+    buttons = []
+    car_class = category.car_classes[1].car_class
+    for i, driver in enumerate(category.drivers):
+        if driver.car_class_id == car_class.car_class_id:
+            buttons.append(
+                InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
+            )
+    buttons = list(chunked(buttons, 2))
+
+    if category.has_sprint_race():
+        button_text = "Salva risultati »"
+        callback_data = "save_race_1_results"
+    else:
+        button_text = "Risultati gara 2 »"
+        callback_data = "save_race_1_results"
+
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                f"« Modifica G.V. classe {category.car_classes[0].car_class.name}",
+                callback_data=str(ASK_FASTEST_LAP_1),
+            ),
+            InlineKeyboardButton(text=button_text, callback_data=callback_data),
+        ]
+    )
+
+    reply_markup = InlineKeyboardMarkup(buttons)
+    text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
+
+    if update.message:
+        user_data["race_1_results"] = text_to_results(update.message.text)
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    else:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
     return SAVE_RACE_1_RESULTS
 
 
@@ -366,9 +433,14 @@ async def save_race_1_results(
 
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
-        user_data["fastest_lap_1"] = category.drivers[
-            int(update.callback_query.data[1])
-        ].driver
+        if not category.multi_class:
+            user_data["fastest_lap_1"] = category.drivers[
+                int(update.callback_query.data[1])
+            ].driver
+        else:
+            user_data["2nd_fastest_lap_1"] = category.drivers[
+                int(update.callback_query.data[1])
+            ].driver
 
     if category.has_sprint_race():
         text = "Invia i risultati di gara 2."
@@ -543,8 +615,6 @@ async def save_race_2_results(
 
 
 def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
-    print(best_time)
-    print(type(position))
     if raceres.seconds is None:
         raceres.position = None
     elif raceres.seconds == 0:
@@ -557,7 +627,6 @@ def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
     else:
         raceres.seconds = raceres.seconds + best_time
         raceres.position = position
-    print(raceres.driver, raceres.seconds)
     return raceres
 
 
@@ -569,7 +638,7 @@ def _separate_car_classes(
         car_class.car_class_id: [] for car_class in category.car_classes
     }
     best_laptime = race_results[0].seconds
-    print(best_laptime)
+
     for pos, result in enumerate(race_results):
         if result.car_class.car_class_id in separated_classes:
             separated_classes[result.car_class.car_class_id].append(
@@ -611,13 +680,17 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Saves race results for every race session.
     for i, (session, results) in enumerate(sessions):
-        fastest_lap_driver = user_data[f"fastest_lap_{i + 1}"]
+        fastest_lap_drivers = [user_data[f"fastest_lap_{i + 1}"].psn_id]
+
+        if user_data.get(f"2nd_fastest_lap_{i + 1}"):
+            fastest_lap_drivers.append(user_data[f"2nd_fastest_lap_{i + 1}"].psn_id)
+
         separated_results = _separate_car_classes(category, results)
         for class_results in separated_results.values():
 
             for result in class_results:
                 bonus_points = 0
-                if result.driver == fastest_lap_driver.psn_id:
+                if result.driver in fastest_lap_drivers:
                     bonus_points += 1
                 driver_obj = get_driver(result.driver)
                 result = RaceResult(
@@ -698,10 +771,16 @@ save_results_conv = ConversationHandler(
             CallbackQueryHandler(ask_fastest_lap_1, "race_1_results_ok"),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), ask_fastest_lap_1),
         ],
+        ASK_2ND_FASTEST_LAP_1: [
+            CallbackQueryHandler(
+                ask_2nd_fastest_lap_1,
+                r"|".join(f"d{num}" for num in range(14)) + r"|save_race_1_results",
+            )
+        ],
         SAVE_RACE_1_RESULTS: [
             CallbackQueryHandler(
                 save_race_1_results,
-                (r"|".join(f"d{num}" for num in range(14)) + r"|save_race_1_results"),
+                r"|".join(f"d{num}" for num in range(14)) + r"|save_race_1_results",
             )
         ],
         DOWNLOAD_RACE_2_RESULTS: [

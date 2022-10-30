@@ -1,12 +1,11 @@
 from __future__ import annotations
-from collections import defaultdict
 
 import datetime
-from datetime import datetime as dt, timedelta
+from collections import defaultdict
+from datetime import datetime as dt
+from datetime import timedelta
 from typing import DefaultDict
-
 from uuid import uuid4
-
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
@@ -15,13 +14,13 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
+    DateTime,
+    Float,
     ForeignKey,
     Integer,
     SmallInteger,
     String,
-    Float,
     UniqueConstraint,
-    DateTime,
     create_engine,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -589,7 +588,9 @@ class Category(Base):
         "Championship", back_populates="categories"
     )
     car_classes: list[CategoryClass] = relationship(
-        "CategoryClass", back_populates="category"
+        "CategoryClass",
+        back_populates="category",
+        order_by="CategoryClass.car_class_id",
     )
 
     def __init__(self, category_id: int, name: str, game: Game) -> None:
@@ -650,6 +651,10 @@ class Category(Base):
             name = category_session.session.name.lower()
             if "gara" == name or "2" in name or "lunga" in name:
                 return category_session.session
+
+    @property
+    def multi_class(self) -> bool:
+        return len(self.car_classes) > 1
 
     def current_standings(self) -> list[list[list[RaceResult], int]]:
         """Calculates the current championship standings. and returns a list
@@ -897,11 +902,6 @@ class RaceResult(Base):
         if not self.finishing_position:
             return 0
         scoring = self.session.point_system.scoring
-        print(
-            self.driver.psn_id,
-            scoring[self.finishing_position] + self.fastest_lap_points,
-            f"point_system_id: {self.session.point_system_id}",
-        )
         return scoring[self.finishing_position - 1] + self.fastest_lap_points
 
 

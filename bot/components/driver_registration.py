@@ -1,4 +1,5 @@
 from typing import cast
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import (
     CallbackQueryHandler,
@@ -8,9 +9,10 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+from components import config
 from components.models import Driver
 from components.queries import get_driver, get_similar_driver, update_object
-from components import config
 
 CHECK_ID, ID, RACE_NUMBER = range(3)
 OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)
