@@ -7,8 +7,6 @@ COPY ./requirements.txt /bot/requirements.txt
 RUN apk update
 RUN apk upgrade
 
-
-
 RUN apk add build-base
 RUN apk add freetype-dev
 RUN apk add tesseract-ocr
