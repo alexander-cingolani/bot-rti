@@ -116,7 +116,7 @@ def get_driver(psn_id: str = None, telegram_id: str | int = None) -> Driver | No
     if telegram_id:
         statement = statement.where(Driver.telegram_id == telegram_id)
 
-    result = _session.execute(statement).one_or_none()
+    result = _session.execute(statement).first()
     return result[0] if result else None
 
 

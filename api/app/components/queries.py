@@ -17,7 +17,6 @@ from app.components.models import (
     Team,
 )
 
-print(os.environ.get("DB_URL"))
 engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
 _session = _Session()
@@ -117,7 +116,7 @@ def get_driver(psn_id: str = None, telegram_id: str | int = None) -> Driver | No
     if telegram_id:
         statement = statement.where(Driver.telegram_id == telegram_id)
 
-    result = _session.execute(statement).one_or_none()
+    result = _session.execute(statement).first()
     return result[0] if result else None
 
 
@@ -142,14 +141,6 @@ def get_latest_report_number(category_id: int) -> int:
     if result:
         return result[0].number
     return 0
-
-
-# def get_leader(telegram_id: str) -> Driver | None:
-#     return _session.execute(
-#         select(Driver).where(
-#             Driver.telegram_id == str(telegram_id) and Driver.is_leader
-#         )
-#     ).one_or_none()
 
 
 def get_team(team_name: str) -> Team | None:
@@ -224,21 +215,15 @@ def update_object() -> None:
     _session.commit()
 
 
-def get_max_races() -> Driver | None:
+def get_max_races() -> int:
     """Returns driver with the most races"""
-    return _session.execute(
+    result = _session.execute(
         """SELECT driver_id, COUNT(DISTINCT(rr.round_id))  from race_results rr WHERE rr.finishing_position != 0 GROUP BY rr.driver_id ORDER BY COUNT(rr.round_id) DESC LIMIT 1"""
-    ).one_or_none()[0]
+    ).one_or_none()
+    if result:
+        return result[1]
+    return 0
 
 
 def delete_report(report: Report) -> None:
     _session.execute(delete(Report).where(Report.report_id == report.report_id))
-
-
-if __name__ == "__main__":
-    print(get_championship())
-    print(get_driver("RTI_Sbinotto17").race_results)
-    print(get_current_category())
-    print(get_games())
-    print(get_latest_report_number(11))
-    print(get_max_races())
