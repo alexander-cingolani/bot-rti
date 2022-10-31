@@ -255,8 +255,13 @@ async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def send_participation_list_command(
-    _: Update, context: ContextTypes.DEFAULT_TYPE
+    update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    
+    try:
+        await update.message.delete()
+    except:
+        pass
     await send_participation_list(context)
     return
 
