@@ -4,11 +4,11 @@ This telegram bot manages racingteamitalia's leaderboards, statistics and penalt
 import json
 import logging
 import os
+import traceback
 from datetime import time
 from uuid import uuid4
 
 import pytz
-import traceback
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
@@ -20,8 +20,8 @@ from telegram import (
     InputTextMessageContent,
     Update,
 )
+from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -106,36 +106,37 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
         "Lo sviluppatore è stato informato del problema e cercherà"
         " di risolverlo al più presto."
     )
-    
+
     try:
-        await update.effective_user.send_message(user_message)
+        if update.message.chat.type == ChatType.PRIVATE:
+            await update.effective_user.send_message(user_message)
     except AttributeError:
         pass
 
-    # tb_list = .format_exception(
-    #     None, context.error, context.error.__traceback__
-    # )
-    # tb_string = "".join(tb_list)
-    # update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    tb_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__
+    )
+    tb_string = "".join(tb_list)
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
 
-    # message = (
-    #     "An exception was raised while handling an update\n"
-    #     f"update = {json.dumps(update_str, indent=2, ensure_ascii=False)}"
-    #     "\n\n"
-    #     f"context.chat_data = {str(context.chat_data)}\n\n"
-    #     f"context.user_data = {str(context.user_data)}\n\n"
-    #     f"{tb_string}"
-    # )
+    message = (
+        "An exception was raised while handling an update\n"
+        f"update = {json.dumps(update_str, indent=2, ensure_ascii=False)}"
+        "\n\n"
+        f"context.chat_data = {str(context.chat_data)}\n\n"
+        f"context.user_data = {str(context.user_data)}\n\n"
+        f"{tb_string}"
+    )
 
-    # with open("traceback.txt", "w") as file:
-    #     file.write(message)
-    #     caption = "An error occured."
+    with open("traceback.txt", "w") as file:
+        file.write(message)
+        caption = "An error occured."
 
-    # with open("traceback.txt", "r") as traceback:
-    #     await context.bot.send_document(
-    #         chat_id=config.DEVELOPER_CHAT, caption=caption, document=traceback
-    #     )
-    # os.remove("traceback.txt")
+    with open("traceback.txt", "rb") as doc:
+        await context.bot.send_document(
+            chat_id=config.DEVELOPER_CHAT, caption=caption, document=doc
+        )
+    os.remove("traceback.txt")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -253,7 +254,7 @@ async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def send_participation_list_command(
     _: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:    
+) -> None:
     await send_participation_list(context)
     return
 
@@ -262,7 +263,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers who are supposed to participate to a race."""
 
     championship = get_championship()
-    
+
     if not (category := championship.current_racing_category()):
         logging.log(logging.INFO, f"{category}")
         return ConversationHandler.END
