@@ -104,7 +104,9 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     user_message = (
         "⚠️ Si è verificato un errore inaspettato!\n\n"
         "Lo sviluppatore è stato informato del problema e cercherà"
-        " di risolverlo al più presto."
+        " di risolverlo al più presto.\n"
+        "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
+        "avrebbe scarsa probabilità di successo."
     )
 
     try:
@@ -280,15 +282,15 @@ Circuito: <b>{round.circuit}</b>
 
     context.chat_data["participation_list_text"] = text
     text += f"0/{len(drivers)}\n"
-    context.chat_data["participants"] = {}  # dict[psn_id, status]
+    context.chat_data["participants"] = {}  # dict[telegram_id, status]
     for driver in drivers:
         driver = driver.driver
-        if driver.telegram_id:
-            context.chat_data["participants"][driver.telegram_id] = [
-                driver.psn_id,
-                None,
-            ]
-            text += f"\n{driver.psn_id}"
+
+        context.chat_data["participants"][driver.psn_id] = [
+            driver.telegram_id,
+            None,
+        ]
+        text += f"\n{driver.psn_id}"
 
     reply_markup = InlineKeyboardMarkup(
         [
@@ -314,23 +316,36 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Sends the list of drivers who are supposed to participate to a race."""
+
     user_id = update.effective_user.id
-    driver = get_driver(telegram_id=user_id)
+
+    user_psn_id = None
+
+    # Checks for non-registered users and queries the database to verify if
+    # the user has registered since the participation list was last sent
+    for psn_id, (tg_id, status) in context.chat_data["participants"].items():
+        if not tg_id:
+            
+            context.chat_data["participants"][psn_id] = [get_driver(psn_id=psn_id).telegram_id, status]
+            tg_id = context.chat_data["participants"][psn_id][0]
+
+        if tg_id == user_id:
+            user_psn_id = psn_id
 
     received_status = update.callback_query.data == "participating"
     # Checks if the user is allowed to answer and if his answer is the same as the previous one.
-    if user_id not in context.chat_data[
-        "participants"
-    ] or received_status in context.chat_data["participants"].get(user_id, []):
+    if user_psn_id not in context.chat_data["participants"]:
+        return
+    if received_status == context.chat_data["participants"].get(user_psn_id, [0, 0])[1]:
         return
 
-    context.chat_data["participants"][user_id][1] = received_status
+    context.chat_data["participants"][user_psn_id][1] = received_status
 
     text: str = context.chat_data["participation_list_text"]
     text += "{confirmed}/{total}\n"
     confirmed = 0
     total_drivers = 0
-    for driver, status in context.chat_data["participants"].values():
+    for driver, (_, status) in context.chat_data["participants"].items():
         total_drivers += 1
         if status is None:
             text_status = ""
@@ -351,7 +366,7 @@ async def update_participation_list(
         ]
     )
     await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
-
+    return
 
 def main() -> None:
     """Starts the bot."""
