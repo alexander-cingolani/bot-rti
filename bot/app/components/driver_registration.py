@@ -69,7 +69,10 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             return ConversationHandler.END
         driver.telegram_id = str(update.effective_user.id)
         update_object()
-        text = "Ok! Puoi utilizzare il comando /stats per vedere le tue statistiche."
+        text = (
+            "Ok! In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
+            "Al momento però questa funzione non è disponibile, in quanto i dati non sono sufficienti."
+        )
         await update.message.reply_text(text)
         context.user_data.clear()
         return ConversationHandler.END

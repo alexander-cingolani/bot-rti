@@ -102,8 +102,9 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
     user_message = (
-        "⚠️ Si è verificato un errore inaspettato! Lo sviluppatore è stato informato"
-        " del problema e cercherà di risolverlo al più presto."
+        "⚠️ Si è verificato un errore inaspettato!\n\n"
+        "Lo sviluppatore è stato informato del problema e cercherà"
+        " di risolverlo al più presto."
     )
     
     try:
@@ -111,30 +112,30 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
     except AttributeError:
         pass
 
-    tb_list = .format_exception(
-        None, context.error, context.error.__traceback__
-    )
-    tb_string = "".join(tb_list)
-    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    # tb_list = .format_exception(
+    #     None, context.error, context.error.__traceback__
+    # )
+    # tb_string = "".join(tb_list)
+    # update_str = update.to_dict() if isinstance(update, Update) else str(update)
 
-    message = (
-        "An exception was raised while handling an update\n"
-        f"update = {json.dumps(update_str, indent=2, ensure_ascii=False)}"
-        "\n\n"
-        f"context.chat_data = {str(context.chat_data)}\n\n"
-        f"context.user_data = {str(context.user_data)}\n\n"
-        f"{tb_string}"
-    )
+    # message = (
+    #     "An exception was raised while handling an update\n"
+    #     f"update = {json.dumps(update_str, indent=2, ensure_ascii=False)}"
+    #     "\n\n"
+    #     f"context.chat_data = {str(context.chat_data)}\n\n"
+    #     f"context.user_data = {str(context.user_data)}\n\n"
+    #     f"{tb_string}"
+    # )
 
-    with open("traceback.txt", "w") as file:
-        file.write(message)
-        caption = "An error occured."
+    # with open("traceback.txt", "w") as file:
+    #     file.write(message)
+    #     caption = "An error occured."
 
-    with open("traceback.txt", "r") as traceback:
-        await context.bot.send_document(
-            chat_id=config.DEVELOPER_CHAT, caption=caption, document=traceback
-        )
-    os.remove("traceback.txt")
+    # with open("traceback.txt", "r") as traceback:
+    #     await context.bot.send_document(
+    #         chat_id=config.DEVELOPER_CHAT, caption=caption, document=traceback
+    #     )
+    # os.remove("traceback.txt")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
