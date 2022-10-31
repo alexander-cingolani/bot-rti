@@ -187,8 +187,11 @@ class ReportDocument:
             y0 -= 15
 
         if self.report.video_link:
+            pdf.setFont("arialB", 11.5)
             pdf.drawString(50, y0 - 15, "Video")
+            pdf.setFont("arial", 10)
             pdf.drawString(155, y0 - 15, self.report.video_link)
+            
         pdf.setLineWidth(0.1)
         pdf.line(x1=50, x2=550, y1=640, y2=640)
         pdf.line(x1=50, x2=550, y1=560, y2=560)
