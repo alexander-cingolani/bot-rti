@@ -18,12 +18,14 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     create_engine,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+import telegram
 
 Base = declarative_base()
 
@@ -249,7 +251,7 @@ class Driver(Base):
 
     driver_id: int = Column(SmallInteger, primary_key=True)
     psn_id: str = Column(String(16), unique=True, nullable=False)
-    telegram_id: int = Column(Integer)
+    _telegram_id: int = Column(Text)
 
     championships: list[DriverChampionship] = relationship(
         "DriverChampionship", back_populates="driver"
@@ -319,7 +321,15 @@ class Driver(Base):
         for driver_category in self.current_category().drivers:
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
+        
+    @property
+    def telegram_id(self):
+        return int(self._telegram_id)
 
+    @telegram_id.setter
+    def telegram_id(self, telegram_id):
+        self._telegram_id = str(telegram_id)
+        
 
 class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.
