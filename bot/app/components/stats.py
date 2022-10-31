@@ -1,4 +1,5 @@
 from statistics import stdev
+
 from app.components.models import Driver
 
 

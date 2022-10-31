@@ -18,6 +18,8 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
     InputTextMessageContent,
+    MenuButton,
+    MenuButtonCommands,
     Update,
 )
 from telegram.constants import ChatType, ParseMode
@@ -154,9 +156,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
-    await set_admin_commands(context.bot)
+    driver = get_driver(get_driver(telegram_id=update.effective_user.id))
 
-    await set_admin_chat_commands(context.bot)
+    if not driver:
+        logging.log(logging.INFO, "setting user commands")
+        await update.message.reply_text(
+            "Pare che non ti sia ancora registrato, puoi farlo con /registrami.\n\n"
+            "Questa operazione va fatta solo una volta, a meno che tu non decida"
+            " di usare un account Telegram diverso in futuro."
+        )
+
+    if update.effective_user.id in config.ADMINS:
+        await context.bot.set_my_commands(
+            config.ADMIN_COMMANDS, BotCommandScopeChat(update.effective_user.id)
+        )
+    elif driver.current_team().leader.driver_id == update.effective_user.id:
+        await context.bot.set_my_commands(
+            config.LEADER_COMMANDS, BotCommandScopeChat(update.effective_user.id)
+        )
 
 
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -257,7 +274,7 @@ async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_participation_list_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    
+
     try:
         await update.message.delete()
     except:
@@ -330,8 +347,11 @@ async def update_participation_list(
     # the user has registered since the participation list was last sent
     for psn_id, (tg_id, status) in context.chat_data["participants"].items():
         if not tg_id:
-            
-            context.chat_data["participants"][psn_id] = [get_driver(psn_id=psn_id).telegram_id, status]
+
+            context.chat_data["participants"][psn_id] = [
+                get_driver(psn_id=psn_id).telegram_id,
+                status,
+            ]
             tg_id = context.chat_data["participants"][psn_id][0]
 
         if tg_id == user_id:
@@ -373,6 +393,7 @@ async def update_participation_list(
     await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
     return
 
+
 def main() -> None:
     """Starts the bot."""
 
@@ -389,7 +410,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=11, minute=32, second=0),
+        time=time(hour=11, minute=30, second=0),
         chat_id=config.GROUP_CHAT,
     )
 

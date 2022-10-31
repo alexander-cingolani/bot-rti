@@ -24,6 +24,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
@@ -234,7 +235,7 @@ class Driver(Base):
     Attributes:
         driver_id (int): Automatically generated unique ID assigned upon object creation.
         psn_id (str): The driver's Playstation ID (max 16 characters).
-        telegram_id (int): The driver's telegram ID.
+        telegram_id (str): The driver's telegram ID.
 
         championship (list[DriverChampionship]): Championships the driver has participated in.
         teams (list[DriverAssignment]): Teams the driver has been acquired by.
@@ -283,7 +284,7 @@ class Driver(Base):
             psn_id (str): The driver's Playstation ID (max 16 characters).
 
         Optional Keyword Args:
-            telegram_id (int): The driver's telegram ID.
+            telegram_id (str): The driver's telegram ID.
         """
         self.psn_id = psn_id
         self.telegram_id = kwargs.get("telegram_id")
@@ -320,8 +321,8 @@ class Driver(Base):
         for driver_category in self.current_category().drivers:
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
-        
-    @property
+
+    @hybrid_property
     def telegram_id(self) -> int | None:
         if self._telegram_id:
             return int(self._telegram_id)
@@ -330,7 +331,7 @@ class Driver(Base):
     @telegram_id.setter
     def telegram_id(self, telegram_id):
         self._telegram_id = str(telegram_id)
-        
+
 
 class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.

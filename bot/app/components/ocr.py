@@ -1,14 +1,13 @@
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from difflib import get_close_matches
-import re
-
-from pytesseract import image_to_string
-from PIL import Image, ImageOps, ImageFilter
-from PIL.ImageEnhance import Contrast
 
 from app.components.models import CarClass
 from app.components.queries import get_driver
+from PIL import Image, ImageFilter, ImageOps
+from PIL.ImageEnhance import Contrast
+from pytesseract import image_to_string
 
 
 @dataclass

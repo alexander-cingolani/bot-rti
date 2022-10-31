@@ -1,11 +1,10 @@
 from datetime import datetime
 from textwrap import wrap
 
+from app.components.models import Driver, Report
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-
-from app.components.models import Driver, Report
 
 
 class ReviewedReportDocument:

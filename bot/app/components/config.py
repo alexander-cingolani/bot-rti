@@ -1,8 +1,9 @@
 import json
 import os
+
 from telegram import User
 
-DEBUG = False
+DEBUG = bool(os.environ.get("DEBUG"))
 
 REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
 TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))

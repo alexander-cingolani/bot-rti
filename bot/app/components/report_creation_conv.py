@@ -1,17 +1,6 @@
 import os
 from datetime import datetime, timedelta
 
-from more_itertools import chunked
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import (
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
-
 from app.components import config
 from app.components.models import Category, Driver, Report
 from app.components.queries import (
@@ -24,6 +13,16 @@ from app.components.queries import (
     update_object,
 )
 from app.components.reportdoc import ReportDocument
+from more_itertools import chunked
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
 
 (
     CATEGORY,
@@ -134,6 +133,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_data = context.user_data
 
     user_data["leader"] = get_driver(telegram_id=user.id)
+
     if not user_data["leader"]:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"

@@ -1,11 +1,7 @@
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
 import sqlalchemy as sa
-
-from sqlalchemy import delete, desc
-from sqlalchemy.future import create_engine, select
-from sqlalchemy.orm import joinedload, sessionmaker
-
 from app.components.models import (
     CarClass,
     Category,
@@ -16,6 +12,10 @@ from app.components.models import (
     Report,
     Team,
 )
+from sqlalchemy import delete, desc
+from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy.future import create_engine, select
+from sqlalchemy.orm import joinedload, sessionmaker
 
 engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
@@ -108,22 +108,26 @@ def get_last_report_by(reporting_team_id: int) -> Report | None:
     return result
 
 
-def get_driver(psn_id: str = None, telegram_id: str | int = None) -> Driver | None:
+def get_driver(psn_id: str = None, telegram_id: str = None) -> Driver | None:
     """Returns corresponding Driver object to the given psn_id or telegram_id."""
     statement = select(Driver)
     if psn_id:
         statement = statement.where(Driver.psn_id == psn_id)
     if telegram_id:
-        statement = statement.where(Driver.telegram_id == telegram_id)
+        statement = statement.where(Driver._telegram_id == str(telegram_id))
 
-    result = _session.execute(statement).first()
+    try:
+        result = _session.execute(statement).one_or_none()
+
+    except MultipleResultsFound:
+        return None
     return result[0] if result else None
 
 
 def get_similar_driver(psn_id: str) -> Driver | None:
     """Returns the Driver object with the psn_id most similar to the one given"""
     result = _session.execute(
-        select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.2)
+        select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.3)
     ).first()
 
     if result:

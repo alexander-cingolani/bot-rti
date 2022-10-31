@@ -1,6 +1,10 @@
 import os
 from collections import defaultdict
 
+from app.components import config
+from app.components.models import Report
+from app.components.queries import get_championship, get_reports, save_and_apply_report
+from app.components.reportdoc import ReviewedReportDocument
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -11,11 +15,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
-from app.components import config
-from app.components.models import Report
-from app.components.queries import get_championship, get_reports, save_and_apply_report
-from app.components.reportdoc import ReviewedReportDocument
 
 CATEGORY, ASK_FACT, FACT, PENALTY, PENALTY_REASON, ADD_TO_QUEUE = range(6)
 

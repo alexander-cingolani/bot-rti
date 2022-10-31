@@ -1,18 +1,6 @@
 import os
 from typing import cast
 
-from more_itertools import chunked
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import ChatAction
-from telegram.ext import (
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
-
 from app.components import config
 from app.components.models import CarClass, Category, QualifyingResult, RaceResult
 from app.components.ocr import (
@@ -26,6 +14,17 @@ from app.components.queries import (
     get_driver,
     save_object,
     update_object,
+)
+from more_itertools import chunked
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ChatAction
+from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
 (

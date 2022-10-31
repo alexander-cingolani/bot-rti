@@ -1,5 +1,8 @@
 from typing import cast
 
+from app.components import config
+from app.components.models import Driver
+from app.components.queries import get_driver, get_similar_driver, update_object
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import (
     CallbackQueryHandler,
@@ -9,10 +12,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
-from app.components import config
-from app.components.models import Driver
-from app.components.queries import get_driver, get_similar_driver, update_object
 
 CHECK_ID, ID, RACE_NUMBER = range(3)
 OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)
@@ -51,14 +50,17 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             driver = cast(Driver, context.user_data["driver_obj"])
             driver.telegram_id = None
             update_object()
+
         elif update.callback_query.data == "correct_id":
             await update.callback_query.edit_message_text("Perfetto!")
             return ConversationHandler.END
+
         text = "Scrivimi il tuo <i>PlayStation ID</i>:"
         await update.callback_query.edit_message_text(text)
         return CHECK_ID
 
     if driver := get_driver(psn_id=update.message.text):
+
         # Checks that no other telegram_id is already registered to that driver.
         if driver.telegram_id:
             text = (
@@ -67,11 +69,13 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
             context.user_data.clear()
             return ConversationHandler.END
-        driver.telegram_id = str(update.effective_user.id)
+
+        driver.telegram_id = update.effective_user.id
         update_object()
         text = (
-            "Ok! In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
-            "Al momento però questa funzione non è disponibile, in quanto i dati non sono sufficienti."
+            "Ok!\n"
+            "In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
+            "Al momento questa funzione non è disponibile, in quanto i dati non sono sufficienti."
         )
         await update.message.reply_text(text)
         context.user_data.clear()
@@ -120,7 +124,11 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return ConversationHandler.END
         driver.telegram_id = str(update.effective_user.id)
         update_object()
-        text = "Perfetto! Ora potrai utilizzare /stats in questa chat per vedere le tue statistiche."
+        text = (
+            "Bene!\n"
+            "In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
+            "Al momento questa funzione non è disponibile, in quanto i dati non sono sufficienti."
+        )
         await update.callback_query.edit_message_text(text)
 
         context.user_data.clear()
