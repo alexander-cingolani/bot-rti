@@ -490,7 +490,7 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         report.number = get_latest_report_number(category.category_id) + 1
 
         channel = (
-            config.TEST_CHANNEL
+            config.LATE_REPORT_CHAT
             if user_data.get("late_report")
             else config.REPORT_CHANNEL
         )
