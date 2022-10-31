@@ -1007,6 +1007,14 @@ class Championship(Base):
     def abbreviated_name(self) -> str:
         return "".join(i[0] for i in self.championship_name.split()).upper()
 
+    @property
+    def driver_list(self) -> list[Driver]:
+        drivers = []
+        for category in self.categories:
+            for driver in category.drivers:
+                drivers.append(driver.driver)
+        return drivers
+
 
 def create_tables() -> None:
     """Creates all the tables"""

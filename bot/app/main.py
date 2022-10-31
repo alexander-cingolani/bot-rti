@@ -176,10 +176,10 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     max_races = get_max_races()
 
-    drivers = get_championship().driverss
-    
-    for  driver in drivers:
-        
+    drivers = get_championship().driver_list
+
+    for driver in drivers:
+
         if query.lower() in driver.psn_id.lower():
 
             wins, podiums, poles = stats(driver)
@@ -189,8 +189,6 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 current_team, f"{current_team} [Attuale]"
             )
 
-            
-            
             if const := consistency(driver) < 0:
                 const = "N.D."
             if exp := experience(driver, max_races) <= 0:
@@ -199,7 +197,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 sprt = "N.D."
             if pace := race_pace(driver) <= 0:
                 pace = "N.D."
-                
+
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.psn_id,
@@ -219,7 +217,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 ),
             )
             results.append(result_article)
-            
+
     await update.inline_query.answer(results)
 
 
