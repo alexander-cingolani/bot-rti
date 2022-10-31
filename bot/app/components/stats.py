@@ -3,8 +3,8 @@ from app.components.models import Driver
 
 
 def consistency(driver: Driver) -> int:
-    """Returns a number from 0 to 100 calculated on the standard deviation of 
-    the set of finishing positions and taking absences into account. """
+    """Returns a number from 0 to 100 calculated on the standard deviation of
+    the set of finishing positions and taking absences into account."""
     if not driver.race_results:
         return 0
 
@@ -20,7 +20,7 @@ def consistency(driver: Driver) -> int:
 
 
 def speed(driver: Driver) -> int:
-    """Returns an int between 0 and 100 indicating """
+    """Returns an int between 0 and 100 indicating"""
     current_category = driver.current_category()
     pole_laptimes = current_category.pole_lap_times()
 

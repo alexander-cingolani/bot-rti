@@ -15,7 +15,6 @@ OWNER_ID = int(os.environ.get("OWNER_ID"))
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 
-
 ADMIN_CHAT_COMMANDS = [
     ("lista_presenze", "Invia la lista presenze dell'evento di oggi.")
 ]
@@ -41,4 +40,3 @@ REASONS = [
 if DEBUG:
     REPORT_CHANNEL = TEST_CHANNEL
     GROUP_CHAT = DEVELOPER_CHAT
-
