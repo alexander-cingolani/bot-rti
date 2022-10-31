@@ -86,10 +86,13 @@ async def post_init(application: Application) -> None:
 
 
 async def post_shutdown(_: Application) -> None:
+
     if os.path.exists("results.jpg"):
         os.remove("results.jpg")
+
     if os.path.exists("results_1.jpg"):
         os.remove("results_1.jpg")
+
     if os.path.exists("results_2.jpg"):
         os.remove("results_2.jpg")
 
@@ -132,14 +135,14 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
-    user = update.effective_user
-    await update.message.reply_text(
-        f"""
-Ciao {user.first_name}!
-Sono il bot di racingteamitalia, mi occupo delle segnalazioni, comunicazioni penalità e statistiche dei nostri campionati.
 
-Per qualsiasi problema o idea per migliorarmi puoi contattare {config.OWNER.mention_html(config.OWNER.full_name)}.
-        """,
+    owner_mention = config.OWNER.mention_html(config.OWNER.full_name)
+
+    await update.message.reply_text(
+        f"Ciao {update.effective_user.first_name}!\n"
+        "Sono il bot di Racing Team Italia, mi occupo delle segnalazioni, comunicazioni"
+        "penalità e statistiche dei nostri campionati.\n"
+        f"Per qualsiasi problema o idea per migliorarmi puoi contattare {owner_mention}.",
         reply_markup=ForceReply(selective=True),
     )
 
@@ -169,48 +172,55 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the inline query. This callback is executed when the user types: @botusername <query>"""
     query = update.inline_query.query
 
-    if query == "":
-        return
-
-    race_results = []
-    # InlineQueryResultArticle(
-    #     id=str(1),
-    #     title="Linee guida per i sorpassi",
-    #     input_message_content=InputTextMessageContent(
-    #         "In order for a car being overtaken to be required to give sufficient room to an overtaking car, the overtaking car needs to have a significant portion of the car alongside the car being overtaken and the overtaking manoeuvre must be done in a safe and controlled manner, while enabling the car to clearly remain within the limits of the track. When considering what is a ‘significant portion’ for an overtaking on the inside of a corner, among the various factors that will be looked at by the stewards when exercising their discretion, the stewards will consider if the overtaking car’s front tyres are alongside the other car by no later than the apex of the corner"        #     ),
-    #     thumb_url="https://modales-project.eu/wp-content/uploads/2019/11/06-fia.png",
-    # ),
+    results = []
 
     max_races = get_max_races()
-    for driver in get_championship().drivers:
-        driver = driver.driver
+
+    drivers = get_championship().driverss
+    
+    for  driver in drivers:
+        
         if query.lower() in driver.psn_id.lower():
+
             wins, podiums, poles = stats(driver)
             current_team = driver.current_team().name
-            race_results.append(
-                InlineQueryResultArticle(
-                    id=str(uuid4()),
-                    title=f"{driver.psn_id}",
-                    input_message_content=InputTextMessageContent(
-                        f"""
-
-<i><b>Statistiche {driver.psn_id}</b></i>
-
-<b>Costanza:</b> <i>{consistency(driver)}</i>
-<b>Esperienza:</b> <i>{experience(driver, max_races)}</i>
-<b>Sportività:</b> <i>{sportsmanship(driver)}</i>
-<b>Passo:</b> <i>{race_pace(driver)}
-
-<b>Team:</b> <i>{(",".join(set(map(lambda x: x.team_name, driver.teams))).replace(current_team, f"{current_team} [Attuale]"))}</i>
-<b>Vittorie:</b> <i>{wins}</i>
-<b>Podi:</b> <i>{podiums}</i>
-<b>Pole/Giri veloci:</b> <i>{poles}</i>
-"""
-                    ),
-                )
+            unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+            unique_teams = unique_teams.replace(
+                current_team, f"{current_team} [Attuale]"
             )
 
-    await update.inline_query.answer(race_results)
+            
+            
+            if const := consistency(driver) < 0:
+                const = "N.D."
+            if exp := experience(driver, max_races) <= 0:
+                exp = "N.D."
+            if sprt := sportsmanship(driver) <= 0:
+                sprt = "N.D."
+            if pace := race_pace(driver) <= 0:
+                pace = "N.D."
+                
+            result_article = InlineQueryResultArticle(
+                id=str(uuid4()),
+                title=driver.psn_id,
+                input_message_content=InputTextMessageContent(
+                    (
+                        f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
+                        f"<b>Costanza:</b> <i>{const}</i>\n"
+                        f"<b>Esperienza:</b> <i>{exp}</i>\n"
+                        f"<b>Sportività:</b> <i>{sprt}\n</i>"
+                        f"<b>Passo:</b> <i>{pace}</i>\n\n"
+                        f"<b>Vittorie:</b> <i>{wins}</i>\n"
+                        f"<b>Podi:</b> <i>{podiums}</i>\n"
+                        f"<b>Pole/Giri veloci:</b> <i>{poles}</i>\n"
+                        f"<b>Gare disputate:</b> <i>{len(driver.race_results)}\n</i>"
+                        f"<b>Team:</b> <i>{unique_teams}</i>"
+                    ),
+                ),
+            )
+            results.append(result_article)
+            
+    await update.inline_query.answer(results)
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -258,7 +268,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     drivers = category.drivers
     text = f"""
-<b>{round.number + 1}ᵃ Tappa {category.name}</b>
+<b>{round.number}ᵃ Tappa {category.name}</b>
 Circuito: <b>{round.circuit}</b>
 """
 
@@ -353,7 +363,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(0),
+        time=time(hour=0, minute=54),
         chat_id=config.GROUP_CHAT,
     )
 
