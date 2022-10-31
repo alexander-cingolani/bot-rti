@@ -53,7 +53,7 @@ async def report_processing_entry_point(
         if update.callback_query:
             await update.callback_query.edit_text(text)
         else:
-            update.message.reply_text(text)
+            await update.message.reply_text(text)
         return ConversationHandler.END
 
     if total == 1:
