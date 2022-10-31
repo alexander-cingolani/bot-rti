@@ -250,7 +250,7 @@ class Driver(Base):
 
     driver_id: int = Column(SmallInteger, primary_key=True)
     psn_id: str = Column(String(16), unique=True, nullable=False)
-    _telegram_id: int = Column(Text)
+    _telegram_id: int = Column("telegram_id", Text)
 
     championships: list[DriverChampionship] = relationship(
         "DriverChampionship", back_populates="driver"
