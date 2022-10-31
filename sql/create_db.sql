@@ -202,7 +202,7 @@ ALTER TABLE public.driver_championships OWNER TO alexander;
 CREATE TABLE public.drivers (
     driver_id smallint NOT NULL,
     psn_id character varying(16) NOT NULL,
-    telegram_id integer
+    telegram_id text
 );
 
 
@@ -775,17 +775,14 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 18	MatteoFixC8	\N
 20	BlackSail	\N
 21	RTI_antofox26	\N
-22	RTI_Elgallo17	\N
 23	Paperfico	\N
 24	RTI_Falco72ac	\N
 25	RTI_HawkOne	\N
 26	RTI_Shardana	\N
 32	RTI_Jacobomber06	\N
-33	Mantextek05	\N
 34	domdila	\N
 36	RTI_Mattia76pg	\N
 40	LuigiUSocij	\N
-41	mattly94	\N
 42	lukadevil90	\N
 7	chiasiellis	\N
 8	maurynho993	\N
@@ -795,7 +792,6 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 14	RTI_Morrisss0087	\N
 15	piter-72	\N
 19	Turbolibix46	\N
-28	Alphy_31	\N
 29	kimi-ice1983	\N
 30	dariuccinopanzon	\N
 31	RTI_andrea43race	\N
@@ -806,8 +802,12 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 44	Lightning_blu	\N
 13	XAceOfPeaksX	\N
 43	RTI_Samtor	\N
+16	RTI_Sbinotto17	\N
+22	RTI_Elgallo17	219223863
 27	RTI_Gigi-Rox	383460444
-16	RTI_Sbinotto17	633997625
+28	Alphy_31	1543224317
+33	Mantextek05	800167010
+41	mattly94	212989058
 \.
 
 
@@ -1504,3 +1504,4 @@ ALTER TABLE ONLY public.sessions
 --
 -- PostgreSQL database dump complete
 --
+

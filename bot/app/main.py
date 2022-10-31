@@ -8,6 +8,7 @@ from datetime import time
 from uuid import uuid4
 
 import pytz
+import traceback
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
@@ -104,10 +105,13 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
         "⚠️ Si è verificato un errore inaspettato! Lo sviluppatore è stato informato"
         " del problema e cercherà di risolverlo al più presto."
     )
+    
+    try:
+        await update.effective_user.send_message(user_message)
+    except AttributeError:
+        pass
 
-    await update.effective_user.send_message(user_message)
-
-    tb_list = traceback.format_exception(
+    tb_list = .format_exception(
         None, context.error, context.error.__traceback__
     )
     tb_string = "".join(tb_list)
@@ -248,7 +252,7 @@ async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def send_participation_list_command(
     _: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+) -> None:    
     await send_participation_list(context)
     return
 
@@ -257,11 +261,13 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers who are supposed to participate to a race."""
 
     championship = get_championship()
-
+    
     if not (category := championship.current_racing_category()):
+        logging.log(logging.INFO, f"{category}")
         return ConversationHandler.END
 
     if not (round := category.first_non_completed_round()):
+        logging.log(logging.INFO, f"{round}")
         return ConversationHandler.END
 
     drivers = category.drivers
@@ -361,7 +367,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=0, minute=54),
+        time=time(hour=11, minute=32, second=0),
         chat_id=config.GROUP_CHAT,
     )
 
