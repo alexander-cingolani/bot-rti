@@ -324,7 +324,7 @@ class Driver(Base):
     @property
     def telegram_id(self) -> int | None:
         if self._telegram_id:
-            return int(self.telegram_id)
+            return int(self._telegram_id)
         return None
 
     @telegram_id.setter
