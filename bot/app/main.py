@@ -325,8 +325,8 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         ]
     )
 
-    if chat_data.get("called_via_command_by"):
-        chat_id = context.bot_data.pop("called_via_command_by")
+    if context.bot_data.get("called_manually_by"):
+        chat_id = context.bot_data.pop("called_manually_by")
     else:
         chat_id = config.GROUP_CHAT
         
