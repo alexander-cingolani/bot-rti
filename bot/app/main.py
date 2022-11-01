@@ -281,6 +281,7 @@ async def send_participation_list_command(
         await update.message.delete()
     except:
         pass
+    context.bot_data["called_manually_by"] = update.effective_chat.id
     await send_participation_list(context)
     return
 
@@ -289,7 +290,8 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers who are supposed to participate to a race."""
 
     championship = get_championship()
-
+    chat_data = context.chat_data
+    
     if not (category := championship.current_racing_category()):
         return ConversationHandler.END
 
@@ -302,13 +304,13 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Circuito: <b>{round.circuit}</b>"
     )
 
-    context.chat_data["participation_list_text"] = text
+    chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
-    context.chat_data["participants"] = {}  # dict[telegram_id, status]
+    chat_data["participants"] = {}  # dict[telegram_id, status]
     for driver in drivers:
         driver = driver.driver
 
-        context.chat_data["participants"][driver.psn_id] = [
+        chat_data["participants"][driver.psn_id] = [
             driver.telegram_id,
             None,
         ]
@@ -323,8 +325,13 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         ]
     )
 
+    if chat_data.get("called_via_command_by"):
+        chat_id = context.bot_data.pop("called_via_command_by")
+    else:
+        chat_id = config.GROUP_CHAT
+        
     message = await context.bot.send_message(
-        chat_id=config.GROUP_CHAT, text=text, reply_markup=reply_markup
+        chat_id=chat_id, text=text, reply_markup=reply_markup
     )
 
     await context.bot.pin_chat_message(
@@ -338,7 +345,10 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
-
+    
+    if not context.chat_data.get("participants"):
+        return
+    
     user_id = update.effective_user.id
     user_psn_id = None
 
