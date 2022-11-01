@@ -35,7 +35,12 @@ from telegram.ext import (
 
 from app.components import config
 from app.components.driver_registration import driver_registration
-from app.components.queries import get_championship, get_driver, get_max_races
+from app.components.queries import (
+    get_category,
+    get_championship,
+    get_driver,
+    get_max_races,
+)
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
@@ -154,19 +159,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
+    if update.effective_user.id in config.ADMINS:
+        await context.bot.set_my_commands(
+            config.ADMIN_COMMANDS, BotCommandScopeChat(update.effective_user.id)
+        )
+
     driver = get_driver(get_driver(telegram_id=update.effective_user.id))
 
     if not driver:
-        logging.log(logging.INFO, "setting user commands")
         await update.message.reply_text(
             "Pare che non ti sia ancora registrato, puoi farlo con /registrami.\n\n"
             "Questa operazione va fatta solo una volta, a meno che tu non decida"
             " di usare un account Telegram diverso in futuro."
-        )
-
-    if update.effective_user.id in config.ADMINS:
-        await context.bot.set_my_commands(
-            config.ADMIN_COMMANDS, BotCommandScopeChat(update.effective_user.id)
         )
     elif driver.current_team().leader.driver_id == update.effective_user.id:
         await context.bot.set_my_commands(
@@ -287,13 +291,11 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     championship = get_championship()
 
     if not (category := championship.current_racing_category()):
-        logging.log(logging.INFO, f"{category}")
         return ConversationHandler.END
 
     if not (round := category.first_non_completed_round()):
-        logging.log(logging.INFO, f"{round}")
         return ConversationHandler.END
-
+    category = get_category(1)[0]
     drivers = category.drivers
     text = (
         f"<b>{round.number}ᵃ Tappa {category.name}</b>\n"
@@ -301,7 +303,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
     context.chat_data["participation_list_text"] = text
-    text += f"0/{len(drivers)}\n"
+    text += f"\n0/{len(drivers)}\n"
     context.chat_data["participants"] = {}  # dict[telegram_id, status]
     for driver in drivers:
         driver = driver.driver
@@ -339,34 +341,36 @@ async def update_participation_list(
 
     user_id = update.effective_user.id
     user_psn_id = None
+
+    chat_data = context.chat_data
     # Checks for non-registered users and queries the database to verify if
     # the user has registered since the participation list was last sent
     for psn_id, (tg_id, status) in context.chat_data["participants"].items():
         if not tg_id:
-
-            context.chat_data["participants"][psn_id] = [
-                get_driver(psn_id=psn_id).telegram_id,
+            driver = get_driver(psn_id=psn_id)
+            chat_data["participants"][psn_id] = [
+                driver.telegram_id,
                 status,
             ]
-            tg_id = context.chat_data["participants"][psn_id][0]
+            tg_id = chat_data["participants"][psn_id][0]
 
         if tg_id == user_id:
             user_psn_id = psn_id
 
     received_status = update.callback_query.data == "participating"
     # Checks if the user is allowed to answer and if his answer is the same as the previous one.
-    if user_psn_id not in context.chat_data["participants"]:
+    if user_psn_id not in chat_data["participants"]:
         return
-    if received_status == context.chat_data["participants"].get(user_psn_id, [0, 0])[1]:
+    if received_status == chat_data["participants"].get(user_psn_id, [0, 0])[1]:
         return
 
-    context.chat_data["participants"][user_psn_id][1] = received_status
+    chat_data["participants"][user_psn_id][1] = received_status
 
-    text: str = context.chat_data["participation_list_text"]
-    text += "{confirmed}/{total}\n"
+    text: str = chat_data["participation_list_text"]
+    text += "\n{confirmed}/{total}\n"
     confirmed = 0
     total_drivers = 0
-    for driver, (_, status) in context.chat_data["participants"].items():
+    for driver, (_, status) in chat_data["participants"].items():
         total_drivers += 1
         if status is None:
             text_status = ""
@@ -406,7 +410,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=11, minute=30, second=0),
+        time=time(hour=11, minute=51, second=30),
         chat_id=config.GROUP_CHAT,
     )
 
