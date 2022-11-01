@@ -295,7 +295,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (round := category.first_non_completed_round()):
         return ConversationHandler.END
-    category = get_category(1)[0]
+
     drivers = category.drivers
     text = (
         f"<b>{round.number}ᵃ Tappa {category.name}</b>\n"
@@ -410,7 +410,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=11, minute=51, second=30),
+        time=time(hour=11, minute=45),
         chat_id=config.GROUP_CHAT,
     )
 
@@ -422,7 +422,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=close_report_column,
-        time=time(hour=23, minute=59),
+        time=time(hour=23, minute=59, second=40),
         chat_id=config.REPORT_CHANNEL,
     )
 
