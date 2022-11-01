@@ -24,7 +24,6 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
@@ -251,7 +250,7 @@ class Driver(Base):
 
     driver_id: int = Column(SmallInteger, primary_key=True)
     psn_id: str = Column(String(16), unique=True, nullable=False)
-    _telegram_id: int = Column("telegram_id", Text)
+    _telegram_id: str = Column("telegram_id", Text)
 
     championships: list[DriverChampionship] = relationship(
         "DriverChampionship", back_populates="driver"
@@ -322,15 +321,18 @@ class Driver(Base):
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
 
-    @hybrid_property
+    @property
     def telegram_id(self) -> int | None:
         if self._telegram_id:
             return int(self._telegram_id)
         return None
 
     @telegram_id.setter
-    def telegram_id(self, telegram_id):
-        self._telegram_id = str(telegram_id)
+    def telegram_id(self, telegram_id: int):
+        if not isinstance(telegram_id, int):
+            raise TypeError
+        if telegram_id:
+            self._telegram_id = str(telegram_id)
 
 
 class QualifyingResult(Base):

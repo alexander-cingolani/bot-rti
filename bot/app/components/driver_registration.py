@@ -122,7 +122,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
             context.user_data.clear()
             return ConversationHandler.END
-        driver.telegram_id = str(update.effective_user.id)
+        driver.telegram_id = update.effective_user.id
         update_object()
         text = (
             "Bene!\n"
