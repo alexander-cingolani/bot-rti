@@ -18,8 +18,6 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
     InputTextMessageContent,
-    MenuButton,
-    MenuButtonCommands,
     Update,
 )
 from telegram.constants import ChatType, ParseMode
@@ -231,12 +229,12 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Costanza:</b> <i>{const}</i>\n"
                         f"<b>Esperienza:</b> <i>{exp}</i>\n"
-                        f"<b>Sportività:</b> <i>{sprt}\n</i>"
+                        f"<b>Sportività:</b> <i>{sprt}</i>\n"
                         f"<b>Passo:</b> <i>{pace}</i>\n\n"
                         f"<b>Vittorie:</b> <i>{wins}</i>\n"
                         f"<b>Podi:</b> <i>{podiums}</i>\n"
                         f"<b>Pole/Giri veloci:</b> <i>{poles}</i>\n"
-                        f"<b>Gare disputate:</b> <i>{len(driver.race_results)}\n</i>"
+                        f"<b>Gare disputate:</b> <i>{len(driver.race_results)}</i>\n"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
@@ -251,8 +249,8 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     if category := championship.reporting_category():
         round = category.first_non_completed_round()
         text = (
-            f"Penalità Categoria {category.name}"
-            f"{round.number}ª Tappa / {round.circuit}"
+            f"<b>Segnalazioni Categoria {category.name}</b>\n"
+            f"{round.number}ª Tappa / {round.circuit}\n"
             f"#{championship.abbreviated_name}Tappa{round.number} #{category.name}"
         )
         await context.bot.send_message(
@@ -297,10 +295,10 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return ConversationHandler.END
 
     drivers = category.drivers
-    text = f"""
-<b>{round.number}ᵃ Tappa {category.name}</b>
-Circuito: <b>{round.circuit}</b>
-"""
+    text = (
+        f"<b>{round.number}ᵃ Tappa {category.name}</b>\n"
+        f"Circuito: <b>{round.circuit}</b>"
+    )
 
     context.chat_data["participation_list_text"] = text
     text += f"0/{len(drivers)}\n"
@@ -337,12 +335,10 @@ Circuito: <b>{round.circuit}</b>
 async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Sends the list of drivers who are supposed to participate to a race."""
+    """Manages updates to the list of drivers supposed to participate to a race."""
 
     user_id = update.effective_user.id
-
     user_psn_id = None
-
     # Checks for non-registered users and queries the database to verify if
     # the user has registered since the participation list was last sent
     for psn_id, (tg_id, status) in context.chat_data["participants"].items():
