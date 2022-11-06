@@ -852,6 +852,7 @@ save_results_conv = ConversationHandler(
         DOWNLOAD_QUALI_RESULTS: [
             MessageHandler(filters.ATTACHMENT, download_quali_results),
             CallbackQueryHandler(download_quali_results, r"^skip_quali$"),
+            MessageHandler(filters.Regex(r"[^/]{60,}"), download_quali_results)
         ],
         SAVE_QUALI_RESULTS: [
             CallbackQueryHandler(save_quali_results, r"^confirm_quali_results$"),

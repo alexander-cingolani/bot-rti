@@ -44,7 +44,6 @@ FACTS = [
 ]
 
 
-
 INFRACTIONS = [
     "Finisce il carburante prima del traguardo.",
     "Taglio linea in ingresso ai box.",
