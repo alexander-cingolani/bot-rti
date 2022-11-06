@@ -1,4 +1,4 @@
-import logging
+
 import re
 from dataclasses import dataclass
 from datetime import timedelta
@@ -117,9 +117,8 @@ def recognize_quali_results(
         driver = image_to_string(name_box, config="--psm 8").strip()
         
         seconds = string_to_seconds(a:=image_to_string(laptime_box, config="--psm 8"))
-        logging.log(logging.DEBUG, f"{a} - {seconds}")
         matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
-        logging.log(logging.DEBUG, "here2")
+
         if matches and len(driver) >= 3:
             quali_res = Result(matches[0], seconds)
             quali_res.car_class = get_driver(quali_res.driver).current_class()
@@ -170,7 +169,6 @@ def recognize_race_results(
     results = []
     remaining_drivers = expected_drivers.copy()
     for _ in range(len(expected_drivers)):
-        logging.log(logging.DEBUG, "here")
         name_box = image.crop((LEFT_1, top, RIGHT_1, bottom))
 
         laptime_box = image.crop((LEFT_2, top, RIGHT_2, bottom))
@@ -178,7 +176,6 @@ def recognize_race_results(
         driver = image_to_string(name_box, config="--psm 8").strip()
         seconds = string_to_seconds(a:=image_to_string(laptime_box, config="--psm 8"))
         
-        logging.log(logging.DEBUG, f"{a} - {seconds}")
         matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
         
         print(matches, seconds)

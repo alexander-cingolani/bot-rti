@@ -38,5 +38,4 @@ async def root(
     else:
         raise HTTPException(400, f"'{action}' action is invalid.")
 
-    logging.log(logging.INFO, result)
     return result

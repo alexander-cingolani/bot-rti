@@ -2,7 +2,7 @@
 This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
-import logging
+
 import os
 from collections import defaultdict
 from typing import cast
@@ -59,7 +59,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     buttons = []
     for i, category in enumerate(championship.categories):
-        logging.log(logging.INFO, category.name)
+
         buttons.append(InlineKeyboardButton(category.name, callback_data=f"C{i}"))
     buttons = list(chunked(buttons, 3))
     buttons.append(
@@ -284,7 +284,6 @@ async def report_processing_entry_point(
     reply_markup = []
     for i, category in enumerate(championship.categories):
         if report_categories.get(category.name):
-            logging.log(logging.INFO, f"{category.name} {i}")
             reply_markup.append(
                 InlineKeyboardButton(category.name, callback_data=f"C{i}")
             )
@@ -387,7 +386,6 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.callback_query.edit_message_text(
         text, reply_markup=InlineKeyboardMarkup(buttons)
     )
-    logging.log(logging.INFO, f"STATE  {next_step}")
     return next_step
 
 
@@ -660,7 +658,7 @@ async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     user_data = context.user_data
     report = user_data["current_report"]
-    logging.log(logging.INFO, f"{report.time_penalty} {type(report.time_penalty)}")
+    
     if update.callback_query.data == "send_now":
         save_and_apply_report(report)
         file = ReviewedReportDocument(report).generate_document()
@@ -757,7 +755,7 @@ async def go_back_handler_report_processing(
     }
     state = int(update.callback_query.data)
     await callbacks.get(state)(update, context)
-    logging.log(logging.DEBUG, state)
+
     return state + (1 if state != 17 else 3)
 
 

@@ -1,4 +1,4 @@
-import logging
+
 import os
 from typing import cast
 
@@ -71,18 +71,14 @@ def text_to_results(text: str, category: Category) -> list[Result]:
     driver_classes = {
         driver.driver.psn_id: driver.car_class for driver in category.drivers
     }
-    logging.log(logging.DEBUG, driver_classes)
+
 
     for i, (driver, gap) in enumerate(results):
-        logging.log(logging.DEBUG, driver)
         if driver not in driver_classes:
             driver_obj = get_similar_driver(driver)
         else:
             driver_obj = get_driver(driver)
         seconds = string_to_seconds(gap)
-        logging.log(
-            logging.INFO, f"{gap} -> {seconds} | {driver_obj.psn_id} - {driver}"
-        )
 
         result = Result(driver_obj.psn_id, seconds)
         result.car_class = driver_classes[driver_obj.psn_id]
@@ -423,7 +419,6 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
-        logging.log(logging.INFO, user_data["race_1_results"])
 
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
@@ -663,7 +658,6 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
-        logging.log(logging.INFO, user_data["race_2_results"])
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
     return SAVE_RACE_2_RESULTS

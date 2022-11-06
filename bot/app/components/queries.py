@@ -3,7 +3,7 @@ This module contains class-specific queries to the database; as well as
 general purpose functions such as save_object and update_object.
 """
 
-import logging
+
 import os
 from datetime import datetime, timedelta
 
@@ -199,10 +199,7 @@ def save_and_apply_report(report: Report) -> None:
         race_result = row[0]
         if getattr(race_result, "total_racetime"):
             if race_result.driver_id == report.reported_driver_id:
-                logging.log(
-                    logging.INFO,
-                    f"{race_result.driver_id} - {type(report.time_penalty)} {report.time_penalty}",
-                )
+
                 race_result.total_racetime += report.time_penalty
                 break
         race_results.append(race_result)
