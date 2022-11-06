@@ -1,10 +1,3 @@
---
--- PostgreSQL database dump
---
-
--- Dumped from database version 14.5 (Ubuntu 14.5-0ubuntu0.22.04.1)
--- Dumped by pg_dump version 14.5 (Ubuntu 14.5-0ubuntu0.22.04.1)
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -790,7 +783,6 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 28	Alphy_31	1543224317
 33	Mantextek05	800167010
 41	mattly94	212989058
-16	RTI_Sbinotto17	633997625
 4	GDC_77	386766202
 5	Sturla04	998444984
 6	RTI_Revenge	173005072
@@ -821,6 +813,7 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 43	RTI_Samtor	886549791
 44	Lightning_blu	918599592
 21	RTI_antofox26	601552815
+16	RTI_Sbinotto17	633997625
 \.
 
 
@@ -891,6 +884,7 @@ COPY public.games (game_id, name) FROM stdin;
 COPY public.point_systems (point_system_id, point_system) FROM stdin;
 1	12.5 10 8 6.5 5.5 5 4.5 4 3.5 3 2.5 2 1.5 1
 2	40 35 32 27 25 23 22 20 15 12 9 6 4 2
+3	2 0 0 0 0 0 0 0 0 0 0 0 0 0\n
 \.
 
 
@@ -898,7 +892,35 @@ COPY public.point_systems (point_system_id, point_system) FROM stdin;
 -- Data for Name: qualifying_results; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.qualifying_results (qualifying_result_id, "position", laptime, penalty_points, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
+COPY public.qualifying_results (qualifying_result_id, "position", relative_position, laptime, penalty_points, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
+43	1	1	118.461	0	33	1	1	6	0	0
+44	2	2	118.823	0	3	1	1	6	0	0
+45	3	3	119.194	0	27	1	1	6	0	0
+46	4	4	119.3	0	39	1	1	6	0	0
+47	5	5	121.268	0	15	1	1	6	0	0
+48	\N	6	\N	0	9	1	1	6	0	0
+49	\N	7	\N	0	21	1	1	6	0	0
+50	6	1	126.974	0	40	1	1	6	0	0
+51	7	2	127.198	0	16	1	1	6	0	0
+52	8	3	127.94	0	34	1	1	6	0	0
+53	9	4	128.05	0	4	1	1	6	0	0
+54	10	5	128.386	0	28	1	1	6	0	0
+55	11	6	128.707	0	22	1	1	6	0	0
+56	\N	7	\N	0	10	1	1	6	0	0
+57	1	1	129.164	0	26	2	2	6	0	0
+58	2	2	129.20499999999998	0	32	2	2	6	0	0
+59	3	3	129.58999999999997	0	8	2	2	6	0	0
+60	4	4	129.607	0	13	2	2	6	0	0
+61	5	5	129.74499999999998	0	14	2	2	6	0	0
+62	6	6	129.81599999999997	0	19	2	2	6	0	0
+63	7	7	130.236	0	43	2	2	6	0	0
+64	8	8	130.422	0	31	2	2	6	0	0
+65	9	9	130.789	0	44	2	2	6	0	0
+66	10	10	130.868	0	38	2	2	6	0	0
+67	11	11	132.96699999999998	0	25	2	2	6	0	0
+68	\N	12	\N	0	7	2	2	6	0	0
+69	\N	13	\N	0	20	2	2	6	0	0
+70	\N	14	\N	0	37	2	2	6	0	0
 \.
 
 
@@ -906,7 +928,74 @@ COPY public.qualifying_results (qualifying_result_id, "position", laptime, penal
 -- Data for Name: race_results; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.race_results (result_id, finishing_position, fastest_lap_points, penalty_points, penalty_seconds, gap_to_first, total_racetime, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
+COPY public.race_results (result_id, finishing_position, relative_position, fastest_lap_points, penalty_points, penalty_seconds, gap_to_first, total_racetime, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
+227	1	1	0	0	0	0	4059.684	3	1	1	3	0	0
+229	3	3	0	0	0	52	4111.684	9	1	1	3	0	0
+230	4	4	0	0	0	63.87700000000041	4123.561000000001	27	1	1	3	0	0
+231	5	5	0	0	0	75.52999999999975	4135.214	39	1	1	3	0	0
+232	6	6	0	0	0	105	4164.684	15	1	1	3	0	0
+233	\N	\N	0	0	0	\N	\N	21	1	1	3	0	0
+234	7	1	0	0	0	0	4299.684	28	1	1	3	0	0
+235	8	2	0	0	0	5.694000000000415	4305.378000000001	34	1	1	3	0	0
+236	9	3	0	0	0	34.435999999999694	4334.12	16	1	1	3	0	0
+237	10	4	0	0	0	42.5	4342.184	22	1	1	3	0	0
+238	11	5	1	0	0	60.39800000000014	4360.082	4	1	1	3	0	0
+239	12	6	0	0	0	76.48300000000017	4376.167	40	1	1	3	0	0
+240	\N	\N	0	0	0	\N	\N	10	1	1	3	0	0
+241	1	1	0	0	0	0	1457.202	26	2	2	1	0	0
+242	2	2	0	0	0	3.6010000000001128	1460.803	13	2	2	1	0	0
+243	3	3	0	0	0	16.922000000000025	1474.124	19	2	2	1	0	0
+244	4	4	0	0	0	22.136999999999944	1479.339	31	2	2	1	0	0
+245	5	5	1	0	0	22.621000000000095	1479.823	32	2	2	1	0	0
+246	6	6	0	0	0	30.59999999999991	1487.802	43	2	2	1	0	0
+247	7	7	0	0	0	30.74700000000007	1487.949	8	2	2	1	0	0
+248	8	8	0	0	0	31.457000000000107	1488.659	14	2	2	1	0	0
+249	9	9	0	0	0	39.45399999999995	1496.656	44	2	2	1	0	0
+250	10	10	0	0	0	53.218000000000075	1510.42	38	2	2	1	0	0
+251	11	11	0	0	0	109.48900000000003	1566.691	25	2	2	1	0	0
+252	\N	\N	0	0	0	\N	\N	7	2	2	1	0	0
+253	\N	\N	0	0	0	\N	\N	20	2	2	1	0	0
+254	\N	\N	0	0	0	\N	\N	37	2	2	1	0	0
+255	1	1	0	0	0	0	1459.795	13	2	2	2	0	0
+256	2	2	0	0	0	7.176999999999907	1466.972	8	2	2	2	0	0
+257	3	3	0	0	0	8.037000000000035	1467.832	26	2	2	2	0	0
+258	4	4	1	0	0	13.371000000000095	1473.1660000000002	32	2	2	2	0	0
+259	5	5	0	0	0	13.894000000000005	1473.689	14	2	2	2	0	0
+260	6	6	0	0	0	18.50999999999999	1478.305	19	2	2	2	0	0
+261	7	7	0	0	0	21.628999999999905	1481.424	43	2	2	2	0	0
+262	8	8	0	0	0	22.468000000000075	1482.2630000000001	44	2	2	2	0	0
+263	9	9	0	0	0	26.11500000000001	1485.91	31	2	2	2	0	0
+264	10	10	0	0	0	46.541999999999916	1506.337	38	2	2	2	0	0
+265	11	11	0	0	0	96.32899999999995	1556.124	25	2	2	2	0	0
+266	\N	\N	0	0	0	\N	\N	7	2	2	2	0	0
+267	\N	\N	0	0	0	\N	\N	20	2	2	2	0	0
+268	\N	\N	0	0	0	\N	\N	37	2	2	2	0	0
+269	1	1	0	0	0	0	1821.666	12	3	3	1	0	0
+270	2	2	0	0	0	1	1822.666	35	3	3	1	0	0
+282	1	1	0	0	0	0	1795	35	3	3	2	0	0
+283	2	2	0	0	0	5	1800	5	3	3	2	0	0
+271	3	3	0	0	0	2	1823.666	5	3	3	1	0	0
+272	4	4	1	0	0	3	1824.666	11	3	3	1	0	0
+273	5	5	0	0	0	7	1828.666	23	3	3	1	0	0
+274	6	6	0	0	0	14	1835.666	29	3	3	1	0	0
+275	7	7	0	0	0	27	1848.666	17	3	3	1	0	0
+276	8	8	0	0	0	31	1862.666	6	3	3	1	0	0
+277	9	9	0	0	0	46	1867.666	42	3	3	1	0	0
+278	10	10	0	0	0	53	1874.666	41	3	3	1	0	0
+279	11	11	0	0	0	68	1889.666	18	3	3	1	0	0
+280	12	12	0	0	0	75	1896.666	36	3	3	1	0	0
+281	13	13	0	0	0	105	1926.666	24	3	3	1	0	0
+284	3	3	0	0	0	8	1803	12	3	3	2	0	0
+228	2	2	1	0	0	31.2829999999999	4090.967	33	1	1	3	0	0
+285	4	4	0	0	0	13	1808	29	3	3	2	0	0
+286	5	5	0	0	0	20	1815	11	3	3	2	0	0
+287	6	6	0	0	0	30	1825	17	3	3	2	0	0
+288	7	7	1	0	0	37	1832	6	3	3	2	0	0
+289	8	8	0	0	0	42	187	23	3	3	2	0	0
+290	9	9	0	0	0	54	1849	41	3	3	2	0	0
+291	10	10	0	0	0	59	1854	36	3	3	2	0	0
+292	11	11	0	0	0	65	1860	24	3	3	2	0	0
+293	12	12	0	0	0	70	1865	42	3	3	2	0	0
 \.
 
 
@@ -915,8 +1004,11 @@ COPY public.race_results (result_id, finishing_position, fastest_lap_points, pen
 --
 
 COPY public.reports (report_id, number, incident_time, report_reason, video_link, fact, penalty, time_penalty, championship_penalty_points, licence_penalty_points, penalty_reason, is_reviewed, is_queued, report_time, category_id, round_id, session_id, channel_message_id, reported_team_id, reporting_team_id, warnings, licence_points, reported_driver_id, reporting_driver_id) FROM stdin;
-30	1	4:30	Mantextek effettua impeding nei confronti di ElGallo facendolo finire in ghiaia	https://youtu.be/tyHtd7tSxo8	\N	\N	30	\N	\N	\N	f	f	\N	1	1	6	687	6	4	0	0	33	22
-31	1	2:20	maurynho993 tampona Turbolibix46 in curva 1, facendolo uscire di pista e perdere una posizione	\N	\N	\N	30	\N	\N	\N	f	f	\N	2	2	1	689	1	3	0	0	8	19
+36	2	1:08:23	\N	\N	Finisce il carburante prima del traguardo.	1 warning (1/12), 0punti sulla licenza (10/10).	0	0	0	Carburante terminato prima della linea del traguardo	t	f	\N	1	1	3	\N	7	\N	1	0	39	\N
+37	3	1:08:37	\N	\N	Finisce il carburante prima del traguardo.	1 warning (1/12), 0punti sulla licenza (10/10).	0	0	0	Carburante terminato prima della linea del traguardo	t	f	\N	1	1	3	\N	4	\N	1	0	22	\N
+38	4	1:08:01	\N	\N	Finisce il carburante prima del traguardo.	1 warning (1/12), 0punti sulla licenza (10/10).	0	0	0	Carburante terminato prima della linea del traguardo	t	f	\N	1	1	3	\N	2	\N	1	0	9	\N
+31	1	2:20	maurynho993 tampona Turbolibix46 in curva 1, facendolo uscire di pista e perdere una posizione	\N	Collisione con vettura no.46.	1 warning (1/12), 0punti sulla licenza (10/10).	0	\N	\N	In approccio di curva 1 il pilota Maurynho993 non lascia sufficiente spazio a Turbolibix46 e lo forza fuori pista.	t	f	\N	2	2	1	689	1	3	1	0	8	19
+30	1	4:30	Mantextek effettua impeding nei confronti di ElGallo facendolo finire in ghiaia	https://youtu.be/tyHtd7tSxo8	Impeeding in qualifica nei confronti del pilota RTI_Elgallo17	1 warning (1/12), 0punti sulla licenza (10/10).	0	\N	\N	Il pilota Mantextek05 non mantiene una posizione in pista consona in qualifica e causa un impeeding nei confronti del pilota RTI_Elgallo17. Si ricorda a tutti i piloti di non intralciare la traiettoria ideale e di procedere a una adeguata velocità	t	f	\N	1	1	6	687	6	4	1	0	33	22
 \.
 
 
@@ -941,11 +1033,11 @@ COPY public.rounds (round_id, number, date, circuit, completed, category_id, cha
 25	3	2022-11-17	Circuit de la Sarthe	f	3	1
 4	2	2022-11-07	Circuit de Barcelona-Catalunya	f	1	1
 23	3	2022-11-14	Circuit de la Sarthe	f	1	1
-3	1	2022-11-03	Suzuka Circuit	f	3	1
 6	2	2022-11-10	Circuit de Barcelona-Catalunya	f	3	1
-2	1	2022-11-01	Suzuka Circuit	f	2	1
 5	2	2022-11-08	Circuit de Barcelona-Catalunya	f	2	1
-1	1	2022-10-31	Suzuka Circuit	f	1	1
+1	1	2022-10-31	Suzuka Circuit	t	1	1
+2	1	2022-11-01	Suzuka Circuit	t	2	1
+3	1	2022-11-03	Suzuka Circuit	t	3	1
 \.
 
 
@@ -956,8 +1048,8 @@ COPY public.rounds (round_id, number, date, circuit, completed, category_id, cha
 COPY public.sessions (session_id, name, point_system_id) FROM stdin;
 1	Gara 1	1
 2	Gara 2	1
-6	Qualifica	1
 3	Gara	2
+6	Qualifica	3
 \.
 
 
@@ -1022,21 +1114,21 @@ SELECT pg_catalog.setval('public.point_systems_point_system_id_seq', 2, true);
 -- Name: qualifying_results_qualifying_result_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.qualifying_results_qualifying_result_id_seq', 14, true);
+SELECT pg_catalog.setval('public.qualifying_results_qualifying_result_id_seq', 70, true);
 
 
 --
 -- Name: race_results_result_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.race_results_result_id_seq', 184, true);
+SELECT pg_catalog.setval('public.race_results_result_id_seq', 293, true);
 
 
 --
 -- Name: reports_report_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.reports_report_id_seq', 33, true);
+SELECT pg_catalog.setval('public.reports_report_id_seq', 38, true);
 
 
 --
@@ -1510,5 +1602,65 @@ ALTER TABLE ONLY public.sessions
 
 --
 -- PostgreSQL database dump complete
+--
+
+--
+-- Database "postgres" dump
+--
+
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 15.0 (Debian 15.0-1.pgdg110+1)
+-- Dumped by pg_dump version 15.0 (Debian 15.0-1.pgdg110+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+DROP DATABASE postgres;
+--
+-- Name: postgres; Type: DATABASE; Schema: -; Owner: alexander
+--
+
+CREATE DATABASE postgres WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.utf8';
+
+
+ALTER DATABASE postgres OWNER TO alexander;
+
+\connect postgres
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: DATABASE postgres; Type: COMMENT; Schema: -; Owner: alexander
+--
+
+COMMENT ON DATABASE postgres IS 'default administrative connection database';
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+--
+-- PostgreSQL database cluster dump complete
 --
 

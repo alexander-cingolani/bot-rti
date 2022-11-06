@@ -1,8 +1,13 @@
+"""
+This module contains the necessary SQLAlchemy models to keep track of
+RacingTeamItalia's championships and drivers.
+"""
 from __future__ import annotations
 
 import datetime
 from collections import defaultdict
 from datetime import timedelta
+import os
 from typing import DefaultDict
 from uuid import uuid4
 
@@ -50,8 +55,9 @@ class Report(Base):
         penalty (str): The penalty inflicted to the driver. This attribute must be left empty
             in case the reported_driver is not found culpable.
         time_penalty (int): Seconds to add to the driver's total race time.
-        championship_penalty_points (int) Points to be subtracted from the driver's point tally.
-        licence_penalty_points (int) Points to be subtracted from the driver's licence.
+        championship_penalty_points (int): Points to be subtracted from the driver's points tally.
+        licence_points (int): Points to be subtracted from the driver's licence.
+        warnings (int): Number of warnings received.
         penalty_reason (str): Detailed explanation of the reason the penalty was inflicted for.
         is_queued (bool): True if the reviewed report is in queue to be sent out
             to the reports channel.
@@ -79,30 +85,30 @@ class Report(Base):
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
 
     report_id: int = Column(Integer, primary_key=True)
-    number: int = Column("number", SmallInteger, nullable=False)
+    number: int = Column(SmallInteger, nullable=False)
     incident_time: str = Column(String(12), nullable=False)
     report_reason: str = Column(String(2000), nullable=False)
     video_link: str = Column(String(80))
 
     fact: str = Column(String(400))
-    penalty: str = Column(String(100))
+    penalty: str = Column(String(300))
     time_penalty: int = Column(SmallInteger)
-    championship_penalty_points = Column(SmallInteger)
-    licence_penalty_points: int = Column(SmallInteger)
+    licence_points: int = Column(SmallInteger, default=0)
+    warnings: int = Column(SmallInteger, default=0)
+    championship_penalty_points = Column(SmallInteger, default=0)
     penalty_reason: str = Column(String(2000))
     is_reviewed: bool = Column(Boolean, default=False)
     is_queued: bool = Column(Boolean, default=False)
     report_time: datetime = Column(DateTime, server_default=func.now())
-
     channel_message_id: int = Column(BigInteger)
 
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
     round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
     session_id: str = Column(ForeignKey("sessions.session_id"), nullable=False)
-    reported_driver_id: str = Column(ForeignKey("drivers.psn_id"), nullable=False)
+    reported_driver_id: str = Column(ForeignKey("drivers.driver_id"), nullable=False)
     # reporting_driver_id and reporting_team_id are nullable because admins can decide
     # to assign penalties for reasons other than contact between two drivers
-    reporting_driver_id: str = Column(ForeignKey("drivers.psn_id"))
+    reporting_driver_id: str = Column(ForeignKey("drivers.driver_id"))
     reported_team_id: int = Column(ForeignKey("teams.team_id"), nullable=False)
     reporting_team_id: int = Column(ForeignKey("teams.team_id"))
 
@@ -124,6 +130,20 @@ class Report(Base):
 
     def __init__(self):
         """Returns a new Report object."""
+
+    def is_complete(self) -> bool:
+        return all(
+            (
+                self.reported_driver,
+                self.category,
+                self.round,
+                self.session,
+                self.fact,
+                self.penalty,
+                self.reported_team,
+                self.penalty_reason
+            )
+        )
 
 
 class DriverAssignment(Base):
@@ -196,8 +216,9 @@ class DriverCategory(Base):
 
     joined_on: datetime.date = Column(Date, server_default=func.now())
     left_on: datetime.date = Column(Date)
-    licence_points: int = Column(Integer, default=10)
     race_number: int = Column(SmallInteger)
+    warnings: int = Column(SmallInteger, default=0)
+    licence_points: int = Column(SmallInteger, default=10)
 
     driver_id: int = Column(ForeignKey("drivers.driver_id"), primary_key=True)
     category_id: int = Column(ForeignKey("categories.category_id"), primary_key=True)
@@ -288,8 +309,10 @@ class Driver(Base):
         self.psn_id = psn_id
         self.telegram_id = kwargs.get("telegram_id")
 
-    def __eq__(self, __o: Driver) -> bool:
-        return self.driver_id == __o.driver_id
+    def __eq__(self, other: Driver) -> bool:
+        if isinstance(other, Driver):
+            return self.driver_id == other.driver_id
+        return NotImplemented
 
     def __key(self) -> tuple:
         return self.driver_id, self.psn_id
@@ -316,23 +339,39 @@ class Driver(Base):
                 return category.car_class
 
     @property
-    def race_number(self) -> int:
+    def current_race_number(self) -> int:
+        """The number currently being used by the Driver in races."""
         for driver_category in self.current_category().drivers:
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
 
     @property
     def telegram_id(self) -> int | None:
+        """The telegram_id associated with the Driver."""
         if self._telegram_id:
             return int(self._telegram_id)
         return None
 
     @telegram_id.setter
     def telegram_id(self, telegram_id: int):
-        if not isinstance(telegram_id, int):
-            raise TypeError
-        if telegram_id:
+        if telegram_id is None:
+            self._telegram_id = None
+        elif str(telegram_id).isnumeric():
             self._telegram_id = str(telegram_id)
+        else:
+            raise ValueError
+
+    @property
+    def warnings(self) -> int:
+        for category in self.categories:
+            if not category.left_on:
+                return category.warnings
+
+    @property
+    def licence_points(self) -> int:
+        for driver_category in self.categories:
+            if not driver_category.left_on:
+                return driver_category.licence_points
 
 
 class QualifyingResult(Base):
@@ -344,7 +383,9 @@ class QualifyingResult(Base):
         position (int): Position the driver qualified in.
         laptime (float): Best lap registered by the driver.
         penalty_points (int): Points to be subracted from the driver's total.
-
+        warnings (int): Warnings to added to the driver's total.
+        licence_points (int): Points to be subtracted from the driver's licence.
+        
         driver_id (int): Unique ID of the driver the result belongs to.
         round_id (int): Unique ID of the round the result was made in.
         category_id (int): Unique ID of the category the result was made in.
@@ -361,10 +402,13 @@ class QualifyingResult(Base):
     __table_args__ = (UniqueConstraint("driver_id", "round_id"),)
 
     qualifying_result_id: int = Column(SmallInteger, primary_key=True)
-    position: int = Column(SmallInteger, nullable=False)
+    position: int = Column(SmallInteger)
+    relative_position: int = Column(SmallInteger)
     laptime: float = Column(Float, nullable=True)
     penalty_points: int = Column(SmallInteger, default=0, nullable=False)
-
+    warnings: int = Column(SmallInteger, default=0)
+    licence_points: int = Column(SmallInteger, default=0)
+    
     driver_id: int = Column(ForeignKey("drivers.driver_id"), nullable=False)
     round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
@@ -381,6 +425,7 @@ class QualifyingResult(Base):
         laptime: float,
         driver: Driver,
         round: Round,
+        relative_position: int,
     ) -> None:
         """Returns a new QualifyingResult object.
 
@@ -394,6 +439,7 @@ class QualifyingResult(Base):
         self.laptime = laptime
         self.driver = driver
         self.round = round
+        self.relative_position = relative_position
 
         self.category = round.category
         self.session = self.category.qualifying_session
@@ -403,11 +449,12 @@ class QualifyingResult(Base):
 
     @property
     def points_earned(self) -> float:
+        """Points earned by the driver in this qualifying session."""
         if not self.position:
             return 0
-
+       
         scoring = self.session.point_system.scoring
-        return scoring[self.position - 1]
+        return scoring[self.relative_position - 1]
 
 
 class CarClass(Base):
@@ -436,6 +483,7 @@ class CarClass(Base):
     def __eq__(self, other: CarClass) -> bool:
         if isinstance(other, CarClass):
             return self.car_class_id == other.car_class_id
+        return NotImplemented
 
 
 class Team(Base):
@@ -481,9 +529,9 @@ class Team(Base):
         self.name = name
 
     def __eq__(self, __o: Team) -> bool:
-        if not isinstance(__o, Team):
-            return NotImplemented
-        return self.team_id == __o.team_id
+        if isinstance(__o, Team):
+            return self.team_id == __o.team_id
+        return NotImplemented
 
     def __key(self) -> tuple[int, str]:
         return (self.leader_id, self.team_id)
@@ -493,6 +541,7 @@ class Team(Base):
 
     @property
     def leader(self) -> Driver:
+        """The leader of this team."""
         for driver in self.drivers:
             if driver.is_leader:
                 return driver.driver
@@ -622,11 +671,11 @@ class Category(Base):
         return f"Category(category_id={self.category_id},name={self.name})"
 
     def has_sprint_race(self) -> bool:
-        """Returns True if the category has a sprint race"""
+        """Returns True if the category has a sprint race."""
         return len(self.sessions) == 3
 
     def first_non_completed_round(self) -> Round:
-        """Returns the first non completed round"""
+        """Returns the first non completed round."""
         for rnd in self.rounds:
             if not rnd.completed:
                 return rnd
@@ -644,7 +693,7 @@ class Category(Base):
     def qualifying_session(self) -> Session:
         """Returns the Session where qualifying takes place in the category."""
         for category_session in self.sessions:
-            if category_session.session.is_:
+            if category_session.session.is_quali:
                 return category_session.session
 
     @property
@@ -659,6 +708,7 @@ class Category(Base):
 
     @property
     def long_race(self) -> Session:
+        """The Session object corresponding to this category's long race"""
         for category_session in self.sessions:
             name = category_session.session.name.lower()
             if "gara" == name or "2" in name or "lunga" in name:
@@ -666,6 +716,7 @@ class Category(Base):
 
     @property
     def multi_class(self) -> bool:
+        """True if this Category has multiple car classes competing together."""
         return len(self.car_classes) > 1
 
     def current_standings(self) -> list[list[list[RaceResult], int]]:
@@ -686,15 +737,21 @@ class Category(Base):
             results[race_result.driver][1] += race_result.points_earned
         return sorted(list(results.values()), key=lambda x: x[1], reverse=True)
 
+    def reports_today(self):
+        """Returns True if today is reporting day for this category."""
+        return datetime.datetime.now().weekday() == self.round_weekday + 1
+
 
 class PointSystem(Base):
     """
-    This object represents a point system which can be attributed to multiple Sessions.
+    This object represents a point system.
+    Each point system can be associated with multiple Sessions.
 
     Attributes:
         point_system_id (int): A unique ID.
         point_system (str): String containing the number of points for each position,
             separated by a space. E.g. "25 18 15"
+
     """
 
     __tablename__ = "point_systems"
@@ -707,10 +764,16 @@ class PointSystem(Base):
         self.point_system = point_system
 
     def __repr__(self) -> str:
-        return f"PointSystem(point_system_id={self.point_system_id}, point_system={self.point_system})"
+        return (
+            f"PointSystem(point_system_id={self.point_system_id}, "
+            f"point_system={self.point_system})"
+        )
 
     @property
     def scoring(self) -> dict[int, float]:
+        """Dictionary which can be used to easily get the amount of points earned
+        by using the finishing position in the race or qualifying session as the key to
+        the dictionary."""
         return {i: float(score) for i, score in enumerate(self.point_system.split())}
 
 
@@ -775,15 +838,31 @@ class Round(Base):
     def __repr__(self) -> str:
         return f"Round(circuit={self.circuit}, date={self.date}, completed={self.completed})"
 
-    def pole_time(self) -> float:
+    def pole_time(self, car_class_id: int) -> float:
+        """The fastest lap time (in seconds) scored in this round by a specific car class."""
         for quali_result in self.qualifying_results:
-            if quali_result.position == 1:
+            if (
+                quali_result.driver.current_class().car_class_id == car_class_id
+                and quali_result.position == 1
+            ):
                 return quali_result.laptime
 
-    def get_qualifying_result(self, driver_id) -> QualifyingResult:
+    def get_qualifying_result(self, driver_id: int) -> QualifyingResult:
+        """Returns the qualifying result scored by a specific driver."""
         for qualifying_result in self.qualifying_results:
             if qualifying_result.driver_id == driver_id:
                 return qualifying_result
+
+    # def get_reports(self, driver_id: int, session_id: int) -> list[Report]:
+    #     """Returns the reports received by a specific driver in a particular session."""
+    #     reports = []
+    #     for report in self.reports:
+    #         if (
+    #             report.reported_driver_id == driver_id
+    #             and report.session_id == session_id
+    #         ):
+    #             reports.append(report)
+    #     return reports
 
 
 class Session(Base):
@@ -827,6 +906,10 @@ class Session(Base):
     def __repr__(self) -> str:
         return f"Session(name={self.name})"
 
+    @property
+    def is_quali(self) -> bool:
+         return "quali" in self.name.lower()
+     
 
 class RaceResult(Base):
     """This object represents a Driver's result in a race.
@@ -839,7 +922,8 @@ class RaceResult(Base):
         bonus_points (int): Points obtained from fastest lap/pole position.
         penalty_points (int): Points to be subtracted from the driver's total.
         gap_to_first (float): Difference between the driver's race time
-            and the race winner's race time.
+            and the class winner's race time.
+        total_racetime (float): Total time the driver took to complete the race.
 
         driver_id (int): Unique ID of the driver the result is registered to.
         round_id (int): Unique ID of the round the result is registered to.
@@ -861,9 +945,14 @@ class RaceResult(Base):
 
     result_id: int = Column(Integer, primary_key=True)
     finishing_position: int = Column(SmallInteger)
-    fastest_lap_points: int = Column(SmallInteger)
-    penalty_points: int = Column(SmallInteger)
+    relative_position: int = Column(SmallInteger)
+    fastest_lap_points: int = Column(SmallInteger, default=0)
+    penalty_points: int = Column(SmallInteger, default=0)
+    penalty_seconds: int = Column(Float, default=0)
+    warnings: int = Column(SmallInteger, default=0)
+    licence_points: int = Column(SmallInteger, default=0)
     gap_to_first: float = Column(Float)
+    total_racetime: float = Column(Float)
 
     driver_id: int = Column(ForeignKey("drivers.driver_id"))
     round_id: int = Column(ForeignKey("rounds.round_id"))
@@ -878,7 +967,7 @@ class RaceResult(Base):
     def __init__(
         self,
         finishing_position: int,
-        bonus_points: int,
+        fastest_lap_points: int,
         driver: Driver,
         session: Session,
         **kwargs,
@@ -895,27 +984,40 @@ class RaceResult(Base):
             round (Round): Round the result is registered to.
             penalty_points (int): Points to be subtracted from the driver's total.
             gap_to_first (float): Difference between the driver's race time
-                and the race winner's race time.
+                and the class winner's race time.
+            total_racetime (float): Total time the driver took to complete the race.
             participated (bool): True if the driver participated to the race.
         """
         self.finishing_position = finishing_position
         self.driver = driver
         self.session = session
-        self.fastest_lap_points = bonus_points
+        self.fastest_lap_points = fastest_lap_points
         self.round = kwargs.get("round")
         self.penalty_points = kwargs.get("penalty_points")
         self.gap_to_first = kwargs.get("gap_to_first")
+        self.total_racetime = kwargs.get("total_racetime")
         self.participated = bool(kwargs.get("participated"))
+        self.relative_position = kwargs.get("relative_position")
         if self.round:
             self.category = self.round.category
 
     @property
     def points_earned(self) -> float:
+        """Total amount of points earned by the driver in this race.
+        (Finishing position + fastest lap points) *Does not take into account penalty points."""
+        
         if not self.finishing_position:
             return 0
+        quali_points = 0
+        if "1" in self.session.name or "2" not in self.session.name:
+            quali_points = self.round.get_qualifying_result(self.driver_id).points_earned
         scoring = self.session.point_system.scoring
-        return scoring[self.finishing_position - 1] + self.fastest_lap_points
-
+        return (
+            scoring[self.finishing_position - 1]
+            + self.fastest_lap_points
+            - self.penalty_points
+            + quali_points
+        )
 
 class DriverChampionship(Base):
     """This object associates a Driver with a Championship.
@@ -949,7 +1051,8 @@ class Championship(Base):
         start (datetime.date): Date the championship starts on.
         end (datetime.date): Date the championship ends on.
 
-        categories (list[Category]): Categories belonging to the championship. [Ordered by round_weekday]
+        categories (list[Category]): Categories belonging to the championship.
+            [Ordered by round_weekday]
         drivers (list[DriverChampionship]): Drivers participating in the championship.
         rounds (list[Round]): Rounds present in the championship.
     """
@@ -958,7 +1061,6 @@ class Championship(Base):
 
     championship_id: int = Column(SmallInteger, primary_key=True)
     championship_name: str = Column(String(60), unique=True, nullable=False)
-
     start: datetime.date = Column(Date, nullable=False)
     end: datetime.date = Column(Date, nullable=True)
 
@@ -1019,10 +1121,15 @@ class Championship(Base):
 
     @property
     def abbreviated_name(self) -> str:
+        """Short version of the championship's name created by taking the first letter
+        of each word in it.
+        E.G. "eSports Championship 1" -> "EC1"
+        """
         return "".join(i[0] for i in self.championship_name.split()).upper()
 
     @property
     def driver_list(self) -> list[Driver]:
+        """List of drivers participating to this championship."""
         drivers = []
         for category in self.categories:
             for driver in category.drivers:
@@ -1032,19 +1139,12 @@ class Championship(Base):
 
 def create_tables() -> None:
     """Creates all the tables"""
-    engine = create_engine("postgresql://alexander:alexander@localhost:5432/rti")
-    _Session = sessionmaker(bind=engine)
-    with _Session() as _session:
+    engine = create_engine(os.environ.get("DB_URL"))
+    Session = sessionmaker(bind=engine)
+    with Session() as _session:
         Base.metadata.create_all(engine)
         _session.commit()
 
 
 if __name__ == "__main__":
     create_tables()
-    _Session = sessionmaker(
-        bind=create_engine("postgresql://alexander:alexander@localhost:5432/rti")
-    )
-    with _Session() as _session:
-        _session.add(Game("gts"))
-        _session.add(Game("gt7"))
-        _session.commit()

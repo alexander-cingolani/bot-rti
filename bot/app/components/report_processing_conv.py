@@ -258,7 +258,7 @@ async def report_processing_entry_point(
     reports = get_reports(is_reviewed=False)
 
     if not reports:
-        text = "Non ci sono segnalazioni da processare in alcuna categoria."
+        text = "Non ci sono segnalazioni da processare."
         if update.callback_query:
             await update.callback_query.edit_text(text)
         else:

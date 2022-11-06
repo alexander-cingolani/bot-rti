@@ -452,9 +452,9 @@ class QualifyingResult(Base):
         """Points earned by the driver in this qualifying session."""
         if not self.position:
             return 0
-
+       
         scoring = self.session.point_system.scoring
-        return scoring[self.position - 1]
+        return scoring[self.relative_position - 1]
 
 
 class CarClass(Base):
@@ -1005,26 +1005,19 @@ class RaceResult(Base):
     def points_earned(self) -> float:
         """Total amount of points earned by the driver in this race.
         (Finishing position + fastest lap points) *Does not take into account penalty points."""
+        
         if not self.finishing_position:
             return 0
+        quali_points = 0
+        if "1" in self.session.name or "2" not in self.session.name:
+            quali_points = self.round.get_qualifying_result(self.driver_id).points_earned
         scoring = self.session.point_system.scoring
         return (
             scoring[self.finishing_position - 1]
             + self.fastest_lap_points
             - self.penalty_points
+            + quali_points
         )
-
-    # def penalty_points(self) -> float:
-    #     """Total penalty points received by the driver in this session"""
-    #     return sum(
-    #         report.championship_penalty_points
-    #         for report in self.round.get_reports(self.driver_id, self.session_id)
-    #     )
-
-    # def penalty_seconds(self) -> float:
-    #     """Total time penalty by the driver in this session."""
-    #     return sum(report.time_penalty for report in self.round.get_reports(self.driver_id, self.session_id))
-
 
 class DriverChampionship(Base):
     """This object associates a Driver with a Championship.

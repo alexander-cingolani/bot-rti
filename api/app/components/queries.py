@@ -1,22 +1,26 @@
+"""
+This module contains class-specific queries to the database; as well as
+general purpose functions such as save_object and update_object.
+"""
+
+
 import os
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from app.components.models import (
-    CarClass,
     Category,
     Championship,
     Driver,
-    Game,
+    QualifyingResult,
     RaceResult,
     Report,
-    Team,
 )
-from sqlalchemy import delete, desc
+from sqlalchemy import delete, desc, func
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.future import create_engine, select
 from sqlalchemy.orm import joinedload, sessionmaker
-
+# from app.components.result_recognition_conv import separate_car_classes
 engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
 _session = _Session()
@@ -44,23 +48,6 @@ def get_championship(championship_id: int = None) -> Championship | None:
     return None
 
 
-def get_games() -> list[Game]:
-    """Returns the list of games."""
-    return _session.execute(select(Game)).all()
-
-
-def get_game(name: str) -> Game | None:
-    """Returns the game matching the given name."""
-    return _session.execute(select(Game).where(Game.name == name)).one_or_none()
-
-
-def get_category(category_id: int) -> Category | None:
-    """Returns the category corresponding to the given category_id."""
-    return _session.execute(
-        select(Category).where(Category.category_id == category_id)
-    ).one_or_none()
-
-
 def get_current_category() -> Category | None:
     """Returns the current championship's category whose race_weekday corresponds to yesterday."""
 
@@ -75,7 +62,7 @@ def get_reports(
     round_id: int = None,
     is_reviewed: bool = None,
     is_queued: bool = None,
-) -> list[Report] | None:
+) -> list[Report]:
     """Returns a list of reports matching the given arguments.
 
     Args:
@@ -125,54 +112,36 @@ def get_driver(psn_id: str = None, telegram_id: str = None) -> Driver | None:
 
 
 def get_similar_driver(psn_id: str) -> Driver | None:
-    """Returns the Driver object with the psn_id most similar to the one given"""
+    """Returns the Driver object with the psn_id most similar to the one given."""
     result = _session.execute(
-        select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.3)
+        select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.4)
     ).first()
 
     if result:
         return result[0]
-    else:
-        return None
+    return None
 
 
-def get_latest_report_number(category_id: int) -> int:
+def get_last_report_number(category_id: int, round_id: int) -> int:
+    """Gets the number of the last report made in a specific category and round.
+
+    Args:
+        category_id (int): ID of the category of which to return the last report.
+        round_id (int): ID of the round of which to return the last report.
+
+    Returns:
+        int: _description_
+    """
+
     result = _session.execute(
         select(Report)
         .where(Report.category_id == category_id)
+        .where(Report.round_id == round_id)
         .order_by(desc(Report.number))
     ).first()
     if result:
         return result[0].number
     return 0
-
-
-def get_team(team_name: str) -> Team | None:
-    result = _session.execute(select(Team).where(Team.name == team_name)).one_or_none()
-    return result[0] if result else None
-
-
-def get_car_class(class_name: str, game_id: int) -> CarClass | None:
-    result = _session.execute(
-        select(CarClass)
-        .where(CarClass.name == class_name)
-        .where(CarClass.game_id == game_id)
-    ).one_or_none()
-    return result[0] if result else None
-
-
-def delete_last_report(leader: Driver) -> None:
-    report: Report = (
-        _session.execute(select(Report))
-        .where(Report.reporting_team_id == leader.current_team().name)
-        .order_by(desc(Report.report_time))
-        .first()
-    )
-    if report:
-        if (datetime.now() - report.report_time) <= timedelta(minutes=30):
-            _session.delete(report)
-            return True
-    return False
 
 
 def save_object(obj) -> None:
@@ -182,35 +151,69 @@ def save_object(obj) -> None:
 
 
 def save_multiple_objects(objs: list) -> None:
+    "Saves a list of objects to the database."
     _session.add_all(objs)
     _session.commit()
 
 
-def save_and_apply_report(report: Report) -> None:
-    if not report.time_penalty:
+def save_qualifying_report(report: Report) -> None:
+    """Saves and applies a penalty to a driver in qualifying."""
+    quali_result = _session.execute(
+        select(QualifyingResult).where(
+            QualifyingResult.driver_id == report.reported_driver_id
+            and QualifyingResult.session_id == report.session_id
+            and QualifyingResult.round_id == report.round_id
+        )
+    ).one_or_none()
+    if quali_result:
+        quali_result: QualifyingResult = quali_result[0]
+        quali_result.warnings = report.warnings
+        quali_result.licence_points = report.licence_points
+        quali_result.penalty_points = report.championship_penalty_points
         update_object()
+        return
+    raise Exception("QualifyingResult not found")
 
+
+def save_and_apply_report(report: Report) -> None:
+    """Saves a report and applies the time penalty, changing the finishing positions
+    of the other drivers as well if needed."""
+
+    if not report.time_penalty:
+        save_object(report)
+    if report.session.is_quali:
+        save_qualifying_report(report)
+        return
     rows = _session.execute(
         select(RaceResult)
         .where(
-            (RaceResult.category_id, RaceResult.round_id, report.session_id)
-            == (report.category_id, report.round_id, report.session_id)
+            RaceResult.category_id == report.category.category_id
+            and RaceResult.round_id == report.round_id
+            and RaceResult.session_id == report.session_id
         )
         .order_by(RaceResult.finishing_position)
     ).all()
+    _session.commit()
+    race_results: list[RaceResult] = []
+    for row in rows:
+        race_result = row[0]
+        if getattr(race_result, "total_racetime"):
+            if race_result.driver_id == report.reported_driver_id:
 
-    race_results = [row[0] for row in rows]
-    for race_result in race_results:
-        if race_result.driver_id == report.reported_driver_id:
-            race_result.gap_to_first += report.time_penalty
-            break
+                race_result.total_racetime += report.time_penalty
+                break
+        race_results.append(race_result)
+    race_results.sort(key=lambda x: x.total_racetime)
 
-    race_results.sort(key=lambda x: x.gap_to_first)
-
-    for i, race_result in enumerate(race_results):
-        if race_result.finishing_position:
-            race_result.finishing_position = i + 1
-
+    # winners_racetime = race_results[0].total_racetime
+    for i, race_result in enumerate(race_results, start=1):
+        race_result.finishing_position = i
+    
+    # separated_results = separate_car_classes(category=report.category, race_results=)
+        
+    # for i, race_result in enumerate(separate_car_classes)
+        # race_result.gap_to_first = race_result.total_racetime - winners_racetime
+    report.is_reviewed = True
     update_object()
 
 
@@ -219,15 +222,21 @@ def update_object() -> None:
     _session.commit()
 
 
-def get_max_races() -> int:
-    """Returns driver with the most races"""
-    result = _session.execute(
-        """SELECT driver_id, COUNT(DISTINCT(rr.round_id))  from race_results rr WHERE rr.finishing_position != 0 GROUP BY rr.driver_id ORDER BY COUNT(rr.round_id) DESC LIMIT 1"""
-    ).one_or_none()
-    if result:
-        return result[1]
-    return 0
+# def get_max_races() -> int:
+#     """Returns the maximum amount of races completed by any driver."""
+#     result = _session.execute(
+#         select([func.count()])
+#         .select_from(RaceResult)
+#         .where(RaceResult.finishing_position > 0)
+#         .group_by(RaceResult.driver_id)
+#         .order_by(desc(RaceResult.round_id).limit(1))
+#     ).first()
+
+#     if result:
+#         return result[1]
+#     return 0
 
 
 def delete_report(report: Report) -> None:
+    """Deletes the given report from the database."""
     _session.execute(delete(Report).where(Report.report_id == report.report_id))

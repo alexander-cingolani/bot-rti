@@ -193,19 +193,24 @@ async def download_quali_results(
     await update.effective_chat.send_action(ChatAction.TYPING)
 
     # Save the photo containing the results.
-    try:
-        file = await update.message.document.get_file()
-    except AttributeError:
-        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-        return
-    await file.download("results.jpg")
+    if update.message:
+        if update.message.text:
+            results = text_to_results(update.message.text, category=category)
+        else:
+        
+            try:
+                file = await update.message.document.get_file()
+            except AttributeError:
+                await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                return
+            await file.download("results.jpg")
 
-    driver_names = [driver.driver.psn_id for driver in category.drivers]
-    success, user_data["quali_results"] = recognize_quali_results(
-        "results.jpg", driver_names, category.game.name
-    )
+            driver_names = [driver.driver.psn_id for driver in category.drivers]
+            success, user_data["quali_results"] = recognize_quali_results(
+                "results.jpg", driver_names, category.game.name
+            )
 
-    os.remove("results.jpg")
+            os.remove("results.jpg")
 
     # Send the results
     results = user_data["quali_results"]
