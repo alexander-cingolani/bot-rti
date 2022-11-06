@@ -1,3 +1,7 @@
+"""
+This module contains all the callbacks necessary to allow users to create reports
+"""
+
 import os
 from datetime import datetime, timedelta
 
@@ -8,7 +12,7 @@ from app.components.queries import (
     get_championship,
     get_driver,
     get_last_report_by,
-    get_latest_report_number,
+    get_last_report_number,
     save_object,
     update_object,
 )
@@ -34,13 +38,14 @@ from telegram.ext import (
     REPORT_REASON,
     SEND,
     UNSEND,
-) = range(6, 15)
+) = range(3, 12)
 
 
 async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user which category he wants to create a report in."""
     championship = get_championship()
     user_data = context.user_data
+    user_data.clear()
     user_data["championship"] = championship
     user_data["categories"] = {}
     reply_markup = []
@@ -131,7 +136,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Asks the user the session in which the accident happened."""
     user = update.effective_user
     user_data = context.user_data
-
+    user_data.clear()
     user_data["leader"] = get_driver(telegram_id=user.id)
 
     if not user_data["leader"]:
@@ -163,15 +168,17 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data["category"] = user_data["championship"].reporting_category()
     if not user_data["category"]:
-        text = """
-Il periodo per le segnalazioni è terminato. Se necessario, puoi chiedere il permesso a un admin.
-Dopo aver ottenuto il permesso crea la segnalazione con /segnalazione_ritardataria.
-"""
+        text = (
+            "Il periodo per le segnalazioni è terminato. Se necessario, puoi chiedere "
+            "il permesso a un admin.\n"
+            "Dopo aver ottenuto il permesso crea la segnalazione con "
+            "/segnalazione_ritardataria."
+        )
         reply_markup = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "Chiedi il permesso", url=f"https://t.me/+6Ksa63FEKTNkYmI0"
+                        "Chiedi il permesso", url="https://t.me/+6Ksa63FEKTNkYmI0"
                     )
                 ]
             ]
@@ -179,8 +186,11 @@ Dopo aver ottenuto il permesso crea la segnalazione con /segnalazione_ritardatar
         await update.message.reply_text(text, reply_markup=reply_markup)
         return ConversationHandler.END
 
-    round = user_data["category"].first_non_completed_round()
-    text = f"{round.number}ª Tappa {user_data['category'].name}\nIn che sessione è avvenuto l'incidente?"
+    championship_round = user_data["category"].first_non_completed_round()
+    text = (
+        f"{championship_round.number}ª Tappa {user_data['category'].name}"
+        "\nIn che sessione è avvenuto l'incidente?"
+    )
     user_data["sessions"] = {}
     reply_markup = []
     for i, session in enumerate(user_data["category"].sessions):
@@ -245,7 +255,10 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             )
             return REPORTING_DRIVER
 
-        text = "Non essendo disponibili i replay delle qualifiche è necessario fornire un video dell'episodio. Incolla il link qui sotto."
+        text = (
+            "Non essendo disponibili i replay delle qualifiche è necessario "
+            "fornire un video dell'episodio. Incolla il link al video YouTube qui sotto."
+        )
         callback_function = (
             str(SESSION) if user_data.get("late_report") else "create_report"
         )
@@ -269,6 +282,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Saves the link provided by the user and asks who is considered to be the victim."""
     user_data = context.user_data
 
     if (
@@ -276,6 +290,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         and "qualific" in user_data["report"].session.name.lower()
     ):
         user_data["report"].video_link = update.message.text
+
     text = "Chi è la vittima?"
     reply_markup = []
     for i, driver in enumerate(user_data["category"].drivers):
@@ -286,6 +301,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
             )
+
     reply_markup = list(chunked(reply_markup, 2))
     reply_markup.append(
         [
@@ -297,6 +313,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
         ]
     )
+
     if user_data["report"].reporting_driver:
         reply_markup[-1].append(
             InlineKeyboardButton(
@@ -315,7 +332,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Saves the reporting driver and asks for the reported driver"""
+    """Saves the victim and asks for the reported driver."""
     user_data = context.user_data
     if not update.callback_query.data.isdigit():
         context.user_data["report"].reporting_driver = user_data["drivers"][
@@ -350,14 +367,14 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Saves the reported driver and asks for the minute"""
+    """Saves the reported driver and asks for the minute."""
 
     user_data = context.user_data
     if not update.callback_query.data.isdigit():
         user_data["report"].reported_driver = user_data["drivers"][
             update.callback_query.data
         ]
-    text = "Quando è avvenuto l'incidente? (mm:ss)"
+    text = "In che minuto è avvenuto l'incidente? (mm:ss)"
 
     reply_markup = [
         [
@@ -380,15 +397,15 @@ async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Saves the minute and asks for the reason"""
+    """Saves the minute and asks for the reason."""
 
     if not update.callback_query:
         context.user_data["report"].incident_time = update.message.text
 
-    text = """
-<b>Seleziona una motivazione per la segnalazione:</b>
-(alternativamente scrivine una qui sotto)
-"""
+    text = (
+        "<b>Seleziona una motivazione per la segnalazione:</b>\n"
+        "(alternativamente scrivine una qui sotto)"
+    )
 
     user_data = context.user_data
     reply_markup = [[]]
@@ -400,9 +417,7 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             b=user_data["report"].reported_driver.psn_id,
         )
         text += f"\n{i} - <i>{reason}</i>"
-        reply_markup[0].append(
-            InlineKeyboardButton(text=str(i), callback_data=f"reason{i}")
-        )
+        reply_markup[0].append(InlineKeyboardButton(text=str(i), callback_data=f"r{i}"))
     reply_markup.append(
         [
             InlineKeyboardButton(
@@ -426,12 +441,12 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Saves the reason and asks if to send or not"""
+    """Saves the reason and asks if to send the report or not."""
     user_data = context.user_data
     if update.callback_query:
         if not update.callback_query.data.isdigit():
             user_data["report"].report_reason = config.REASONS[
-                int(update.callback_query.data.replace("reason", "")) - 1
+                int(update.callback_query.data.removeprefix("r")) - 1
             ].format(
                 a=user_data["report"].reporting_driver.psn_id,
                 b=user_data["report"].reported_driver.psn_id,
@@ -439,16 +454,18 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     else:
         user_data["report"].report_reason = update.message.text
     report: Report = user_data["report"]
-    text = f"""Dopo aver controllato che i dati inseriti siano corretti, premi "conferma e invia" per inviare la segnalazione.
-Dopo aver inviato la segnalazione avrai la possibilità di ritirarla entro 30 min.
+    text = (
+        f"Contolla che i dati inseriti siano corretti, poi premi "
+        '"conferma e invia" per inviare la segnalazione.\n'
+        "Dopo aver inviato la segnalazione avrai la possibilità di ritirarla entro 30 min."
+        f"\n\n<b>Sessione</b>: <i>{report.session.name}</i>"
+        f"\n<b>Pilota Vittima</b>: <i>{report.reporting_driver.psn_id}</i>"
+        f"\n<b>Pilota Colpevole</b>: <i>{report.reported_driver.psn_id}</i>"
+        f"\n<b>Minuto Incidente</b>: <i>{report.incident_time}</i>"
+        f"\n<b>Motivo Segnalazione</b>: <i>{report.report_reason}</i>"
+        f"\n{f'<b>Video</b>: <i>{report.video_link}</i>' if report.video_link else ''}"
+    )
 
-<b>Sessione</b>: <i>{report.session.name}</i>
-<b>Pilota Vittima</b>: <i>{report.reporting_driver.psn_id}</i>
-<b>Pilota Colpevole</b>: <i>{report.reported_driver.psn_id}</i>
-<b>Minuto Incidente</b>: <i>{report.incident_time}</i>
-<b>Motivo Segnalazione</b>: <i>{report.report_reason}</i>
-{f'<b>Video</b>: <i>{report.video_link}</i>' if report.video_link else ''}
- """
     reply_markup = InlineKeyboardMarkup(
         [
             [
@@ -472,22 +489,27 @@ Dopo aver inviato la segnalazione avrai la possibilità di ritirarla entro 30 mi
     return SEND
 
 
-async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the report to the report channel and saves it in the database."""
+async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends the report to the report channel and saves it to the database."""
 
     user_data = context.user_data
+
+    category: Category = user_data["category"]
+
+    if not category.reports_today():
+        text = "Troppo tardi :/ è già scoccata la mezzanotte."
+        await update.callback_query.edit_message_text(text=text)
+
     if update.callback_query.data == "confirm":
-        category: Category = user_data["category"]
+
         report: Report = user_data["report"]
         report.category = category
-        report.round = (
-            user_data["round"]
-            if user_data.get("round")
-            else category.first_non_completed_round()
-        )
+        report.round = category.first_non_completed_round()
         report.reported_team = report.reported_driver.current_team()
         report.reporting_team = report.reporting_driver.current_team()
-        report.number = get_latest_report_number(category.category_id) + 1
+        report.number = (
+            get_last_report_number(category.category_id, report.round.round_id) + 1
+        )
 
         channel = (
             config.LATE_REPORT_CHAT
@@ -496,10 +518,10 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
         report_document_name = ReportDocument(report).generate_document()
-        with open(report_document_name, "rb") as document:
-            message = await context.bot.send_document(
-                chat_id=channel, document=document
-            )
+
+        message = await context.bot.send_document(
+            chat_id=channel, document=open(report_document_name, "rb")
+        )
 
         report.channel_message_id = message.message_id
         update_object()
@@ -515,13 +537,17 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 ]
             ]
         )
-        await update.callback_query.edit_message_text(
-            text="""
-La segnalazione è stata inviata, se hai notato un errore, puoi ritirarla entro 30 minuti.
-Ricorda che creando una nuova segnalazione perderai la possibilità di ritirare quella precedente.
-""",
-            reply_markup=reply_markup,
+
+        text = (
+            "Segnalazione inviata!"
+            "\nSe noti un errore hai 30 minuti di tempo per ritirarla."
+            "\nRicorda che creando una nuova segnalazione perderai "
+            "la possibilità di ritirare quella precedente."
         )
+        await update.callback_query.edit_message_text(
+            text=text, reply_markup=reply_markup
+        )
+
     elif update.callback_query.data == "cancel":
         user_data.clear()
     save_object(report)
@@ -555,7 +581,7 @@ async def change_state_rep_creation(
         REPORTED_DRIVER: reported_driver,
         MINUTE: save_minute,
         REPORT_REASON: save_reason,
-        SEND: send,
+        SEND: send_report,
     }
     state = int(update.callback_query.data)
     await callbacks.get(state)(update, context)
@@ -609,32 +635,25 @@ report_creation = ConversationHandler(
             create_late_report,
             filters=filters.ChatType.PRIVATE,
         ),
-        CallbackQueryHandler(create_report, "create_report"),
-        CallbackQueryHandler(create_late_report, "create_late_report"),
-        CallbackQueryHandler(change_state_rep_creation, r"^[6-9]|1[0-2]$"),
+        CallbackQueryHandler(create_report, "^create_report$"),
+        CallbackQueryHandler(create_late_report, "^create_late_report$"),
     ],
     states={
-        CATEGORY: [CallbackQueryHandler(save_category, r"c0|c1|c2")],
-        SESSION: [CallbackQueryHandler(save_session, r"s0|s1|s2")],
+        CATEGORY: [CallbackQueryHandler(save_category, r"^c[0-9]{1,}$")],
+        SESSION: [CallbackQueryHandler(save_session, r"^s[0-9]{1,}$")],
         LINK: [
             MessageHandler(
                 filters.Regex(
-                    r"^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube(-nocookie)?\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$"
+                    r"^((?:https?:)?\/\/)?((?:www|m)\.)?"
+                    r"((?:youtube(-nocookie)?\.com|youtu.be))"
+                    r"(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$"
                 ),
                 save_link,
             ),
             CallbackQueryHandler(save_link, r"^[6-9]|1[0-2]$"),
         ],
-        REPORTING_DRIVER: [
-            CallbackQueryHandler(
-                reporting_driver, r"|".join(f"d{num}" for num in range(20))
-            )
-        ],
-        REPORTED_DRIVER: [
-            CallbackQueryHandler(
-                reported_driver, r"|".join(f"d{num}" for num in range(20))
-            )
-        ],
+        REPORTING_DRIVER: [CallbackQueryHandler(reporting_driver, r"^d[0-9]{1,}$")],
+        REPORTED_DRIVER: [CallbackQueryHandler(reported_driver, r"^d[0-9]{1,}$")],
         MINUTE: [
             MessageHandler(
                 filters.Regex(r"^(?:(?:([01]?\d|2[0-3]):)?([0-5]?\d):)?([0-5]?\d)$"),
@@ -645,14 +664,15 @@ report_creation = ConversationHandler(
             MessageHandler(filters.Regex(r"^.{20,}$"), save_reason),
             CallbackQueryHandler(
                 save_reason,
-                r"|".join(map(lambda x: f"reason{x}", range(len(config.REASONS) + 1))),
+                r"^r[0-9]{1,}$",
             ),
         ],
-        SEND: [CallbackQueryHandler(send, "confirm")],
+        SEND: [CallbackQueryHandler(send_report, "confirm")],
         UNSEND: [CallbackQueryHandler(withdraw_report, "withdraw_report")],
     },
     fallbacks=[
         CommandHandler("esci", exit_conversation),
         CallbackQueryHandler(exit_conversation, "cancel"),
+        CallbackQueryHandler(change_state_rep_creation, r"^[3-9]$|^1[0-1]$"),
     ],
 )

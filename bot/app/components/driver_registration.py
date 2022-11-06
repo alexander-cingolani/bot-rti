@@ -1,7 +1,8 @@
-from typing import cast
+"""
+This module contains all the callbacks necessary to register drivers to the database.
+"""
 
 from app.components import config
-from app.components.models import Driver
 from app.components.queries import get_driver, get_similar_driver, update_object
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import (
@@ -42,46 +43,45 @@ async def driver_registration_entry_point(
 
 async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Checks if the given psn_id is correct and saves the user's telegram_id if an exact
-    match is found.
+    match is found. If no exact match is found the bot provides the user with a similar
+    ID and asks if that is the right one.
     """
 
     if getattr(update.callback_query, "data", ""):
         if update.callback_query.data == "change_id":
-            driver = cast(Driver, context.user_data["driver_obj"])
+            driver = context.user_data["driver_obj"]
             driver.telegram_id = None
             update_object()
+            text = "Scrivimi il tuo <i>PlayStation ID</i>:"
+            await update.callback_query.edit_message_text(text)
+            return CHECK_ID
 
-        elif update.callback_query.data == "correct_id":
-            await update.callback_query.edit_message_text("Perfetto!")
+        if update.callback_query.data == "correct_id":
+            await update.callback_query.edit_message_text("👌")
             return ConversationHandler.END
-
-        text = "Scrivimi il tuo <i>PlayStation ID</i>:"
-        await update.callback_query.edit_message_text(text)
-        return CHECK_ID
 
     if driver := get_driver(psn_id=update.message.text):
-
-        # Checks that no other telegram_id is already registered to that driver.
+        # Checks that no other user is registered to the requested psn_id
         if driver.telegram_id:
             text = (
-                "Oh oh. Sembra che qualcuno si sia già registrato a questo ID."
-                f"Se questo è il tuo ID PSN contatta {OWNER.mention_html(OWNER.full_name)}"
+                "Oh oh. Sembra che qualcuno si sia già registrato a questo ID.\n"
+                "Se sei sicuro che questo si tratti del tuo ID PSN contatta "
+                f"{OWNER.mention_html(OWNER.full_name)} per risolvere il problema."
             )
-            context.user_data.clear()
-            return ConversationHandler.END
-
-        driver.telegram_id = update.effective_user.id
-        update_object()
-        text = (
-            "Ok!\n"
-            "In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
-            "Al momento questa funzione non è disponibile, in quanto i dati non sono sufficienti."
-        )
+        else:
+            driver.telegram_id = update.effective_user.id
+            update_object()
+            text = (
+                "Ok!\n"
+                "In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
+                "Al momento questa funzione non è disponibile, in quanto i dati che ho"
+                " a disposizione non sono sufficienti."
+            )
         await update.message.reply_text(text)
         context.user_data.clear()
         return ConversationHandler.END
-    elif suggested_driver := get_similar_driver(psn_id=update.message.text):
 
+    if suggested_driver := get_similar_driver(psn_id=update.message.text):
         if not suggested_driver.telegram_id:
             context.user_data["suggested_driver"] = suggested_driver.psn_id
             text = f'Ho trovato "<code>{suggested_driver.psn_id}</code>", sei tu?'
@@ -95,17 +95,12 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
             await update.message.reply_text(text=text, reply_markup=reply_markup)
             return ID
+
         if suggested_driver.telegram_id == update.effective_user.id:
-            text = "Sei già registrato con questo ID PSN."
+            text = f"Sei già registrato con <code>{suggested_driver.psn_id}</code>.\n"
             await update.message.reply_text(text)
             context.user_data.clear()
             return ConversationHandler.END
-        text = (
-            "Oh oh. Sembra che qualcuno si sia già registrato a questo ID."
-            f"Se questo è il tuo ID PSN contatta {OWNER.mention_html(OWNER.full_name)}"
-        )
-        context.user_data.clear()
-        return ConversationHandler.END
 
     text = "Non ho trovato un ID corrispondente, riprova perfavore:"
     await update.message.reply_text(text=text)
@@ -113,6 +108,11 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """This callback is activated when the previous callback (check_id) didn't find an
+    exact match to the ID provided by the user, in which case it gave the option to select
+    a similar ID. This callback therefore handles the user's choice (if to accept the option
+    or not)."""
+
     if update.callback_query.data == "y":
         driver = get_driver(psn_id=context.user_data["suggested_driver"])
         if driver.telegram_id:
@@ -139,15 +139,20 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return CHECK_ID
 
 
-async def cancel_registration(update: Update, _: ContextTypes) -> int:
-    if update.message:
-        await update.message.reply_text("👌")
-    else:
-        await update.callback_query.edit_message_text("👌")
+async def cancel_registration(update: Update, context: ContextTypes) -> int:
+    """This callback is activated when the user decides to cancel the registration."""
+
+    context.user_data.clear()
+
+    await update.message.reply_text("👌")
+
     return ConversationHandler.END
 
 
 async def invalid_psn_id(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+    """This callback is activated when the user inputs an invalid psn_id,
+    telling him to try again."""
+
     await update.message.reply_text("L'ID PlayStation inserito non è valido, riprova:")
     return CHECK_ID
 
@@ -167,7 +172,6 @@ driver_registration = ConversationHandler(
     },
     fallbacks=[
         CommandHandler("annulla", cancel_registration),
-        CallbackQueryHandler(cancel_registration, "exit"),
         CommandHandler("registrami", driver_registration_entry_point),
         MessageHandler(filters.TEXT, invalid_psn_id),
     ],

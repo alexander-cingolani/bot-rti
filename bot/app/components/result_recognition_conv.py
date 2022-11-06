@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import cast
 
@@ -12,8 +13,9 @@ from app.components.ocr import (
 from app.components.queries import (
     get_championship,
     get_driver,
-    save_object,
+    save_multiple_objects,
     update_object,
+    get_similar_driver,
 )
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -40,31 +42,58 @@ from telegram.ext import (
     ASK_2ND_FASTEST_LAP_2,
     SAVE_RACE_2_RESULTS,
     PERSIST_RESULTS,
-) = range(15, 27)
+) = range(27, 39)
 
 
-def text_to_results(text: str) -> list[list[str, float]]:
-    """Helper function for ask_fastest_lap callbacks.
+WRONG_FILE_FORMAT_MESSAGE = (
+    "Il file dei risultati deve essere inviato in formato 16:9 senza compressione."
+    "\nè consigliabile fare lo screenshot dei risultati da PC, in quanto "
+    "il formato degli screenshot fatti da smartphone risulta dilatato rispetto al "
+    "formato 16:9, rendendo impossibile la corretta identificazione dei giocatori "
+    "e dei tempi di gara."
+)
+
+
+def text_to_results(text: str, category: Category) -> list[Result]:
+    """This is a helper function for ask_fastest_lap callbacks.
     It receives the block of text sent by the user to correct race/qualifying results
-    and transforms it into a list of lists, each containing a driver's name (str) and
-    his gap (float) to the previous driver.
+    and transforms it into a list of Result objects. Driver psn id's don't have to be
+    spelt perfectly, this function automatically selects the closest driver to the one
+    given in the message.
 
     Args:
         text (str): Text to convert into results.
 
     Returns:
-        list[list[str, float]]: Results obtained
+        list[Result]: Results obtained
     """
     results = list(chunked(text.split(), 2))
+    driver_classes = {
+        driver.driver.psn_id: driver.car_class for driver in category.drivers
+    }
+    logging.log(logging.DEBUG, driver_classes)
+
     for i, (driver, gap) in enumerate(results):
-        results[i] = Result(driver, string_to_seconds(gap))
+        logging.log(logging.DEBUG, driver)
+        if driver not in driver_classes:
+            driver_obj = get_similar_driver(driver)
+        else:
+            driver_obj = get_driver(driver)
+        seconds = string_to_seconds(gap)
+        logging.log(
+            logging.INFO, f"{gap} -> {seconds} | {driver_obj.psn_id} - {driver}"
+        )
+
+        result = Result(driver_obj.psn_id, seconds)
+        result.car_class = driver_classes[driver_obj.psn_id]
+        results[i] = result
     return results
 
 
 async def results_input_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-    """Asks the admin for the category he wants to add results in."""
+    """Asks the admin for the category he wants to add results to."""
     context.user_data.clear()
     if update.effective_user.id not in config.ADMINS:
         await update.message.reply_text(
@@ -168,7 +197,11 @@ async def download_quali_results(
     await update.effective_chat.send_action(ChatAction.TYPING)
 
     # Save the photo containing the results.
-    file = await update.message.document.get_file()
+    try:
+        file = await update.message.document.get_file()
+    except AttributeError:
+        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+        return
     await file.download("results.jpg")
 
     driver_names = [driver.driver.psn_id for driver in category.drivers]
@@ -216,7 +249,7 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not update.callback_query:
         text = update.message.text
-        results = text_to_results(text)
+        results = text_to_results(text, category)
         user_data["quali_results"] = results
     buttons = [
         InlineKeyboardButton(
@@ -259,37 +292,59 @@ async def download_race_1_results(
 
     # gt7 needs 2 screenshots, therefore after the first screenshot is received
     # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
-    if game == "gt7":
-        if os.path.exists("results_1.jpg") and not os.path.exists("results_2.jpg"):
+    if update.message:
+        if update.message.text:
+            results = text_to_results(update.message.text, category=category)
+        else:
+            if game == "gt7":
+                if os.path.exists("results_1.jpg") and not os.path.exists(
+                    "results_2.jpg"
+                ):
 
-            await update.effective_chat.send_action(ChatAction.TYPING)
+                    await update.effective_chat.send_action(ChatAction.TYPING)
 
-            file = await update.message.effective_attachment.get_file()
-            screenshot = await file.download("results_2.jpg")
+                    try:
+                        file = await update.message.document.get_file()
+                    except AttributeError:
+                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                        return
+                    screenshot = await file.download("results_2.jpg")
 
-            if not user_data.get("partial_race_1_results"):
-                user_data["partial_race_1_results"] = {}
-            results = user_data["partial_race_1_results"]
+                    if not user_data.get("partial_race_1_results"):
+                        user_data["partial_race_1_results"] = {}
+                    results = user_data["partial_race_1_results"]
 
-            results.update(
-                dict.fromkeys(recognize_race_results(screenshot, drivers, game)[1])
-            )
-            results = list(results.keys())
-            user_data["partial_race_1_results"].clear()
-            os.remove("results_1.jpg")
-            os.remove("results_2.jpg")
-        elif not os.path.exists("results_1.jpg"):
-            file = await update.message.effective_attachment.get_file()
-            screenshot = await file.download("results_1.jpg")
-            results = dict.fromkeys(
-                recognize_race_results(screenshot, drivers, game)[1]
-            )
-            return DOWNLOAD_RACE_1_RESULTS
-    else:
-        await update.effective_chat.send_action(ChatAction.TYPING)
-        file = await update.message.effective_attachment.get_file()
-        screenshot = await file.download("results_1.jpg")
-        results = recognize_race_results(screenshot, drivers, game)[1]
+                    results.update(
+                        dict.fromkeys(
+                            recognize_race_results(screenshot, drivers, game)[1]
+                        )
+                    )
+                    results = list(results.keys())
+                    user_data["partial_race_1_results"].clear()
+                    os.remove("results_1.jpg")
+                    os.remove("results_2.jpg")
+                elif not os.path.exists("results_1.jpg"):
+
+                    try:
+                        file = await update.message.document.get_file()
+                    except AttributeError:
+                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                        return
+
+                    screenshot = await file.download("results_1.jpg")
+                    results = dict.fromkeys(
+                        recognize_race_results(screenshot, drivers, game)[1]
+                    )
+                    return DOWNLOAD_RACE_1_RESULTS
+            else:
+                await update.effective_chat.send_action(ChatAction.TYPING)
+                try:
+                    file = await update.message.document.get_file()
+                except AttributeError:
+                    await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                    return
+                screenshot = await file.download("results_1.jpg")
+                results = recognize_race_results(screenshot, drivers, game)[1]
 
     user_data["race_1_results"] = results
     text = ""
@@ -342,7 +397,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             button_text = "Risultati gara 2 »"
             callback_data = "save_race_1_results"
     else:
-        text = f"Chi ha segnato il giro più veloce in {car_class.name}"
+        text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
         if category.has_sprint_race():
             button_text = f"G.V. classe {category.car_classes[1].car_class.name} »"
             callback_data = "ask_2nd_fastest_lap_1"
@@ -362,10 +417,14 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    # Saves corrected results if sent a message.
+    # Saves corrected results if a message was sent.
     if update.message:
-        user_data["race_1_results"] = text_to_results(update.message.text)
+        user_data["race_1_results"] = text_to_results(
+            update.message.text, user_data["category"]
+        )
         await update.message.reply_text(text, reply_markup=reply_markup)
+        logging.log(logging.INFO, user_data["race_1_results"])
+
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
 
@@ -416,7 +475,9 @@ async def ask_2nd_fastest_lap_1(
     text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
 
     if update.message:
-        user_data["race_1_results"] = text_to_results(update.message.text)
+        user_data["race_1_results"] = text_to_results(
+            update.message.text, user_data["category"]
+        )
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
@@ -488,37 +549,58 @@ async def download_race_2_results(
 
     # gt7 needs 2 screenshots, therefore after the first screenshot is received
     # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
-    if game == "gt7":
-        if os.path.exists("results_1.jpg") and not os.path.exists("results_2.jpg"):
+    if update.message:
+        if update.message.text:
+            results = text_to_results(update.message.text, category=category)
+        else:
+            if game == "gt7":
+                if os.path.exists("results_1.jpg") and not os.path.exists(
+                    "results_2.jpg"
+                ):
 
-            await update.effective_chat.send_action(ChatAction.TYPING)
+                    await update.effective_chat.send_action(ChatAction.TYPING)
+                    try:
+                        file = await update.message.document.get_file()
+                    except AttributeError:
+                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                        return
+                    screenshot = await file.download("results_2.jpg")
 
-            file = await update.message.effective_attachment.get_file()
-            screenshot = await file.download("results_2.jpg")
+                    if not user_data.get("partial_race_2_results"):
+                        user_data["partial_race_2_results"] = {}
+                    results = user_data["partial_race_2_results"]
 
-            if not user_data.get("partial_race_2_results"):
-                user_data["partial_race_2_results"] = {}
-            results = user_data["partial_race_2_results"]
+                    results.update(
+                        dict.fromkeys(
+                            recognize_race_results(screenshot, drivers, game)[1]
+                        )
+                    )
+                    results = list(results.keys())
+                    user_data["partial_race_2_results"].clear()
+                    os.remove("results_1.jpg")
+                    os.remove("results_2.jpg")
 
-            results.update(
-                dict.fromkeys(recognize_race_results(screenshot, drivers, game)[1])
-            )
-            results = list(results.keys())
-            user_data["partial_race_2_results"].clear()
-            os.remove("results_1.jpg")
-            os.remove("results_2.jpg")
-        elif not os.path.exists("results_1.jpg"):
-            file = await update.message.effective_attachment.get_file()
-            screenshot = await file.download("results_1.jpg")
-            results = dict.fromkeys(
-                recognize_race_results(screenshot, drivers, game)[1]
-            )
-            return DOWNLOAD_RACE_2_RESULTS
-    else:
-        await update.effective_chat.send_action(ChatAction.TYPING)
-        file = await update.message.effective_attachment.get_file()
-        screenshot = await file.download("results_1.jpg")
-        results = recognize_race_results(screenshot, drivers, game)[1]
+                elif not os.path.exists("results_1.jpg"):
+                    try:
+                        file = await update.message.document.get_file()
+                    except AttributeError:
+                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                        return
+                    screenshot = await file.download("results_1.jpg")
+                    results = dict.fromkeys(
+                        recognize_race_results(screenshot, drivers, game)[1]
+                    )
+                    return DOWNLOAD_RACE_2_RESULTS
+
+            else:
+                await update.effective_chat.send_action(ChatAction.TYPING)
+                try:
+                    file = await update.message.document.get_file()
+                except AttributeError:
+                    await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                    return
+                screenshot = await file.download("results_1.jpg")
+                results = recognize_race_results(screenshot, drivers, game)[1]
 
     user_data["race_2_results"] = results
     text = ""
@@ -574,10 +656,14 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     reply_markup = InlineKeyboardMarkup(buttons)
     text = "Chi ha segnato il giro più veloce?"
-    # Saves corrected results if sent a message.
+
+    # Saves corrected results if a message was sent.
     if update.message:
-        user_data["race_2_results"] = text_to_results(update.message.text)
+        user_data["race_2_results"] = text_to_results(
+            update.message.text, user_data["category"]
+        )
         await update.message.reply_text(text, reply_markup=reply_markup)
+        logging.log(logging.INFO, user_data["race_2_results"])
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
     return SAVE_RACE_2_RESULTS
@@ -593,7 +679,7 @@ async def save_race_2_results(
     if update.callback_query.data != "save_race_2_results":
         user_data["fastest_lap_2"] = category.drivers[
             int(update.callback_query.data[1])
-        ].driver.psn_id
+        ].driver
 
     # Ask if to persist results or edit fastest driver
     text = "Dopo aver controllato che i risultati siano corretti, premi conferma per salvarli."
@@ -622,14 +708,13 @@ def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
     elif position == 1:
         raceres.position = position
         raceres.seconds = best_time
-        pass
     else:
         raceres.seconds = raceres.seconds + best_time
         raceres.position = position
     return raceres
 
 
-def _separate_car_classes(
+def separate_car_classes(
     category: Category, race_results: list[Result]
 ) -> dict[CarClass, list[Result]]:
 
@@ -651,19 +736,23 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     category = cast(Category, user_data["category"])
     rnd = category.first_non_completed_round()
     quali_results = cast(list[Result], user_data.get("quali_results"))
+    result_objs = []  # All QualifyingResults and RaceResults will be added to this.
 
     if quali_results:
-        individual_class_results = _separate_car_classes(category, quali_results)
+
+        individual_class_results = separate_car_classes(category, quali_results)
+
         for class_results in individual_class_results.values():
-            for quali_res in class_results:
-                driver_obj = get_driver(psn_id=quali_res.driver)
-                result = QualifyingResult(
-                    position=quali_res.position + 1,
-                    laptime=quali_res.seconds,
-                    driver=driver_obj,
-                    round=rnd,
+            for pos, quali_res in enumerate(class_results, start=1):
+                result_objs.append(
+                    QualifyingResult(
+                        position=quali_res.position,
+                        laptime=quali_res.seconds,
+                        driver=get_driver(psn_id=quali_res.driver),
+                        round=rnd,
+                        relative_position=pos,
+                    )
                 )
-                save_object(result)
 
     if category.has_sprint_race():
         race_1_results = cast(list[Result], user_data["race_1_results"])
@@ -684,23 +773,34 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if user_data.get(f"2nd_fastest_lap_{i + 1}"):
             fastest_lap_drivers.append(user_data[f"2nd_fastest_lap_{i + 1}"].psn_id)
 
-        separated_results = _separate_car_classes(category, results)
-        for class_results in separated_results.values():
+        separated_results = separate_car_classes(category, results)
 
-            for result in class_results:
+        for class_results in separated_results.values():
+            class_winner_time = class_results[0].seconds
+            for pos, result in enumerate(class_results, start=1):
+
                 bonus_points = 0
                 if result.driver in fastest_lap_drivers:
                     bonus_points += 1
-                driver_obj = get_driver(result.driver)
-                result = RaceResult(
-                    finishing_position=result.position,
-                    bonus_points=bonus_points,
-                    driver=driver_obj,
-                    session=session,
-                    round=rnd,
-                    gap_to_first=result.seconds,
+                if result.seconds:
+                    gap_to_first = result.seconds - class_winner_time
+                else:
+                    gap_to_first = None
+                    pos = None
+   
+                
+                result_objs.append(
+                    RaceResult(
+                        finishing_position=result.position,
+                        fastest_lap_points=bonus_points,
+                        driver=get_driver(result.driver),
+                        session=session,
+                        round=rnd,
+                        gap_to_first=gap_to_first,
+                        total_racetime=result.seconds,
+                        relative_position=pos,
+                    )
                 )
-                save_object(result)
 
     buttons = []
     for i, category in enumerate(user_data["championship"].categories):
@@ -709,6 +809,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 InlineKeyboardButton(f"{category.name}", callback_data=f"c{i}")
             )
 
+    save_multiple_objects(result_objs)
     rnd.completed = True
     update_object()
 
@@ -752,48 +853,50 @@ save_results_conv = ConversationHandler(
     ],
     states={
         ASK_QUALI_RESULTS: [
-            CallbackQueryHandler(ask_qualifying_results, r"c0|c1|c2|c3")
+            CallbackQueryHandler(ask_qualifying_results, r"^c[0-9]{1,}$")
         ],
         DOWNLOAD_QUALI_RESULTS: [
             MessageHandler(filters.ATTACHMENT, download_quali_results),
-            CallbackQueryHandler(download_quali_results, "skip_quali"),
+            CallbackQueryHandler(download_quali_results, r"^skip_quali$"),
         ],
         SAVE_QUALI_RESULTS: [
-            CallbackQueryHandler(save_quali_results, "confirm_quali_results"),
+            CallbackQueryHandler(save_quali_results, r"^confirm_quali_results$"),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), save_quali_results),
         ],
         DOWNLOAD_RACE_1_RESULTS: [
-            CallbackQueryHandler(download_race_1_results, "download_race_1_results"),
+            CallbackQueryHandler(download_race_1_results, r"^download_race_1_results$"),
             MessageHandler(filters.ATTACHMENT, download_race_1_results),
+            MessageHandler(filters.Regex(r"[^/]{60,}"), download_race_1_results),
         ],
         ASK_FASTEST_LAP_1: [
-            CallbackQueryHandler(ask_fastest_lap_1, "race_1_results_ok"),
+            CallbackQueryHandler(ask_fastest_lap_1, r"^race_1_results_ok$"),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), ask_fastest_lap_1),
         ],
         ASK_2ND_FASTEST_LAP_1: [
             CallbackQueryHandler(
                 ask_2nd_fastest_lap_1,
-                r"|".join(f"d{num}" for num in range(14)) + r"|save_race_1_results",
+                r"^d[0-9]{1,}$|^save_race_1_results$",
             )
         ],
         SAVE_RACE_1_RESULTS: [
             CallbackQueryHandler(
                 save_race_1_results,
-                r"|".join(f"d{num}" for num in range(14)) + r"|save_race_1_results",
+                r"^d[0-9]{1,}$|^save_race_1_results$",
             )
         ],
         DOWNLOAD_RACE_2_RESULTS: [
-            CallbackQueryHandler(download_race_2_results, "download_race_2_results"),
+            CallbackQueryHandler(download_race_2_results, "^download_race_2_results$"),
             MessageHandler(filters.ATTACHMENT, download_race_2_results),
+            MessageHandler(filters.Regex(r"[^/]{60,}"), download_race_2_results),
         ],
         ASK_FASTEST_LAP_2: [
-            CallbackQueryHandler(ask_fastest_lap_2, "race_2_results_ok"),
+            CallbackQueryHandler(ask_fastest_lap_2, "^race_2_results_ok$"),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), ask_fastest_lap_2),
         ],
         SAVE_RACE_2_RESULTS: [
             CallbackQueryHandler(
                 save_race_2_results,
-                (r"|".join(f"d{num}" for num in range(14)) + r"|save_race_2_results"),
+                (r"^d[0-9]{1,}$|^save_race_2_results$"),
             )
         ],
         PERSIST_RESULTS: [CallbackQueryHandler(persist_results, "persist_results")],
@@ -803,8 +906,6 @@ save_results_conv = ConversationHandler(
             "salva_risultati",
             results_input_entry_point,
         ),
-        CallbackQueryHandler(
-            change_conversation_state, r"|".join(str(i) for i in range(15, 25))
-        ),
+        CallbackQueryHandler(change_conversation_state, r"^2[7-9]$|^3[0-8]$"),
     ],
 )

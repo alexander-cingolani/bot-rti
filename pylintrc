@@ -147,15 +147,15 @@ confidence=HIGH,
 # no Warning level messages displayed, use "--disable=all --enable=classes
 # --disable=W".
 disable=raw-checker-failed,
-        bad-inline-option,
         locally-disabled,
         file-ignored,
         suppressed-message,
-        useless-suppression,
-        deprecated-pragma,
-        use-symbolic-message-instead,
         too-few-public-methods,
-        inconsistent-return-statements
+        inconsistent-return-statements,
+        import-error,
+        unspecified-encoding,
+        protected-access
+
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

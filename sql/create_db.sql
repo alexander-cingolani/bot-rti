@@ -175,9 +175,11 @@ CREATE TABLE public.driver_assignments (
     left_on date,
     bought_for smallint,
     is_leader boolean,
-    assignment_id uuid NOT NULL,
     driver_id smallint NOT NULL,
-    team_id smallint NOT NULL
+    warnings smallint DEFAULT 0,
+    licence_points smallint DEFAULT 0,
+    team_id smallint,
+    assignment_id smallint NOT NULL
 );
 
 
@@ -202,7 +204,7 @@ ALTER TABLE public.driver_championships OWNER TO alexander;
 CREATE TABLE public.drivers (
     driver_id smallint NOT NULL,
     psn_id character varying(16) NOT NULL,
-    telegram_id text
+    telegram_id character varying(15)
 );
 
 
@@ -214,12 +216,13 @@ ALTER TABLE public.drivers OWNER TO alexander;
 
 CREATE TABLE public.drivers_categories (
     joined_on date,
-    licence_points integer,
+    licence_points integer DEFAULT 10,
     race_number smallint,
     driver_id smallint NOT NULL,
     category_id smallint NOT NULL,
     car_class_id integer,
-    left_on date
+    left_on date,
+    warnings smallint DEFAULT 0
 );
 
 
@@ -321,13 +324,16 @@ ALTER SEQUENCE public.point_systems_point_system_id_seq OWNED BY public.point_sy
 
 CREATE TABLE public.qualifying_results (
     qualifying_result_id smallint NOT NULL,
-    "position" smallint NOT NULL,
+    "position" smallint,
+    relative_position smallint,
     laptime double precision,
-    penalty_points smallint NOT NULL,
+    penalty_points smallint DEFAULT 0,
     driver_id smallint NOT NULL,
     round_id smallint NOT NULL,
     category_id smallint NOT NULL,
-    session_id smallint NOT NULL
+    session_id smallint NOT NULL,
+    warnings smallint DEFAULT 0,
+    licence_points smallint DEFAULT 0
 );
 
 
@@ -362,13 +368,18 @@ ALTER SEQUENCE public.qualifying_results_qualifying_result_id_seq OWNED BY publi
 CREATE TABLE public.race_results (
     result_id integer NOT NULL,
     finishing_position smallint,
+    relative_position smallint,
     fastest_lap_points smallint,
-    penalty_points smallint,
+    penalty_points smallint DEFAULT 0,
+    penalty_seconds double precision DEFAULT 0,
     gap_to_first double precision,
+    total_racetime double precision,
     driver_id smallint,
     round_id smallint,
     category_id smallint,
-    session_id smallint
+    session_id smallint,
+    warnings smallint DEFAULT 0,
+    licence_points smallint DEFAULT 0
 );
 
 
@@ -404,13 +415,13 @@ CREATE TABLE public.reports (
     report_id integer NOT NULL,
     number smallint NOT NULL,
     incident_time character varying(12) NOT NULL,
-    report_reason character varying(2000) NOT NULL,
+    report_reason character varying(2000),
     video_link character varying(80),
     fact character varying(400),
-    penalty character varying(100),
-    time_penalty smallint,
-    championship_penalty_points smallint,
-    licence_penalty_points smallint,
+    penalty character varying(300),
+    time_penalty smallint DEFAULT 0,
+    championship_penalty_points smallint DEFAULT 0,
+    licence_penalty_points smallint DEFAULT 0,
     penalty_reason character varying(2000),
     is_reviewed boolean,
     is_queued boolean,
@@ -418,11 +429,13 @@ CREATE TABLE public.reports (
     category_id smallint NOT NULL,
     round_id smallint NOT NULL,
     session_id smallint NOT NULL,
-    reported_driver_id character varying(16) NOT NULL,
-    reporting_driver_id character varying(16),
     channel_message_id bigint,
     reported_team_id smallint NOT NULL,
-    reporting_team_id smallint
+    reporting_team_id smallint,
+    warnings smallint DEFAULT 0,
+    licence_points smallint DEFAULT 0,
+    reported_driver_id smallint,
+    reporting_driver_id smallint
 );
 
 
@@ -707,49 +720,49 @@ COPY public.championships (championship_id, championship_name, start, "end") FRO
 -- Data for Name: driver_assignments; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.driver_assignments (joined_on, left_on, bought_for, is_leader, assignment_id, driver_id, team_id) FROM stdin;
-2022-10-23	\N	\N	\N	f5ebb15a-d4e3-46eb-8dce-19e7874c5cba	3	1
-2022-10-23	\N	\N	\N	13ea937c-9d2f-4783-a0f6-05cc6392b51e	5	1
-2022-10-23	\N	\N	\N	4fd06e91-e309-448f-8cfe-57315fe7368b	6	1
-2022-10-23	\N	\N	\N	97153664-5a80-4b68-b2a3-3c46762989ab	7	1
-2022-10-23	\N	\N	\N	5b9b9ab1-a347-4082-b78b-03e2f04dc052	8	1
-2022-10-23	\N	\N	\N	07fdcb26-2fee-4fa9-9eb4-3a4e79eb0a82	10	2
-2022-10-23	\N	\N	\N	bf0e0a81-5fb4-48b7-bed4-ab48b7a69bc1	11	2
-2022-10-23	\N	\N	\N	7b4cb711-0765-4ec9-a87f-4886ffaf7b10	12	2
-2022-10-23	\N	\N	\N	80ba0254-78ba-46c2-9b92-0b71d7775d2c	13	2
-2022-10-23	\N	\N	\N	08fdd3fd-cdb3-4ba2-a4fb-20214e2ae082	14	2
-2022-10-23	\N	\N	\N	944c45bb-6174-4ecb-9693-05096f207762	15	3
-2022-10-23	\N	\N	\N	60e1237a-24a8-4f58-aedc-00027eb58741	17	3
-2022-10-23	\N	\N	\N	176e8317-5742-4d63-b3af-223998a4ef95	18	3
-2022-10-23	\N	\N	\N	b0112bee-756a-4966-a15a-63ef781067e2	19	3
-2022-10-23	\N	\N	\N	d4fb8640-e500-4033-9575-40d7c804d613	20	3
-2022-10-23	\N	\N	\N	f2c1fb29-febe-4a39-90b2-c810ecfda51b	22	4
-2022-10-23	\N	\N	\N	bbba40ea-6979-4889-85f4-dce50f07366f	23	4
-2022-10-23	\N	\N	\N	09b4d56b-931a-4979-8680-4824a432c29c	24	4
-2022-10-23	\N	\N	\N	bf5ab71c-493c-4715-993e-e33410929331	25	4
-2022-10-23	\N	\N	\N	d07c8233-2aa4-4364-b9d6-bdb05dfc85c9	26	4
-2022-10-23	\N	\N	\N	994594cf-5cf4-4b35-affc-7f9613ebd76d	28	5
-2022-10-23	\N	\N	\N	25b9e5ff-50f5-4495-a49b-4a435058ca76	29	5
-2022-10-23	\N	\N	\N	72d4c15f-4a0c-4f1d-bef8-308e64669234	30	5
-2022-10-23	\N	\N	\N	e6e9873d-fd68-4acb-9ce2-d599e2d773d3	31	5
-2022-10-23	\N	\N	\N	107e463f-65b9-4784-86f8-9bc22e8cacd2	32	5
-2022-10-23	\N	\N	\N	b252c623-87d0-4006-beb1-1967e81d574d	34	6
-2022-10-23	\N	\N	\N	1d5c29d5-45c5-425d-ba62-eadaa7829189	35	6
-2022-10-23	\N	\N	\N	6e5f9886-6069-4b7f-89a6-cf19a93a9662	36	6
-2022-10-23	\N	\N	\N	ac2fae41-247b-4cfc-906f-e62a4674e44c	37	6
-2022-10-23	\N	\N	\N	64770216-d972-45d2-a2b7-376205a964cf	38	6
-2022-10-23	\N	\N	\N	200bbff3-8f10-4667-9bae-401fa3e4e845	39	7
-2022-10-23	\N	\N	\N	7ee68f41-09eb-4fa7-a6cf-950a30127e69	40	7
-2022-10-23	\N	\N	\N	f4864be2-4b85-41b6-bc03-522f1c0c4d07	42	7
-2022-10-23	\N	\N	\N	30ba062b-5d14-4e70-90dd-f0222b73ff0d	43	7
-2022-10-23	\N	\N	\N	7dba9dd3-15ec-4baa-8e0d-1e3c3a575c8d	44	7
-2022-10-23	\N	\N	t	eb9047ec-cd93-4231-85d4-ce1891d53a50	16	3
-2022-10-23	\N	\N	t	55582ad2-ae80-4fa0-8298-532e4d4f380f	4	1
-2022-10-23	\N	\N	t	ada7e0d1-9255-4294-8cc8-b68b5ec0be51	9	2
-2022-10-23	\N	\N	t	b13ce593-d559-4cfc-b907-622bd390a084	21	4
-2022-10-23	\N	\N	t	0a5bb2be-0f18-4fb7-a7e1-0a6e744b08e3	41	7
-2022-10-23	\N	\N	t	d9bc6308-08f0-4681-8fab-d93cb5c4a25b	27	5
-2022-10-23	\N	\N	t	ad3b3216-b865-4e29-9838-81c18c665860	33	6
+COPY public.driver_assignments (joined_on, left_on, bought_for, is_leader, driver_id, warnings, licence_points, team_id, assignment_id) FROM stdin;
+2022-10-23	\N	\N	f	3	0	0	1	1
+2022-10-23	\N	\N	f	5	0	0	1	2
+2022-10-23	\N	\N	f	6	0	0	1	3
+2022-10-23	\N	\N	f	7	0	0	1	4
+2022-10-23	\N	\N	f	8	0	0	1	5
+2022-10-23	\N	\N	f	10	0	0	2	6
+2022-10-23	\N	\N	f	11	0	0	2	7
+2022-10-23	\N	\N	f	12	0	0	2	8
+2022-10-23	\N	\N	f	13	0	0	2	9
+2022-10-23	\N	\N	f	14	0	0	2	10
+2022-10-23	\N	\N	f	15	0	0	3	11
+2022-10-23	\N	\N	f	17	0	0	3	12
+2022-10-23	\N	\N	f	18	0	0	3	13
+2022-10-23	\N	\N	f	19	0	0	3	14
+2022-10-23	\N	\N	f	20	0	0	3	15
+2022-10-23	\N	\N	f	22	0	0	4	16
+2022-10-23	\N	\N	f	23	0	0	4	17
+2022-10-23	\N	\N	f	24	0	0	4	18
+2022-10-23	\N	\N	f	25	0	0	4	19
+2022-10-23	\N	\N	f	26	0	0	4	20
+2022-10-23	\N	\N	f	28	0	0	5	21
+2022-10-23	\N	\N	f	29	0	0	5	22
+2022-10-23	\N	\N	f	30	0	0	5	23
+2022-10-23	\N	\N	f	31	0	0	5	24
+2022-10-23	\N	\N	f	32	0	0	5	25
+2022-10-23	\N	\N	f	34	0	0	6	26
+2022-10-23	\N	\N	f	35	0	0	6	27
+2022-10-23	\N	\N	f	36	0	0	6	28
+2022-10-23	\N	\N	f	37	0	0	6	29
+2022-10-23	\N	\N	f	38	0	0	6	30
+2022-10-23	\N	\N	f	39	0	0	7	31
+2022-10-23	\N	\N	f	40	0	0	7	32
+2022-10-23	\N	\N	f	42	0	0	7	33
+2022-10-23	\N	\N	f	43	0	0	7	34
+2022-10-23	\N	\N	f	44	0	0	7	35
+2022-10-23	\N	\N	t	16	0	0	3	36
+2022-10-23	\N	\N	t	4	0	0	1	37
+2022-10-23	\N	\N	t	9	0	0	2	38
+2022-10-23	\N	\N	t	21	0	0	4	39
+2022-10-23	\N	\N	t	41	0	0	7	40
+2022-10-23	\N	\N	t	27	0	0	5	41
+2022-10-23	\N	\N	t	33	0	0	6	42
 \.
 
 
@@ -767,47 +780,47 @@ COPY public.driver_championships (driver_id, championship_id) FROM stdin;
 
 COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 3	RTI_MarcRacer_62	\N
-4	GDC_77	\N
-5	Sturla04	\N
-6	RTI_Revenge	\N
-12	RTI_Nik89sf	\N
-17	alecala06_atlas	\N
-18	MatteoFixC8	\N
 20	BlackSail	\N
-21	RTI_antofox26	\N
 23	Paperfico	\N
-24	RTI_Falco72ac	\N
 25	RTI_HawkOne	\N
 26	RTI_Shardana	\N
-32	RTI_Jacobomber06	\N
-34	domdila	\N
-36	RTI_Mattia76pg	\N
-40	LuigiUSocij	\N
-42	lukadevil90	\N
-7	chiasiellis	\N
-8	maurynho993	\N
 9	RTI_DOOM	\N
-10	zaffaror	\N
-11	freedom-aj	\N
-14	RTI_Morrisss0087	\N
-15	piter-72	\N
-19	Turbolibix46	\N
-29	kimi-ice1983	\N
-30	dariuccinopanzon	\N
-31	RTI_andrea43race	\N
-35	ivanven	\N
-37	RTI_Strummer	\N
-38	RTI_Ninja98	\N
-39	RTI_Oliver	\N
-44	Lightning_blu	\N
-13	XAceOfPeaksX	\N
-43	RTI_Samtor	\N
-16	RTI_Sbinotto17	\N
 22	RTI_Elgallo17	219223863
 27	RTI_Gigi-Rox	383460444
 28	Alphy_31	1543224317
 33	Mantextek05	800167010
 41	mattly94	212989058
+16	RTI_Sbinotto17	633997625
+4	GDC_77	386766202
+5	Sturla04	998444984
+6	RTI_Revenge	173005072
+7	chiasiellis	938810293
+8	maurynho993	309397287
+10	zaffaror	1441898190
+11	freedom-aj	1992356952
+12	RTI_Nik89sf	637077056
+13	XAceOfPeaksX	499299093
+14	RTI_Morrisss0087	1120007440
+15	piter-72	440476513
+17	alecala06_atlas	5087429156
+18	MatteoFixC8	812972256
+19	Turbolibix46	1078642982
+24	RTI_Falco72ac	784236675
+29	kimi-ice1983	501624659
+30	dariuccinopanzon	1338429985
+31	RTI_andrea43race	539432905
+32	RTI_Jacobomber06	994012943
+34	domdila	1283601230
+35	ivanven	2114794810
+36	RTI_Mattia76pg	168758814
+37	RTI_Strummer	478254181
+38	RTI_Ninja98	941661051
+39	RTI_Oliver	1029597631
+40	LuigiUSocij	470047055
+42	lukadevil90	659383243
+43	RTI_Samtor	886549791
+44	Lightning_blu	918599592
+21	RTI_antofox26	601552815
 \.
 
 
@@ -815,49 +828,49 @@ COPY public.drivers (driver_id, psn_id, telegram_id) FROM stdin;
 -- Data for Name: drivers_categories; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.drivers_categories (joined_on, licence_points, race_number, driver_id, category_id, car_class_id, left_on) FROM stdin;
-2022-10-23	10	62	3	1	1	\N
-2022-10-23	10	77	4	1	2	\N
-2022-10-23	10	0	9	1	1	\N
-2022-10-23	10	50	10	1	2	\N
-2022-10-23	10	98	15	1	1	\N
-2022-10-23	10	17	16	1	2	\N
-2022-10-23	10	26	21	1	1	\N
-2022-10-23	10	175	22	1	2	\N
-2022-10-23	10	5	27	1	1	\N
-2022-10-23	10	31	28	1	2	\N
-2022-10-23	10	16	33	1	1	\N
-2022-10-23	10	9	34	1	2	\N
-2022-10-23	10	82	39	1	1	\N
-2022-10-23	10	95	40	1	2	\N
-2022-10-23	10	65	7	2	2	\N
-2022-10-23	10	27	8	2	2	\N
-2022-10-23	10	17	13	2	2	\N
-2022-10-23	10	22	14	2	2	\N
-2022-10-23	10	46	19	2	2	\N
-2022-10-23	10	95	25	2	2	\N
-2022-10-23	10	3	26	2	2	\N
-2022-10-23	10	43	31	2	2	\N
-2022-10-23	10	14	32	2	2	\N
-2022-10-23	10	70	37	2	2	\N
-2022-10-23	10	98	38	2	2	\N
-2022-10-23	10	10	44	2	2	\N
-2022-10-23	10	7	20	2	2	\N
-2022-10-23	10	13	5	3	3	\N
-2022-10-23	10	17	6	3	3	\N
-2022-10-23	10	11	12	3	3	\N
-2022-10-23	10	27	17	3	3	\N
-2022-10-23	10	8	18	3	3	\N
-2022-10-23	10	2	23	3	3	\N
-2022-10-23	10	46	29	3	3	\N
-2022-10-23	10	24	30	3	3	\N
-2022-10-23	10	17	35	3	3	\N
-2022-10-23	10	76	36	3	3	\N
-2022-10-23	10	18	41	3	3	\N
-2022-10-23	10	23	42	3	3	\N
-2022-10-23	10	30	11	3	3	\N
-2022-10-23	10	17	24	3	3	\N
-2022-10-23	10	21	43	2	2	\N
+COPY public.drivers_categories (joined_on, licence_points, race_number, driver_id, category_id, car_class_id, left_on, warnings) FROM stdin;
+2022-10-23	10	62	3	1	1	\N	0
+2022-10-23	10	77	4	1	2	\N	0
+2022-10-23	10	0	9	1	1	\N	0
+2022-10-23	10	50	10	1	2	\N	0
+2022-10-23	10	98	15	1	1	\N	0
+2022-10-23	10	17	16	1	2	\N	0
+2022-10-23	10	26	21	1	1	\N	0
+2022-10-23	10	175	22	1	2	\N	0
+2022-10-23	10	5	27	1	1	\N	0
+2022-10-23	10	31	28	1	2	\N	0
+2022-10-23	10	16	33	1	1	\N	0
+2022-10-23	10	9	34	1	2	\N	0
+2022-10-23	10	82	39	1	1	\N	0
+2022-10-23	10	95	40	1	2	\N	0
+2022-10-23	10	65	7	2	2	\N	0
+2022-10-23	10	27	8	2	2	\N	0
+2022-10-23	10	17	13	2	2	\N	0
+2022-10-23	10	22	14	2	2	\N	0
+2022-10-23	10	46	19	2	2	\N	0
+2022-10-23	10	95	25	2	2	\N	0
+2022-10-23	10	3	26	2	2	\N	0
+2022-10-23	10	43	31	2	2	\N	0
+2022-10-23	10	14	32	2	2	\N	0
+2022-10-23	10	70	37	2	2	\N	0
+2022-10-23	10	98	38	2	2	\N	0
+2022-10-23	10	10	44	2	2	\N	0
+2022-10-23	10	7	20	2	2	\N	0
+2022-10-23	10	13	5	3	3	\N	0
+2022-10-23	10	17	6	3	3	\N	0
+2022-10-23	10	11	12	3	3	\N	0
+2022-10-23	10	27	17	3	3	\N	0
+2022-10-23	10	8	18	3	3	\N	0
+2022-10-23	10	2	23	3	3	\N	0
+2022-10-23	10	46	29	3	3	\N	0
+2022-10-23	10	24	30	3	3	\N	0
+2022-10-23	10	17	35	3	3	\N	0
+2022-10-23	10	76	36	3	3	\N	0
+2022-10-23	10	18	41	3	3	\N	0
+2022-10-23	10	23	42	3	3	\N	0
+2022-10-23	10	30	11	3	3	\N	0
+2022-10-23	10	17	24	3	3	\N	0
+2022-10-23	10	21	43	2	2	\N	0
 \.
 
 
@@ -885,7 +898,7 @@ COPY public.point_systems (point_system_id, point_system) FROM stdin;
 -- Data for Name: qualifying_results; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.qualifying_results (qualifying_result_id, "position", laptime, penalty_points, driver_id, round_id, category_id, session_id) FROM stdin;
+COPY public.qualifying_results (qualifying_result_id, "position", laptime, penalty_points, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
 \.
 
 
@@ -893,7 +906,7 @@ COPY public.qualifying_results (qualifying_result_id, "position", laptime, penal
 -- Data for Name: race_results; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.race_results (result_id, finishing_position, fastest_lap_points, penalty_points, gap_to_first, driver_id, round_id, category_id, session_id) FROM stdin;
+COPY public.race_results (result_id, finishing_position, fastest_lap_points, penalty_points, penalty_seconds, gap_to_first, total_racetime, driver_id, round_id, category_id, session_id, warnings, licence_points) FROM stdin;
 \.
 
 
@@ -901,7 +914,9 @@ COPY public.race_results (result_id, finishing_position, fastest_lap_points, pen
 -- Data for Name: reports; Type: TABLE DATA; Schema: public; Owner: alexander
 --
 
-COPY public.reports (report_id, number, incident_time, report_reason, video_link, fact, penalty, time_penalty, championship_penalty_points, licence_penalty_points, penalty_reason, is_reviewed, is_queued, report_time, category_id, round_id, session_id, reported_driver_id, reporting_driver_id, channel_message_id, reported_team_id, reporting_team_id) FROM stdin;
+COPY public.reports (report_id, number, incident_time, report_reason, video_link, fact, penalty, time_penalty, championship_penalty_points, licence_penalty_points, penalty_reason, is_reviewed, is_queued, report_time, category_id, round_id, session_id, channel_message_id, reported_team_id, reporting_team_id, warnings, licence_points, reported_driver_id, reporting_driver_id) FROM stdin;
+30	1	4:30	Mantextek effettua impeding nei confronti di ElGallo facendolo finire in ghiaia	https://youtu.be/tyHtd7tSxo8	\N	\N	30	\N	\N	\N	f	f	\N	1	1	6	687	6	4	0	0	33	22
+31	1	2:20	maurynho993 tampona Turbolibix46 in curva 1, facendolo uscire di pista e perdere una posizione	\N	\N	\N	30	\N	\N	\N	f	f	\N	2	2	1	689	1	3	0	0	8	19
 \.
 
 
@@ -924,13 +939,13 @@ COPY public.rounds (round_id, number, date, circuit, completed, category_id, cha
 19	7	2022-12-15	Autódromo José Carlos Pace	f	3	1
 24	3	2022-11-15	Circuit de la Sarthe	f	2	1
 25	3	2022-11-17	Circuit de la Sarthe	f	3	1
-1	1	2022-10-31	Suzuka Circuit	f	1	1
 4	2	2022-11-07	Circuit de Barcelona-Catalunya	f	1	1
 23	3	2022-11-14	Circuit de la Sarthe	f	1	1
 3	1	2022-11-03	Suzuka Circuit	f	3	1
 6	2	2022-11-10	Circuit de Barcelona-Catalunya	f	3	1
 2	1	2022-11-01	Suzuka Circuit	f	2	1
 5	2	2022-11-08	Circuit de Barcelona-Catalunya	f	2	1
+1	1	2022-10-31	Suzuka Circuit	f	1	1
 \.
 
 
@@ -1007,21 +1022,21 @@ SELECT pg_catalog.setval('public.point_systems_point_system_id_seq', 2, true);
 -- Name: qualifying_results_qualifying_result_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.qualifying_results_qualifying_result_id_seq', 1, false);
+SELECT pg_catalog.setval('public.qualifying_results_qualifying_result_id_seq', 14, true);
 
 
 --
 -- Name: race_results_result_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.race_results_result_id_seq', 170, true);
+SELECT pg_catalog.setval('public.race_results_result_id_seq', 184, true);
 
 
 --
 -- Name: reports_report_id_seq; Type: SEQUENCE SET; Schema: public; Owner: alexander
 --
 
-SELECT pg_catalog.setval('public.reports_report_id_seq', 29, true);
+SELECT pg_catalog.setval('public.reports_report_id_seq', 33, true);
 
 
 --
@@ -1102,19 +1117,11 @@ ALTER TABLE ONLY public.championships
 
 
 --
--- Name: driver_assignments driver_assignments_joined_on_driver_id_team_id_key; Type: CONSTRAINT; Schema: public; Owner: alexander
---
-
-ALTER TABLE ONLY public.driver_assignments
-    ADD CONSTRAINT driver_assignments_joined_on_driver_id_team_id_key UNIQUE (joined_on, driver_id, team_id);
-
-
---
 -- Name: driver_assignments driver_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: alexander
 --
 
 ALTER TABLE ONLY public.driver_assignments
-    ADD CONSTRAINT driver_assignments_pkey PRIMARY KEY (assignment_id, driver_id, team_id);
+    ADD CONSTRAINT driver_assignments_pkey PRIMARY KEY (assignment_id) INCLUDE (team_id, driver_id);
 
 
 --
@@ -1314,7 +1321,7 @@ ALTER TABLE ONLY public.driver_assignments
 --
 
 ALTER TABLE ONLY public.driver_assignments
-    ADD CONSTRAINT driver_assignments_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id);
+    ADD CONSTRAINT driver_assignments_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id) NOT VALID;
 
 
 --
@@ -1434,7 +1441,7 @@ ALTER TABLE ONLY public.reports
 --
 
 ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_reported_driver_id_fkey FOREIGN KEY (reported_driver_id) REFERENCES public.drivers(psn_id);
+    ADD CONSTRAINT reports_reported_driver_id_fkey FOREIGN KEY (reported_driver_id) REFERENCES public.drivers(driver_id) NOT VALID;
 
 
 --
@@ -1450,7 +1457,7 @@ ALTER TABLE ONLY public.reports
 --
 
 ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_reporting_driver_id_fkey FOREIGN KEY (reporting_driver_id) REFERENCES public.drivers(psn_id);
+    ADD CONSTRAINT reports_reporting_driver_id_fkey FOREIGN KEY (reporting_driver_id) REFERENCES public.drivers(driver_id) NOT VALID;
 
 
 --

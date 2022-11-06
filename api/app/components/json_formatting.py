@@ -38,20 +38,20 @@ def get_calendar(championship_id: int, category_id: int):
     calendar = []
 
     sprint_race = category.has_sprint_race()
-    for round in category.rounds:
+    for championship_round in category.rounds:
 
         if sprint_race:
             info = [
                 {
-                    "id": f"SR{round.round_id}",
-                    "calendario": str(round.round_id),
+                    "id": f"SR{championship_round.round_id}",
+                    "calendario": str(championship_round.round_id),
                     "nome_gp": category.sprint_race.name,
                     "ordinamento": "1",
                     "campionato": str(category.championship_id),
                 },
                 {
-                    "id": f"LR{round.round_id}",
-                    "calendario": str(round.round_id),
+                    "id": f"LR{championship_round.round_id}",
+                    "calendario": str(championship_round.round_id),
                     "nome_gp": category.long_race.name,
                     "ordinamento": "2",
                     "campionato": str(category.championship_id),
@@ -60,8 +60,8 @@ def get_calendar(championship_id: int, category_id: int):
         else:
             info = [
                 {
-                    "id": f"LR{round.round_id}",
-                    "calendario": str(round.round_id),
+                    "id": f"LR{championship_round.round_id}",
+                    "calendario": str(championship_round.round_id),
                     "nome_gp": category.long_race.name,
                     "ordinamento": "0",
                     "campionato": str(category.championship_id),
@@ -70,9 +70,9 @@ def get_calendar(championship_id: int, category_id: int):
 
         calendar.append(
             {
-                "id": str(round.round_id),
-                "categoria": str(round.category_id),
-                "campionato": str(round.championship_id),
+                "id": str(championship_round.round_id),
+                "categoria": str(championship_round.category_id),
+                "campionato": str(championship_round.championship_id),
                 "ordinamento": str(i),
                 "info": info,
             }
@@ -86,19 +86,19 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
     driv_res = []
     double_race = race_results[0].category.has_sprint_race()
     for race_result in race_results:
-        round = race_result.round
+        race_result.round
 
         # Makes changes to data in order to facilitate the front-end.
         if not double_race:
             info_gp = f"LR{race_result.round_id}"
-            punti_extra = round.get_qualifying_result(driver.driver_id).points_earned
+            punti_extra = race_result.round.get_qualifying_result(driver.driver_id).points_earned
         elif (
             double_race
             and race_result.session_id == race_result.category.sprint_race.session_id
         ):
             info_gp = f"SR{race_result.round_id}"
             punti_extra = (
-                round.get_qualifying_result(driver.driver_id).points_earned
+                race_result.round.get_qualifying_result(driver.driver_id).points_earned
                 + race_result.fastest_lap_points
             )
         else:

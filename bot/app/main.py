@@ -36,31 +36,30 @@ from telegram.ext import (
 from app.components import config
 from app.components.driver_registration import driver_registration
 from app.components.queries import (
-    get_category,
     get_championship,
     get_driver,
-    get_max_races,
+
 )
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
 from app.components.stats import (
     consistency,
-    experience,
+
     race_pace,
     sportsmanship,
     stats,
 )
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get("BOT_TOKEN")
 
 
-async def set_admin_chat_commands(bot):
+async def set_admin_commands(bot):
+    """Sets admin commands in group & private chats."""
     try:
         await bot.set_my_commands(
             config.ADMIN_CHAT_COMMANDS,
@@ -69,8 +68,6 @@ async def set_admin_chat_commands(bot):
     except BadRequest:
         pass
 
-
-async def set_admin_commands(bot):
     for admin in config.ADMINS:
         try:
             await bot.set_my_commands(config.ADMIN_COMMANDS, BotCommandScopeChat(admin))
@@ -79,43 +76,42 @@ async def set_admin_commands(bot):
 
 
 async def post_init(application: Application) -> None:
+    """Sets commands for every user."""
 
-    bot = application.bot
-
-    await bot.set_my_commands(
+    await application.bot.set_my_commands(
         config.PRIVATE_CHAT_COMMANDS, BotCommandScopeAllPrivateChats()
     )
-
-    await set_admin_chat_commands(bot)
-
-    await set_admin_commands(bot)
+    await set_admin_commands(application.bot)
 
 
 async def post_shutdown(_: Application) -> None:
+    """Deletes any leftover race result images"""
+    if os.path.exists("./app/results.jpg"):
+        os.remove("./app/results.jpg")
 
-    if os.path.exists("results.jpg"):
-        os.remove("results.jpg")
+    if os.path.exists("./app/results_1.jpg"):
+        os.remove("./app/results_1.jpg")
 
-    if os.path.exists("results_1.jpg"):
-        os.remove("results_1.jpg")
-
-    if os.path.exists("results_2.jpg"):
-        os.remove("results_2.jpg")
+    if os.path.exists("./app/results_2.jpg"):
+        os.remove("./app/results_2.jpg")
 
 
 async def error_handler(update: Update, context: ContextTypes) -> None:
+    """Writes full error traceback to a file and sends it to the dev channel.
+    If the error was caused by a user a message will be displayed informing him
+    to not repeat the action which caused the error.
+    """
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
-
-    user_message = (
-        "⚠️ Si è verificato un errore inaspettato!\n\n"
-        "Lo sviluppatore è stato informato del problema e cercherà"
-        " di risolverlo al più presto.\n"
-        "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
-        "avrebbe scarsa probabilità di successo."
-    )
 
     try:
         if update.message.chat.type == ChatType.PRIVATE:
+            user_message = (
+                "⚠️ Si è verificato un errore inaspettato!\n\n"
+                "Lo sviluppatore è stato informato del problema e cercherà"
+                " di risolverlo al più presto.\n"
+                "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
+                "avrebbe scarsa probabilità di successo."
+            )
             await update.effective_user.send_message(user_message)
     except AttributeError:
         pass
@@ -164,7 +160,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             config.ADMIN_COMMANDS, BotCommandScopeChat(update.effective_user.id)
         )
 
-    driver = get_driver(get_driver(telegram_id=update.effective_user.id))
+    driver = get_driver(telegram_id=update.effective_user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -179,8 +175,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /help is issued."""
-    text = f"Questo bot è gestito da {config.OWNER.mention_html(config.OWNER.full_name)}, se hai problemi non esitare a contattarlo."
+    """Sends a message providing the developer's contact details for help."""
+    text = (
+        f"Questo bot è gestito da {config.OWNER.mention_html(config.OWNER.full_name)},"
+        " se stai riscontrando un problema non esitare a contattarlo."
+    )
     await update.message.reply_text(text)
 
 
@@ -196,13 +195,14 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the inline query. This callback is executed when the user types: @botusername <query>"""
+    """Handles the inline query. This callback provides the user with a complete
+    list of drivers saved in the database, and enables him to view the statistics
+    of each of them.
+    """
+
     query = update.inline_query.query
-
     results = []
-
-    max_races = get_max_races()
-
+    # max_races = get_max_races()
     drivers = get_championship().driver_list
 
     for driver in drivers:
@@ -210,19 +210,20 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         if query.lower() in driver.psn_id.lower():
 
             wins, podiums, poles = stats(driver)
-            current_team = driver.current_team().name
+
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+            current_team = driver.current_team().name
             unique_teams = unique_teams.replace(
                 current_team, f"{current_team} [Attuale]"
             )
 
-            if const := consistency(driver) < 0:
+            if (const := consistency(driver)) <= 0:
                 const = "N.D."
-            if exp := experience(driver, max_races) <= 0:
-                exp = "N.D."
-            if sprt := sportsmanship(driver) <= 0:
+            # if exp := experience(driver, max_races) <= 0:
+            #     exp = "N.D."
+            if (sprt := sportsmanship(driver)) <= 0:
                 sprt = "N.D."
-            if pace := race_pace(driver) <= 0:
+            if (pace := race_pace(driver)) <= 0:
                 pace = "N.D."
 
             result_article = InlineQueryResultArticle(
@@ -232,7 +233,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Costanza:</b> <i>{const}</i>\n"
-                        f"<b>Esperienza:</b> <i>{exp}</i>\n"
+                        # f"<b>Esperienza:</b> <i>{exp}</i>\n"
                         f"<b>Sportività:</b> <i>{sprt}</i>\n"
                         f"<b>Passo:</b> <i>{pace}</i>\n\n"
                         f"<b>Vittorie:</b> <i>{wins}</i>\n"
@@ -249,23 +250,32 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message to the report channel announcing that the report window
+    has opened for a specific category.
+    """
+
     championship = get_championship()
     if category := championship.reporting_category():
-        round = category.first_non_completed_round()
+        championship_round = category.first_non_completed_round()
         text = (
             f"<b>Segnalazioni Categoria {category.name}</b>\n"
-            f"{round.number}ª Tappa / {round.circuit}\n"
-            f"#{championship.abbreviated_name}Tappa{round.number} #{category.name}"
+            f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
+            f"#{championship.abbreviated_name} Tappa{championship_round.number} #{category.name}"
         )
         await context.bot.send_message(
             chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
         )
 
 
-async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a sticker to the report channel indicating that the window for making
+    reports has closed for a specific category.
+    """
+
     championship = get_championship()
+
     if championship.reporting_category():
-        with open("./images/sticker.webp") as sticker:
+        with open("./app/images/sticker.webp") as sticker:
             await context.bot.send_sticker(
                 chat_id=config.REPORT_CHANNEL,
                 sticker=sticker,
@@ -276,32 +286,34 @@ async def close_report_column(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_participation_list_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    """Allows admins to call the participation list manually."""
 
-    try:
-        await update.message.delete()
-    except:
-        pass
+    if update.effective_user.id not in config.ADMINS:
+        return
+
+    await update.message.delete()
+
     context.bot_data["called_manually_by"] = update.effective_chat.id
     await send_participation_list(context)
     return
 
 
 async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends the list of drivers who are supposed to participate to a race."""
+    """Sends the list of drivers supposed to participate to a race."""
 
     championship = get_championship()
     chat_data = context.chat_data
-    
+
     if not (category := championship.current_racing_category()):
         return ConversationHandler.END
 
-    if not (round := category.first_non_completed_round()):
+    if not (championship_round := category.first_non_completed_round()):
         return ConversationHandler.END
 
     drivers = category.drivers
     text = (
-        f"<b>{round.number}ᵃ Tappa {category.name}</b>\n"
-        f"Circuito: <b>{round.circuit}</b>"
+        f"<b>{championship_round.number}ᵃ Tappa {category.name}</b>\n"
+        f"Circuito: <b>{championship_round.circuit}</b>"
     )
 
     chat_data["participation_list_text"] = text
@@ -329,7 +341,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = context.bot_data.pop("called_manually_by")
     else:
         chat_id = config.GROUP_CHAT
-        
+
     message = await context.bot.send_message(
         chat_id=chat_id, text=text, reply_markup=reply_markup
     )
@@ -345,10 +357,10 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
-    
+
     if not context.chat_data.get("participants"):
         return
-    
+
     user_id = update.effective_user.id
     user_psn_id = None
 
@@ -420,7 +432,7 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=11, minute=45),
+        time=time(hour=7),
         chat_id=config.GROUP_CHAT,
     )
 
@@ -431,8 +443,8 @@ def main() -> None:
     )
 
     application.job_queue.run_daily(
-        callback=close_report_column,
-        time=time(hour=23, minute=59, second=40),
+        callback=close_report_window,
+        time=time(hour=23, minute=59, second=59),
         chat_id=config.REPORT_CHANNEL,
     )
 

@@ -644,7 +644,7 @@ class Category(Base):
     def qualifying_session(self) -> Session:
         """Returns the Session where qualifying takes place in the category."""
         for category_session in self.sessions:
-            if "quali" in category_session.session.name.lower():
+            if category_session.session.is_:
                 return category_session.session
 
     @property
