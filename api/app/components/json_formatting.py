@@ -91,7 +91,9 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
         # Makes changes to data in order to facilitate the front-end.
         if not double_race:
             info_gp = f"LR{race_result.round_id}"
-            punti_extra = race_result.round.get_qualifying_result(driver.driver_id).points_earned
+            punti_extra = race_result.round.get_qualifying_result(
+                driver.driver_id
+            ).points_earned
         elif (
             double_race
             and race_result.session_id == race_result.category.sprint_race.session_id
@@ -105,12 +107,14 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
             info_gp = f"LR{race_result.round_id}"
             punti_extra = race_result.fastest_lap_points
 
+        finishing_position = str(race_result.finishing_position) if race_result.finishing_position is not None else "0"
+        
         driv_res.append(
             {
                 "pilota": str(driver.driver_id),
                 "calendario": str(race_result.round_id),
                 "info_gp": info_gp,
-                "posizione": str(race_result.finishing_position),
+                "posizione": finishing_position,
                 "punti_extra": str(punti_extra).replace(".0", ""),
             }
         )
