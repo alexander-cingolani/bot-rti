@@ -374,7 +374,7 @@ async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         user_data["report"].reported_driver = user_data["drivers"][
             update.callback_query.data
         ]
-    text = "In che minuto è avvenuto l'incidente? (mm:ss)"
+    text = "In che minuto è avvenuto l'incidente?"
 
     reply_markup = [
         [
@@ -656,7 +656,7 @@ report_creation = ConversationHandler(
         REPORTED_DRIVER: [CallbackQueryHandler(reported_driver, r"^d[0-9]{1,}$")],
         MINUTE: [
             MessageHandler(
-                filters.Regex(r"^(?:(?:([01]?\d|2[0-3]):)?([0-5]?\d):)?([0-5]?\d)$"),
+                filters.Regex(r"^.{3,50}$"),
                 save_minute,
             )
         ],
