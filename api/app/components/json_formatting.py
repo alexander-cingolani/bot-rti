@@ -45,14 +45,14 @@ def get_calendar(championship_id: int, category_id: int):
                 {
                     "id": f"SR{championship_round.round_id}",
                     "calendario": str(championship_round.round_id),
-                    "nome_gp": category.sprint_race.name,
+                    "nome_gp": championship_round.sprint_race.name,
                     "ordinamento": "1",
                     "campionato": str(category.championship_id),
                 },
                 {
                     "id": f"LR{championship_round.round_id}",
                     "calendario": str(championship_round.round_id),
-                    "nome_gp": category.long_race.name,
+                    "nome_gp": championship_round.long_race.name,
                     "ordinamento": "2",
                     "campionato": str(category.championship_id),
                 },
@@ -62,7 +62,7 @@ def get_calendar(championship_id: int, category_id: int):
                 {
                     "id": f"LR{championship_round.round_id}",
                     "calendario": str(championship_round.round_id),
-                    "nome_gp": category.long_race.name,
+                    "nome_gp": championship_round.long_race.name,
                     "ordinamento": "0",
                     "campionato": str(category.championship_id),
                 }
@@ -107,8 +107,12 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
             info_gp = f"LR{race_result.round_id}"
             punti_extra = race_result.fastest_lap_points
 
-        finishing_position = str(race_result.finishing_position) if race_result.finishing_position is not None else "0"
-        
+        finishing_position = (
+            str(race_result.finishing_position)
+            if race_result.finishing_position is not None
+            else "0"
+        )
+
         driv_res.append(
             {
                 "pilota": str(driver.driver_id),

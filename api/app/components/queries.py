@@ -3,9 +3,9 @@ This module contains class-specific queries to the database; as well as
 general purpose functions such as save_object and update_object.
 """
 
-
 import os
 from datetime import datetime, timedelta
+from cachetools import cached, TTLCache
 
 import sqlalchemy as sa
 from app.components.models import (
@@ -16,11 +16,11 @@ from app.components.models import (
     RaceResult,
     Report,
 )
-from sqlalchemy import delete, desc, func
+from sqlalchemy import delete, desc
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.future import create_engine, select
 from sqlalchemy.orm import joinedload, sessionmaker
-# from app.components.result_recognition_conv import separate_car_classes
+
 engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
 _session = _Session()
@@ -95,6 +95,7 @@ def get_last_report_by(reporting_team_id: int) -> Report | None:
     return result
 
 
+@cached(cache=TTLCache(maxsize=50, ttl=30))
 def get_driver(psn_id: str = None, telegram_id: str = None) -> Driver | None:
     """Returns corresponding Driver object to the given psn_id or telegram_id."""
     statement = select(Driver)
@@ -194,6 +195,7 @@ def save_and_apply_report(report: Report) -> None:
         .order_by(RaceResult.finishing_position)
     ).all()
     _session.commit()
+
     race_results: list[RaceResult] = []
     for row in rows:
         race_result = row[0]
@@ -205,14 +207,9 @@ def save_and_apply_report(report: Report) -> None:
         race_results.append(race_result)
     race_results.sort(key=lambda x: x.total_racetime)
 
-    # winners_racetime = race_results[0].total_racetime
     for i, race_result in enumerate(race_results, start=1):
         race_result.finishing_position = i
-    
-    # separated_results = separate_car_classes(category=report.category, race_results=)
-        
-    # for i, race_result in enumerate(separate_car_classes)
-        # race_result.gap_to_first = race_result.total_racetime - winners_racetime
+
     report.is_reviewed = True
     update_object()
 
@@ -220,21 +217,6 @@ def save_and_apply_report(report: Report) -> None:
 def update_object() -> None:
     """Calls Session.commit()"""
     _session.commit()
-
-
-# def get_max_races() -> int:
-#     """Returns the maximum amount of races completed by any driver."""
-#     result = _session.execute(
-#         select([func.count()])
-#         .select_from(RaceResult)
-#         .where(RaceResult.finishing_position > 0)
-#         .group_by(RaceResult.driver_id)
-#         .order_by(desc(RaceResult.round_id).limit(1))
-#     ).first()
-
-#     if result:
-#         return result[1]
-#     return 0
 
 
 def delete_report(report: Report) -> None:
