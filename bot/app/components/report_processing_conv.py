@@ -57,7 +57,6 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if update.message:
         context.user_data["current_report"] = Report()
-
     text = "In quale categoria è avvenuta l'infrazione?"
 
     buttons = []
@@ -693,49 +692,52 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Adds the report to the queue or sends it, then ends the conversation"""
-
+    
     user_data = context.user_data
-    report = user_data["current_report"]
-
+    report: Report = user_data["current_report"]
     if update.callback_query.data == "send_now":
-        save_and_apply_report(report)
         file = ReviewedReportDocument(report).generate_document()
         await context.bot.send_document(
             chat_id=config.REPORT_CHANNEL,
             document=open(file, "rb"),
         )
-
+        save_and_apply_report(report)
         text = "Penalità salvata e inviata."
-    elif update.callback_query.data == "add_to_queue":
-        report.is_reviewed = True
-        report.is_queued = True
-        text = "Penalità salvata e aggiunta alla coda"
+        
+    if update.message:
+        await update.message.reply_text(text)
+    else:
+        await update.callback_query.edit_message_text(text)
+    # elif update.callback_query.data == "add_to_queue":
+    #     report.is_reviewed = True
+    #     report.is_queued = True
+    #     text = "Penalità salvata e aggiunta alla coda"
 
-    text += f"\nOra ne rimangono {len(user_data['unreviewed_reports'])}."
-    reply_markup = [
-        [
-            InlineKeyboardButton(
-                "Prossima segnalazione",
-                callback_data=str(ASK_CATEGORY)
-                if len(user_data["unreviewed_reports"]) == 0
-                else "start_reviewing",
-            ),
-        ]
-    ]
+    # text += f"\nOra ne rimangono {len(user_data['unreviewed_reports'])}."
+    # reply_markup = [
+    #     [
+    #         InlineKeyboardButton(
+    #             "Prossima segnalazione",
+    #             callback_data=str(ASK_CATEGORY)
+    #             if len(user_data["unreviewed_reports"]) == 0
+    #             else "start_reviewing",
+    #         ),
+    #     ]
+    # ]
 
-    if len(context.user_data["unreviewed_reports"]) == 1:
-        reply_markup.append(
-            [
-                InlineKeyboardButton(
-                    "Invia tutti i messaggi in coda", callback_data="send_all"
-                )
-            ]
-        )
+    # if len(context.user_data["unreviewed_reports"]) == 1:
+    #     reply_markup.append(
+    #         [
+    #             InlineKeyboardButton(
+    #                 "Invia tutti i messaggi in coda", callback_data="send_all"
+    #             )
+    #         ]
+    #     )
 
-    await update.callback_query.edit_message_text(
-        text, reply_markup=InlineKeyboardMarkup(reply_markup)
-    )
-    return END_REPORTING
+    # await update.callback_query.edit_message_text(
+    #     text, reply_markup=InlineKeyboardMarkup(reply_markup)
+    # )
+    return ConversationHandler.END
 
 
 async def end_reporting_process(

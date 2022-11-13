@@ -10,6 +10,7 @@ from datetime import timedelta
 import os
 from typing import DefaultDict
 from uuid import uuid4
+import uuid
 from cachetools import TTLCache
 from sqlalchemy import (
     BigInteger,
@@ -87,7 +88,7 @@ class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
 
-    report_id: int = Column(Integer, primary_key=True)
+    report_id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     number: int = Column(SmallInteger, nullable=False)
     incident_time: str = Column(String(12), nullable=False)
     report_reason: str = Column(String(2000), nullable=False)
