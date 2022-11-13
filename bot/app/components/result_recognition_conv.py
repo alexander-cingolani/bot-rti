@@ -1,9 +1,9 @@
-
 import os
+from difflib import get_close_matches
 from typing import cast
 
 from app.components import config
-from app.components.models import CarClass, Category, QualifyingResult, RaceResult
+from app.components.models import Category, QualifyingResult, RaceResult, Round
 from app.components.ocr import (
     Result,
     recognize_quali_results,
@@ -15,8 +15,8 @@ from app.components.queries import (
     get_driver,
     save_multiple_objects,
     update_object,
-    get_similar_driver,
 )
+from app.components.utils import separate_car_classes
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
@@ -71,18 +71,29 @@ def text_to_results(text: str, category: Category) -> list[Result]:
     driver_classes = {
         driver.driver.psn_id: driver.car_class for driver in category.drivers
     }
-
-
+    drivers = [driver.driver.psn_id for driver in category.drivers]
     for i, (driver, gap) in enumerate(results):
-        if driver not in driver_classes:
-            driver_obj = get_similar_driver(driver)
+        if driver not in drivers:
+            driver = get_close_matches(driver, drivers, cutoff=0.2)[0]
+            driver_obj = get_driver(psn_id=driver)
+            if driver:
+                drivers.remove(driver)
         else:
             driver_obj = get_driver(driver)
+            drivers.remove(driver)
         seconds = string_to_seconds(gap)
 
-        result = Result(driver_obj.psn_id, seconds)
+        if driver:
+            result = Result(driver_obj.psn_id, seconds)
+            result.car_class = driver_classes[driver_obj.psn_id]
+            results[i] = result
+    for driver in drivers:
+        driver_obj = get_driver(psn_id=driver)
+        result = Result(driver_obj.psn_id, 0)
+
         result.car_class = driver_classes[driver_obj.psn_id]
-        results[i] = result
+        results.append(result)
+
     return results
 
 
@@ -135,10 +146,11 @@ async def ask_qualifying_results(
 
     category = cast(Category, user_data["category"])
 
-    round = category.first_non_completed_round()
+    current_round = category.first_non_completed_round()
+    user_data["round"] = current_round
     text = (
-        f"<b>{category.name}</b> - {round.number}ᵃ tappa {round.circuit}.\n"
-        "Inviami l'immagine dei risultati della qualifica:"
+        f"<b>{category.name}</b> - {current_round.number}ᵃ tappa {current_round.circuit}."
+        "\nInviami l'immagine dei risultati della qualifica:"
     )
     reply_markup = InlineKeyboardMarkup(
         [[InlineKeyboardButton("Salta", callback_data="skip_quali")]]
@@ -196,8 +208,10 @@ async def download_quali_results(
     if update.message:
         if update.message.text:
             results = text_to_results(update.message.text, category=category)
+            user_data["quali_results"] = results
+            success = True
         else:
-        
+
             try:
                 file = await update.message.document.get_file()
             except AttributeError:
@@ -212,7 +226,6 @@ async def download_quali_results(
 
             os.remove("results.jpg")
 
-    # Send the results
     results = user_data["quali_results"]
     results_message_text = ""
     for result in results:
@@ -246,7 +259,7 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Saves the qualifying results"""
 
     user_data = context.user_data
-    category = cast(Category, user_data["category"])
+    category: Category = user_data["category"]
 
     if not update.callback_query:
         text = update.message.text
@@ -258,7 +271,7 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     ]
 
-    if category.has_sprint_race():
+    if user_data["round"].has_sprint_race:
         text = "Inviami lo screenshot dei risultati di gara 1."
     else:
         text = "Inviami lo screenshot dei risultati di gara."
@@ -279,7 +292,7 @@ async def download_race_1_results(
     category = cast(Category, user_data["category"])
 
     if update.callback_query:
-        if category.has_sprint_race():
+        if user_data["round"].has_sprint_race:
             gara = " 1"
         else:
             gara = ""
@@ -391,7 +404,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if not category.multi_class:
         text = "Chi ha segnato il giro più veloce?"
-        if category.has_sprint_race():
+        if user_data["round"].has_sprint_race:
             button_text = "Salva risultati »"
             callback_data = "save_race_1_results"
         else:
@@ -399,7 +412,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             callback_data = "save_race_1_results"
     else:
         text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
-        if category.has_sprint_race():
+        if user_data["round"].has_sprint_race:
             button_text = f"G.V. classe {category.car_classes[1].car_class.name} »"
             callback_data = "ask_2nd_fastest_lap_1"
         else:
@@ -454,7 +467,7 @@ async def ask_2nd_fastest_lap_1(
             )
     buttons = list(chunked(buttons, 2))
 
-    if category.has_sprint_race():
+    if user_data["round"].has_sprint_race:
         button_text = "Salva risultati »"
         callback_data = "save_race_1_results"
     else:
@@ -502,7 +515,7 @@ async def save_race_1_results(
                 int(update.callback_query.data[1])
             ].driver
 
-    if category.has_sprint_race():
+    if user_data["round"].has_sprint_race:
         text = "Invia i risultati di gara 2."
         reply_markup = InlineKeyboardMarkup(
             [
@@ -698,43 +711,11 @@ async def save_race_2_results(
     return PERSIST_RESULTS
 
 
-def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
-    if raceres.seconds is None:
-        raceres.position = None
-    elif raceres.seconds == 0:
-        raceres.seconds = None
-        raceres.position = position
-    elif position == 1:
-        raceres.position = position
-        raceres.seconds = best_time
-    else:
-        raceres.seconds = raceres.seconds + best_time
-        raceres.position = position
-    return raceres
-
-
-def separate_car_classes(
-    category: Category, race_results: list[Result]
-) -> dict[CarClass, list[Result]]:
-
-    separated_classes = {
-        car_class.car_class_id: [] for car_class in category.car_classes
-    }
-    best_laptime = race_results[0].seconds
-
-    for pos, result in enumerate(race_results):
-        if result.car_class.car_class_id in separated_classes:
-            separated_classes[result.car_class.car_class_id].append(
-                _prepare_result(result, best_laptime, pos + 1)
-            )
-    return separated_classes
-
-
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = context.user_data
     category = cast(Category, user_data["category"])
-    rnd = category.first_non_completed_round()
-    quali_results = cast(list[Result], user_data.get("quali_results"))
+    championship_round: Round = user_data["round"]
+    quali_results: list[Result] = user_data.get("quali_results")
     result_objs = []  # All QualifyingResults and RaceResults will be added to this.
 
     if quali_results:
@@ -742,28 +723,36 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         individual_class_results = separate_car_classes(category, quali_results)
 
         for class_results in individual_class_results.values():
+            class_pole_time = class_results[0].seconds
             for pos, quali_res in enumerate(class_results, start=1):
+                if quali_res.seconds:
+                    gap_to_first = quali_res.seconds - class_pole_time
+                participated = bool(quali_res.position)
+                if not participated:
+                    pos = None
                 result_objs.append(
                     QualifyingResult(
                         position=quali_res.position,
+                        gap_to_first=gap_to_first,
                         laptime=quali_res.seconds,
                         driver=get_driver(psn_id=quali_res.driver),
-                        round=rnd,
+                        round=championship_round,
+                        participated=bool(quali_res.position),
                         relative_position=pos,
                     )
                 )
 
-    if category.has_sprint_race():
+    if user_data["round"].has_sprint_race:
         race_1_results = cast(list[Result], user_data["race_1_results"])
         race_2_results = cast(list[Result], user_data["race_2_results"])
         sessions = [
-            (category.sprint_race, race_1_results),
-            (category.long_race, race_2_results),
+            (championship_round.sprint_race, race_1_results),
+            (championship_round.long_race, race_2_results),
         ]
     else:
         # If the category has no sprint race then it can only have a long race.
         race_results = cast(list[Result], user_data["race_1_results"])
-        sessions = [(category.long_race, race_results)]
+        sessions = [(championship_round.long_race, race_results)]
 
     # Saves race results for every race session.
     for i, (session, results) in enumerate(sessions):
@@ -775,31 +764,29 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         separated_results = separate_car_classes(category, results)
 
         for class_results in separated_results.values():
-            class_winner_time = class_results[0].seconds
+            class_pole_time = class_results[0].seconds
             for pos, result in enumerate(class_results, start=1):
 
                 bonus_points = 0
                 if result.driver in fastest_lap_drivers:
                     bonus_points += 1
                 if result.seconds:
-                    gap_to_first = result.seconds - class_winner_time
+                    gap_to_first = result.seconds - class_pole_time
                 else:
                     gap_to_first = None
                     pos = None
-   
-                
-                result_objs.append(
-                    RaceResult(
-                        finishing_position=result.position,
-                        fastest_lap_points=bonus_points,
-                        driver=get_driver(result.driver),
-                        session=session,
-                        round=rnd,
-                        gap_to_first=gap_to_first,
-                        total_racetime=result.seconds,
-                        relative_position=pos,
-                    )
+                result = RaceResult(
+                    finishing_position=result.position,
+                    fastest_lap_points=bonus_points,
+                    driver=get_driver(result.driver),
+                    session=session,
+                    round=championship_round,
+                    gap_to_first=gap_to_first,
+                    total_racetime=result.seconds,
+                    relative_position=pos,
                 )
+                result.participated = bool(pos)
+                result_objs.append(result)
 
     buttons = []
     for i, category in enumerate(user_data["championship"].categories):
@@ -809,7 +796,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
     save_multiple_objects(result_objs)
-    rnd.completed = True
+    championship_round.completed = True
     update_object()
 
     reply_markup = InlineKeyboardMarkup([buttons])
@@ -857,7 +844,7 @@ save_results_conv = ConversationHandler(
         DOWNLOAD_QUALI_RESULTS: [
             MessageHandler(filters.ATTACHMENT, download_quali_results),
             CallbackQueryHandler(download_quali_results, r"^skip_quali$"),
-            MessageHandler(filters.Regex(r"[^/]{60,}"), download_quali_results)
+            MessageHandler(filters.Regex(r"[^/]{60,}"), download_quali_results),
         ],
         SAVE_QUALI_RESULTS: [
             CallbackQueryHandler(save_quali_results, r"^confirm_quali_results$"),

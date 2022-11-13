@@ -38,21 +38,21 @@ from app.components.driver_registration import driver_registration
 from app.components.queries import (
     get_championship,
     get_driver,
-
 )
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
 from app.components.stats import (
     consistency,
-
     race_pace,
     sportsmanship,
+    speed,
     stats,
 )
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -194,6 +194,29 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Command which sends the event info for the next round."""
+    driver = get_driver(telegram_id=update.effective_user.id)
+    if not driver:
+        championship_round = get_championship().next_round()
+        if not championship_round:
+            msg = "Il campionato è terminato, non ci sono più gare da completare."
+        else:
+            msg = championship_round.generate_info_message()
+
+            await update.message.reply_text(msg)
+            return
+
+    championship_round = driver.current_category().next_round()
+    if not championship_round:
+        msg = "Il campionato è terminato, non ci sono più gare da completare."
+    else:
+        msg = championship_round.generate_info_message()
+
+    await update.message.reply_text(msg)
+    return
+
+
 async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the inline query. This callback provides the user with a complete
     list of drivers saved in the database, and enables him to view the statistics
@@ -202,14 +225,13 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = update.inline_query.query
     results = []
-    # max_races = get_max_races()
     drivers = get_championship().driver_list
 
     for driver in drivers:
 
         if query.lower() in driver.psn_id.lower():
 
-            wins, podiums, poles = stats(driver)
+            wins, podiums, poles, fastest_laps = stats(driver)
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team().name
@@ -219,12 +241,12 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
             if (const := consistency(driver)) <= 0:
                 const = "N.D."
-            # if exp := experience(driver, max_races) <= 0:
-            #     exp = "N.D."
             if (sprt := sportsmanship(driver)) <= 0:
                 sprt = "N.D."
             if (pace := race_pace(driver)) <= 0:
                 pace = "N.D."
+            if (quali_pace := speed(driver)) <= 0:
+                quali_pace = "N.D."
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
@@ -233,12 +255,13 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Costanza:</b> <i>{const}</i>\n"
-                        # f"<b>Esperienza:</b> <i>{exp}</i>\n"
                         f"<b>Sportività:</b> <i>{sprt}</i>\n"
-                        f"<b>Passo:</b> <i>{pace}</i>\n\n"
+                        f"<b>Qualifica:</b> <i>{quali_pace}</i>\n"
+                        f"<b>Passo gara:</b> <i>{pace}</i>\n\n"
                         f"<b>Vittorie:</b> <i>{wins}</i>\n"
                         f"<b>Podi:</b> <i>{podiums}</i>\n"
-                        f"<b>Pole/Giri veloci:</b> <i>{poles}</i>\n"
+                        f"<b>Pole:</b> <i>{poles}</i>\n"
+                        f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
                         f"<b>Gare disputate:</b> <i>{len(driver.race_results)}</i>\n"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
@@ -268,19 +291,18 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a sticker to the report channel indicating that the window for making
-    reports has closed for a specific category.
+    """Sends a sticker to the report channel indicating that the time window for making
+    reports has closed.
     """
 
     championship = get_championship()
 
     if championship.reporting_category():
-        with open("./app/images/sticker.webp") as sticker:
-            await context.bot.send_sticker(
-                chat_id=config.REPORT_CHANNEL,
-                sticker=sticker,
-                disable_notification=True,
-            )
+        await context.bot.send_sticker(
+            chat_id=config.REPORT_CHANNEL,
+            sticker=open("./app/images/sticker.webp", "rb"),
+            disable_notification=True,
+        )
 
 
 async def send_participation_list_command(
@@ -458,11 +480,13 @@ def main() -> None:
             filters=filters.ChatType.GROUPS,
         )
     )
+
     application.add_handler(
         CallbackQueryHandler(
             update_participation_list, r"participating|not_participating"
         )
     )
+
     application.add_handler(driver_registration)
     application.add_handler(report_processing)
     application.add_handler(report_creation)
@@ -470,6 +494,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
+    application.add_handler(CommandHandler("prossima_gara", next_event))
 
     application.add_error_handler(error_handler)
 

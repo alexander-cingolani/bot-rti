@@ -1,7 +1,6 @@
 """
 This module contains all the callbacks necessary to register drivers to the database.
 """
-
 from app.components import config
 from app.components.queries import get_driver, get_similar_driver, update_object
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User

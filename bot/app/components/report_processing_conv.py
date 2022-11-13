@@ -5,10 +5,9 @@ made by users.
 
 import os
 from collections import defaultdict
-from typing import cast
 
 from app.components import config
-from app.components.models import DriverCategory, Report, Category
+from app.components.models import Category, DriverCategory, Report
 from app.components.queries import (
     get_championship,
     get_last_report_number,
@@ -48,6 +47,10 @@ from telegram.ext import (
 
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Allows admins to create reports without a pre-existing one made by a driver."""
+
+    if update.effective_user.id not in config.ADMINS:
+        await update.message.reply_text(text="Questo comando è riservato agli admin.")
+        return ConversationHandler.END
 
     championship = get_championship()
     context.user_data["championship"] = championship
@@ -135,10 +138,8 @@ async def ask_session(update: Update, context: ContextTypes) -> int:
     text = "In quale sessione è avvenuta l'infrazione?"
 
     buttons = []
-    for i, session in enumerate(category.sessions):
-        buttons.append(
-            InlineKeyboardButton(session.session.name, callback_data=f"S{i}")
-        )
+    for i, session in enumerate(user_data["current_report"].round.sessions):
+        buttons.append(InlineKeyboardButton(session.name, callback_data=f"S{i}"))
     buttons = list(chunked(buttons, 3))
     buttons.append(
         [
@@ -155,23 +156,33 @@ async def ask_session(update: Update, context: ContextTypes) -> int:
 
 async def ask_incident_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the championship round and asks when the accident happened."""
-    
+
     user_data = context.user_data
-    category: Category = user_data["category"]
+
     if not update.callback_query.data.isnumeric():
-        user_data["current_report"].session = category.sessions[
-            int(update.callback_query.data.removeprefix("S"))
-        ].session
-        
+        user_data["current_report"].session = user_data[
+            "current_report"
+        ].round.sessions[int(update.callback_query.data.removeprefix("S"))]
+
     text = "In che minuto è stata commessa l'infrazione?"
     reply_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("« Sessione", callback_data=str(ASK_SESSION)), InlineKeyboardButton("Pilota colpevole »", callback_data=str(ASK_DRIVER))]]
+        [
+            [
+                InlineKeyboardButton("« Sessione", callback_data=str(ASK_SESSION)),
+                InlineKeyboardButton(
+                    "Pilota colpevole »", callback_data=str(ASK_DRIVER)
+                ),
+            ]
+        ]
     )
     if update.callback_query:
-        await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+        await update.callback_query.edit_message_text(
+            text=text, reply_markup=reply_markup
+        )
     else:
         update.message.reply_text(text, reply_markup=reply_markup)
     return ASK_DRIVER
+
 
 async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the championship round and asks who the driver to report is."""
@@ -219,7 +230,7 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
         user_data["current_report"].reported_team = driver.driver.current_team()
         user_data["current_report"].reported_driver = driver.driver
-        
+
     buttons = []
     for i, infraction in enumerate(config.INFRACTIONS):
         buttons.append([InlineKeyboardButton(infraction, callback_data=f"i{i}")])
@@ -249,7 +260,7 @@ async def report_processing_entry_point(
     if user.id not in config.ADMINS:
         text = "Questa funzione è riservata agli admin di RTI.\n"
         button = InlineKeyboardButton(
-            text="Chiedi l'autorizzazione", url=f"tg://user?id=<{config.OWNER_ID}>"
+            text="Chiedi l'autorizzazione", url=f"tg://user?id={config.OWNER_ID}"
         )
         reply_markup = InlineKeyboardMarkup([[button]])
         await update.message.reply_text(text, reply_markup=reply_markup)
@@ -338,7 +349,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the admin for the fact when callback_data containing "ask_fact" is received."""
 
-    report = cast(Report, context.user_data["current_report"])
+    report: Report = context.user_data["current_report"]
     text = "Seleziona il fatto accaduto, oppure scrivine uno tu.\n"
 
     buttons = []
@@ -471,15 +482,17 @@ async def ask_licence_points(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 user_data["current_report"].penalty = None
                 user_data["time_penalty_text"] = None
             else:
-                time_penalty =int(
-                    update.callback_query.data.split()[0]
-                )
+                time_penalty = int(update.callback_query.data.split()[0])
                 user_data["current_report"].time_penalty = time_penalty
-                user_data["time_penalty_text"] = f"{time_penalty} secondi aggiunti sul tempo di gara."
-                
+                user_data[
+                    "time_penalty_text"
+                ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+
     else:
         user_data["current_report"].time_penalty = int(update.message.text.split()[0])
-        user_data["time_penalty_text"] = f"{time_penalty} secondi aggiunti sul tempo di gara."
+        user_data[
+            "time_penalty_text"
+        ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
 
     buttons = []
     for licence_points in range(5):
@@ -530,15 +543,28 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     if update.callback_query:
         if not update.callback_query.data.isdigit():
-            licence_points = int(
-                update.callback_query.data.removeprefix("lp")
-            )
+            licence_points = int(update.callback_query.data.removeprefix("lp"))
             user_data["current_report"].licence_points = licence_points
-            user_data["licence_points_text"] = f"{licence_points}punti sulla licenza ({user_data['current_report'].reported_driver.licence_points - licence_points}/10)"
+            current_report: Report = user_data["current_report"]
+            if licence_points > 1:
+                user_data["licence_points_text"] = (
+                    f"{licence_points} punti sulla licenza"
+                    f"({current_report.reported_driver.licence_points - licence_points}/10)"
+                )
+            elif licence_points == 1:
+                user_data["licence_points_text"] = (
+                    "1 punto sulla licenza"
+                    f"({current_report.reported_driver.licence_points - 1}/10)"
+                )
+            else:
+                user_data["licence_points_text"] = ""
     else:
         licence_points = int(update.message.text.split()[0])
         user_data["current_report"].licence_points = licence_points
-        user_data["licence_points_text"] = f"{licence_points}punti sulla licenza ({user_data['current_report'].reported_driver.licence_points - licence_points}/10)"
+        user_data["licence_points_text"] = (
+            f"{licence_points}punti sulla licenza"
+            f"({user_data['current_report'].reported_driver.licence_points - licence_points}/10)"
+        )
     text = "Quanti warning sono stati dati?"
 
     buttons = []
@@ -573,20 +599,23 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_data = context.user_data
     if update.callback_query:
-        
-        if not update.callback_query.data.isnumeric():
-            warnings = int(
-                update.callback_query.data.removeprefix("w")
-            )
-            user_data["current_report"].warnings = warnings
-            user_data["warnings_text"] = f"{warnings} warning ({warnings + user_data['current_report'].reported_driver.warnings}/12)"
 
+        if not update.callback_query.data.isnumeric():
+            warnings = int(update.callback_query.data.removeprefix("w"))
+            user_data["current_report"].warnings = warnings
+            if warnings > 0:
+                user_data["warnings_text"] = (
+                    f"{warnings} warning"
+                    f"({warnings + user_data['current_report'].reported_driver.warnings}/12)"
+                )
+            else:
+                user_data["warnings_text"] = ""
     reply_markup = InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton("« Warning", callback_data=str(ASK_WARNINGS)),
                 InlineKeyboardButton(
-                    "Motivazione »", callback_data=str(ASK_QUEUE_OR_SEND)
+                    "Controlla »", callback_data=str(ASK_QUEUE_OR_SEND)
                 ),
             ]
         ]
@@ -612,8 +641,17 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     report: Report = user_data["current_report"]
 
     report.penalty = ", ".join(
-        filter(None, (user_data.get("time_penalty_text", None), user_data.get("warnings_text", None), user_data.get("licence_points_text", None)))
+        filter(
+            None,
+            (
+                user_data.get("time_penalty_text", None),
+                user_data.get("warnings_text", None),
+                user_data.get("licence_points_text", None),
+            ),
+        )
     )
+    if not report.penalty:
+        report.penalty = "Nessun'azione"
     if report.penalty:
         report.penalty += "."
     text = (
@@ -658,7 +696,7 @@ async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     user_data = context.user_data
     report = user_data["current_report"]
-    
+
     if update.callback_query.data == "send_now":
         save_and_apply_report(report)
         file = ReviewedReportDocument(report).generate_document()
@@ -741,7 +779,7 @@ async def go_back_handler_report_processing(
     callbacks = {
         ASK_ROUND: ask_round,
         ASK_SESSION: ask_session,
-        ASK_INCIDENT_TIME:ask_incident_time,
+        ASK_INCIDENT_TIME: ask_incident_time,
         ASK_DRIVER: ask_driver,
         ASK_INFRACTION: ask_infraction,
         ASK_CATEGORY: ask_category,

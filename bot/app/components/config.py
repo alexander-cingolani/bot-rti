@@ -3,7 +3,7 @@ import os
 
 from telegram import User
 
-# DEBUG = bool(os.environ.get("DEBUG"))
+DEBUG = bool(os.environ.get("DEBUG"))
 
 REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
 TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))
@@ -24,12 +24,14 @@ ADMIN_COMMANDS = [
     ("nuova_segnalazione", "Crea una nuova segnalazione."),
     ("segnalazioni", "Giudica le segnalazioni in coda."),
     ("salva_risultati", "Salva i risultati delle ultime gare."),
-    ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota.")
+    ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota."),
 ]
+
 LEADER_COMMANDS = [
     ("help", "Ricevi Informazioni sull'utilizzo del bot."),
     ("nuova_segnalazione", "Crea una nuova segnalazione."),
 ]
+
 PRIVATE_CHAT_COMMANDS = [("help", "Ricevi Informazioni sull'utilizzo del bot.")]
 
 REASONS = [
@@ -41,6 +43,7 @@ REASONS = [
 FACTS = [
     "Collisione con vettura no.{a}.",
     "Bandiere blu non rispettate nei confronti della vettura no.{a}.",
+    "Benzina esaurita prima del traguardo.",
 ]
 
 
@@ -50,7 +53,7 @@ INFRACTIONS = [
     "Taglio linea in uscita dai box.",
 ]
 
-# if DEBUG:
-#     REPORT_CHANNEL = TEST_CHANNEL
-#     GROUP_CHAT = DEVELOPER_CHAT
-#     LATE_REPORT_CHAT = DEVELOPER_CHAT
+if DEBUG:
+    REPORT_CHANNEL = TEST_CHANNEL
+    GROUP_CHAT = DEVELOPER_CHAT
+    LATE_REPORT_CHAT = DEVELOPER_CHAT

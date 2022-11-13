@@ -1,77 +1,10 @@
-
-import re
-from dataclasses import dataclass
-from datetime import timedelta
 from difflib import get_close_matches
 
-from app.components.models import CarClass
+from app.components.utils import Result, string_to_seconds
 from app.components.queries import get_driver
 from PIL import Image, ImageFilter, ImageOps
 from PIL.ImageEnhance import Contrast
 from pytesseract import image_to_string
-
-
-@dataclass
-class Result:
-
-    driver: str
-    seconds: float
-    car_class: CarClass
-    position: int
-
-    def __init__(self, driver, seconds):
-        self.seconds = seconds
-        self.driver = driver
-        self.car_class = None
-        self.position: int = None
-
-    def __hash__(self) -> int:
-        return hash(str(self))
-
-
-def string_to_seconds(string) -> float | None | str:
-    """Converts a string formatted as "mm:ss:SSS" to seconds.
-    0 is returned when the gap to the winner wasn't available.
-    None is returned when the driver did not finish the race
-
-    Returns:
-        float: Number of seconds.
-    """
-    match = re.search(r"((([0-9]){1,2}:)){0,2}[0-9]{1,2}((\.|,)[0-9]{1,3})?", string)
-    if not match:
-        if (
-            "gir" in string
-            or "gar" in string
-            or "/" == string
-            or "1" in string
-            or "2" in string
-        ):
-            return 0
-        # if string is equals to "ASSENTE" None is retured.
-        return None
-
-    matched_string = match.group(0)
-    matched_string = matched_string.replace(",", ".")
-    milliseconds = 0
-    other = matched_string
-    if "." in other:
-        other, milliseconds = matched_string.split(".")
-
-    hours = 0
-    minutes = 0
-    if other.count(":") == 2:
-        hours, minutes, seconds = other.split(":")
-    elif other.count(":") == 1:
-        minutes, seconds = other.split(":")
-    else:
-        seconds = other
-
-    return timedelta(
-        hours=int(hours),
-        minutes=int(minutes),
-        seconds=int(seconds),
-        milliseconds=int(milliseconds),
-    ).total_seconds()
 
 
 def recognize_quali_results(
@@ -115,8 +48,8 @@ def recognize_quali_results(
         laptime_box = image.crop((LEFT_2, top, RIGHT_2, bottom))
 
         driver = image_to_string(name_box, config="--psm 8").strip()
-        
-        seconds = string_to_seconds(a:=image_to_string(laptime_box, config="--psm 8"))
+
+        seconds = string_to_seconds(image_to_string(laptime_box, config="--psm 8"))
         matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
 
         if matches and len(driver) >= 3:
@@ -174,10 +107,10 @@ def recognize_race_results(
         laptime_box = image.crop((LEFT_2, top, RIGHT_2, bottom))
         laptime_box.show()
         driver = image_to_string(name_box, config="--psm 8").strip()
-        seconds = string_to_seconds(a:=image_to_string(laptime_box, config="--psm 8"))
-        
+        seconds = string_to_seconds(image_to_string(laptime_box, config="--psm 8"))
+
         matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
-        
+
         print(matches, seconds)
         if matches and len(driver) >= 3:
             race_res = Result(matches[0], seconds)
@@ -216,6 +149,4 @@ BlackSail ASSENTE
 RTI_Strummer ASSENTE
 """
     drivers = [i.split()[0] for i in drivers.splitlines()]
-    recognize_race_results(
-        "./bot/app/images/test_gr4.png", drivers, "gts"
-    )
+    recognize_race_results("./bot/app/images/test_gr4.png", drivers, "gts")

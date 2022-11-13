@@ -64,7 +64,8 @@ class ReviewedReportDocument:
         pdf.drawString(
             50,
             540,
-            "La Safety Commission, in seguito alla segnalazione ricevuta, ha analizzato l'episodio e determina che:",
+            "La Safety Commission, in seguito alla segnalazione ricevuta, ha analizzato"
+            " l'episodio e determina che:",
         )
         pdf.setFont("arialB", 11.5)
         pdf.drawString(50, 500, "No / Pilota")
@@ -78,7 +79,7 @@ class ReviewedReportDocument:
         pdf.setFont("arial", 11)
 
         reported_driver_team_name = self.reported_driver.current_team().name
-        
+
         pdf.drawString(75, 619, "Safety Commission")
         pdf.drawString(75, 599, "Capo Scuderia,")
         pdf.drawString(75, 585, f"Scuderia {reported_driver_team_name}")
@@ -167,17 +168,18 @@ class ReportDocument:
         pdf.drawString(
             50,
             540,
-            f"La scuderia {self.reporting_driver.current_team().name} chiede la revisione del seguente incidente:",
+            f"La scuderia {self.reporting_driver.current_team().name}"
+            "chiede la revisione del seguente incidente:",
         )
         pdf.drawString(
             155,
             499,
-            f"{self.reporting_driver.current_race_number} - {self.reporting_driver.psn_id}",
+            f"{self.reporting_driver.current_race_number} / {self.reporting_driver.psn_id}",
         )
         pdf.drawString(
             155,
             474,
-            f"{self.reported_driver.current_race_number} - {self.reported_driver.psn_id}",
+            f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
         )
         pdf.drawString(155, 449, self.reported_driver.current_team().name)
         pdf.drawString(155, 424, self.report.incident_time)
