@@ -857,12 +857,9 @@ class Round(Base):
     @property
     def sprint_race(self) -> Session:
         """Returns the first race session of this round."""
-        key_words = ("1", "sprint", "breve", "corta")
         for session in self.sessions:
-            name = session.name.lower()
-            for key_word in key_words:
-                if key_word in name:
-                    return session
+            if "gara 1" in session.name.lower():
+                return session
 
     @property
     def long_race(self) -> Session:

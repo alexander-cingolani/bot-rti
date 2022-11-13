@@ -1,3 +1,4 @@
+import logging
 from app.components.models import RaceResult
 from app.components.queries import get_championship
 
@@ -37,9 +38,9 @@ def get_calendar(championship_id: int, category_id: int):
 
     calendar = []
 
-    sprint_race = category.has_sprint_race()
     for championship_round in category.rounds:
-
+        sprint_race = championship_round.has_sprint_race
+        logging.log(logging.INFO, f"{sprint_race}, {championship_round.sessions}")
         if sprint_race:
             info = [
                 {
@@ -84,9 +85,9 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
     """Creates a list containing"""
     driver = race_results[0].driver
     driv_res = []
-    double_race = race_results[0].category.has_sprint_race()
+
     for race_result in race_results:
-        race_result.round
+        double_race = race_results[0].round.has_sprint_race
 
         # Makes changes to data in order to facilitate the front-end.
         if not double_race:

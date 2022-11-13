@@ -3,4 +3,4 @@ pg8000==1.29.3
 SQLAlchemy==1.4.42
 uvicorn==0.19.0
 python-multipart
-types-cachetools==5.2.0
+cachetools==5.2.0
