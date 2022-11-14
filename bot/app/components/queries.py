@@ -161,7 +161,14 @@ def save_qualifying_report(report: Report) -> None:
             and QualifyingResult.session_id == report.session_id
             and QualifyingResult.round_id == report.round_id
         )
+
     ).one_or_none()
+    for driver_category in report.reported_driver.categories:
+        if driver_category.category_id == report.category.category_id:
+            driver_category.licence_points -= report.licence_points
+            driver_category.warnings += report.warnings
+    
+    
     if quali_result:
         quali_result: QualifyingResult = quali_result[0]
         quali_result.warnings = report.warnings

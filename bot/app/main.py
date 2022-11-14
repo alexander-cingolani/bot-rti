@@ -1,6 +1,7 @@
 """
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
+from collections import defaultdict
 import json
 import logging
 import os
@@ -79,7 +80,7 @@ async def post_init(application: Application) -> None:
     """Sets commands for every user."""
 
     await application.bot.set_my_commands(
-        config.PRIVATE_CHAT_COMMANDS, BotCommandScopeAllPrivateChats()
+        config.BASE_COMMANDS, BotCommandScopeAllPrivateChats()
     )
     await set_admin_commands(application.bot)
 
@@ -196,16 +197,13 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
+    
     driver = get_driver(telegram_id=update.effective_user.id)
+    
     if not driver:
-        championship_round = get_championship().next_round()
-        if not championship_round:
-            msg = "Il campionato è terminato, non ci sono più gare da completare."
-        else:
-            msg = championship_round.generate_info_message()
-
-            await update.message.reply_text(msg)
-            return
+        message = "Per usare questa funzione devi essere registrato. Puoi farlo tramite /registrami."
+        await update.message.reply_text(message)
+        return
 
     championship_round = driver.current_category().next_round()
     if not championship_round:
@@ -270,6 +268,51 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             results.append(result_article)
 
     await update.inline_query.answer(results)
+
+
+async def championship_standings(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """When activated via the /classifica command, it sends a message containing
+    the current championship standings for the category the user is in.
+    """
+    driver = get_driver(telegram_id=update.effective_user.id)
+    if not driver:
+        return
+
+    category = driver.current_category()
+    standings = category.current_standings()
+    message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
+    for pos, (results, points) in enumerate(standings, start=1):
+        message += f"<b>{pos:>3} - {results[0].driver.psn_id}</b> <i>{points}</i>\n"
+    logging.info(f"{standings}")
+    await update.message.reply_text(message)
+
+
+async def complete_championship_standings(
+    update: Update, _: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """When activated via the /classifica command, it sends a message containing
+    the current championship standings for the category the user is in.
+    """
+
+    teams = defaultdict(float)
+    championship = get_championship()
+    for category in championship.categories:
+        standings = category.current_standings()
+        message = f"<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
+        for pos, (results, points) in enumerate(standings, start=1):
+            driver = results[0].driver
+            message += f"<b>{pos:>3} - {driver.psn_id}</b> <i>{points}</i>\n"
+            teams[driver.current_team().name] += points
+        await update.message.reply_text(message)
+
+    message = (
+        f"<i><b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b></i>\n\n"
+    )
+    for pos, (team, points) in enumerate(teams.items(), start=1):
+        message += f"{pos:>3} - {team} {points}"
+    await update.message.reply_text(message)
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -495,7 +538,10 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
-
+    application.add_handler(CommandHandler("classifica", championship_standings))
+    application.add_handler(
+        CommandHandler("classifica_completa", complete_championship_standings)
+    )
     application.add_error_handler(error_handler)
 
     application.run_polling(drop_pending_updates=True)
