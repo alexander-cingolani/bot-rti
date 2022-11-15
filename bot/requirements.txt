@@ -1,5 +1,5 @@
 more-itertools==9.0.0
-Pillow==9.2.0
+Pillow==9.3.0
 pg8000==1.29.3
 pytesseract==0.3.10
 python-telegram-bot==20.0a4
