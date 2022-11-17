@@ -3,7 +3,6 @@ import os
 
 from telegram import User
 
-
 REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
 TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))
 GROUP_CHAT = int(os.environ.get("GROUP_CHAT"))
@@ -16,10 +15,14 @@ OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 
 BASE_COMMANDS = [
-    ("help", "Ricevi Informazioni sull'utilizzo del bot."),
-    ("classifica", "Visualizza la classifica della tua categoria."),
-    ("classifica_completa", "Visualizza tutte le classifiche del campionato."),
-    ("prossima_gara", "Visualizza le info sulla tua prossima gara.")
+    ("classifica", "Classifica della tua categoria."),
+    (
+        "classifica_completa",
+        "Classifiche piloti e costruttori del campionato in corso.",
+    ),
+    ("prossima_gara", "Info sulla tua prossima gara."),
+    ("ultima_gara", "Risultati della scorsa gara con le penalità applicate."),
+    ("help", "Info sull'utilizzo del bot."),
 ]
 
 ADMIN_CHAT_COMMANDS = BASE_COMMANDS + [
@@ -31,15 +34,10 @@ LEADER_COMMANDS = BASE_COMMANDS + [
 ]
 
 ADMIN_COMMANDS = LEADER_COMMANDS + [
-
-    ("nuova_segnalazione", "Crea una nuova segnalazione."),
     ("segnalazioni", "Giudica le segnalazioni in coda."),
     ("salva_risultati", "Salva i risultati delle ultime gare."),
     ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota."),
 ]
-
-
-
 
 REASONS = [
     "{b} tampona {a} in curva facendolo uscire di pista.",
@@ -52,7 +50,6 @@ FACTS = [
     "Bandiere blu non rispettate nei confronti della vettura no.{a}.",
     "Benzina esaurita prima del traguardo.",
 ]
-
 
 INFRACTIONS = [
     "Finisce il carburante prima del traguardo.",
