@@ -2,6 +2,7 @@
 This module contains functions which calculate various driver statistics
 """
 
+import logging
 from statistics import stdev
 
 from app.components.models import Driver, RaceResult
@@ -162,11 +163,16 @@ def stats(driver: Driver) -> tuple[int, int, int]:
             wins += 1
         if race_result.relative_position <= 3:
             podiums += 1
-
-        quali_res = race_result.round.get_qualifying_result(driver_id=driver.driver_id)
-        if quali_res:
-            poles += 1 if quali_res.relative_position == 1 else 0
         fastest_laps += race_result.fastest_lap_points
+        
+    for quali_result in driver.qualifying_results:
+        if quali_result:
+            if quali_result.relative_position == 1:
+                poles += 1
+                logging.info(
+                    f"{quali_result.driver.psn_id} - {quali_result.relative_position} - {quali_result.round_id}"
+                )
+                
 
     races_completed = len(driver.race_results) - no_participation
     return wins, podiums, poles, fastest_laps, races_completed
