@@ -26,14 +26,15 @@ def consistency(driver: Driver) -> int:
     if len(race_results) < 2:
         return 0
     positions = [race_result.relative_position for race_result in race_results]
+    participation_ratio = len(race_results) / len(driver.race_results)
 
-    return round(99 - (stdev(positions) * 7))
+    return round((99 - (stdev(positions) * 10)) * participation_ratio)
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))
 def speed(driver: Driver) -> int:
     """This statistic is calculated based on the average gap between
-    the driver's qualifying times and the poleman's.
+    the driver's qualifying times and the pole man's.
 
     Args:
         driver (Driver): The Driver to calculate the speed rating of.
@@ -41,26 +42,19 @@ def speed(driver: Driver) -> int:
     Returns:
         int: Speed rating. (0-99)
     """
-    current_category = driver.current_category()
-    pole_laptimes = current_category.pole_lap_times()
-
-    if not pole_laptimes:
-        return 0
-
-    driver_laptimes = []
-    poles = []
-    for quali_result, pole in zip(driver.qualifying_results, pole_laptimes):
-        if quali_result.category_id == current_category.category_id:
-            if quali_result.laptime:
-                driver_laptimes.append(quali_result.laptime)
-                poles.append(pole)
 
     percentages = []
-    for pole, driver_time in zip(poles, driver_laptimes):
-        percentages.append((driver_time - pole) / pole * 99)
+    for quali_result in filter(lambda x: x.laptime, driver.qualifying_results):
+        percentages.append(
+            (
+                quali_result.gap_to_first
+                / (quali_result.gap_to_first + quali_result.laptime)
+            )
+            * 100
+        )
 
     if percentages:
-        return round(99 - sum(percentages) / len(percentages) * 3)
+        return round(99 - sum(percentages) / len(percentages) * 8)
     return 0
 
 
@@ -112,7 +106,7 @@ def sportsmanship(driver: Driver) -> int:
     if not driver.received_reports:
         return 99
 
-    penalty_score = (rr.penalty_points for rr in driver.race_results)
+    penalty_score = (rr.championship_penalty_points for rr in driver.received_reports)
 
     if penalty_score:
         return round(99 - sum(penalty_score) * 10 / len(driver.race_results))
@@ -138,7 +132,7 @@ def race_pace(driver: Driver) -> int:
         99
         - (
             sum(race_result.gap_to_first for race_result in race_results)
-            / (len(race_results) * 2.5)
+            / (len(race_results) * 3)
         )
     )
 
@@ -157,19 +151,22 @@ def stats(driver: Driver) -> tuple[int, int, int]:
     podiums = 0
     fastest_laps = 0
     poles = 0
+    no_participation = 0
 
     for race_result in driver.race_results:
-        if race_result.participated:
-            if race_result.relative_position == 1:
-                wins += 1
-            if race_result.relative_position <= 3:
-                podiums += 1
+        if not race_result.participated:
+            no_participation += 1
+            continue
 
-            quali_res = race_result.round.get_qualifying_result(
-                driver_id=driver.driver_id
-            )
-            if quali_res:
-                poles += 1 if quali_res.relative_position == 1 else 0
-            fastest_laps += race_result.fastest_lap_points
+        if race_result.relative_position == 1:
+            wins += 1
+        if race_result.relative_position <= 3:
+            podiums += 1
 
-    return wins, podiums, poles, fastest_laps
+        quali_res = race_result.round.get_qualifying_result(driver_id=driver.driver_id)
+        if quali_res:
+            poles += 1 if quali_res.relative_position == 1 else 0
+        fastest_laps += race_result.fastest_lap_points
+
+    races_completed = len(driver.race_results) - no_participation
+    return wins, podiums, poles, fastest_laps, races_completed
