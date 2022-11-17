@@ -1,15 +1,22 @@
 """
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
-from collections import defaultdict
 import json
 import logging
 import os
 import traceback
+from collections import defaultdict
 from datetime import time
 from uuid import uuid4
 
 import pytz
+from app.components import config
+from app.components.driver_registration import driver_registration
+from app.components.queries import get_championship, get_driver
+from app.components.report_creation_conv import report_creation
+from app.components.report_processing_conv import report_processing
+from app.components.result_recognition_conv import save_results_conv
+from app.components.stats import consistency, race_pace, speed, sportsmanship, stats
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
@@ -31,24 +38,8 @@ from telegram.ext import (
     ConversationHandler,
     Defaults,
     InlineQueryHandler,
+    PicklePersistence,
     filters,
-)
-
-from app.components import config
-from app.components.driver_registration import driver_registration
-from app.components.queries import (
-    get_championship,
-    get_driver,
-)
-from app.components.report_creation_conv import report_creation
-from app.components.report_processing_conv import report_processing
-from app.components.result_recognition_conv import save_results_conv
-from app.components.stats import (
-    consistency,
-    race_pace,
-    sportsmanship,
-    speed,
-    stats,
 )
 
 logging.basicConfig(
@@ -197,9 +188,9 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-    
+
     driver = get_driver(telegram_id=update.effective_user.id)
-    
+
     if not driver:
         message = "Per usare questa funzione devi essere registrato. Puoi farlo tramite /registrami."
         await update.message.reply_text(message)
@@ -229,7 +220,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
         if query.lower() in driver.psn_id.lower():
 
-            wins, podiums, poles, fastest_laps = stats(driver)
+            wins, podiums, poles, fastest_laps, races_disputed = stats(driver)
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team().name
@@ -252,7 +243,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 input_message_content=InputTextMessageContent(
                     (
                         f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
-                        f"<b>Costanza:</b> <i>{const}</i>\n"
+                        f"<b>Affidabilità:</b> <i>{const}</i>\n"
                         f"<b>Sportività:</b> <i>{sprt}</i>\n"
                         f"<b>Qualifica:</b> <i>{quali_pace}</i>\n"
                         f"<b>Passo gara:</b> <i>{pace}</i>\n\n"
@@ -260,7 +251,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Podi:</b> <i>{podiums}</i>\n"
                         f"<b>Pole:</b> <i>{poles}</i>\n"
                         f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
-                        f"<b>Gare disputate:</b> <i>{len(driver.race_results)}</i>\n"
+                        f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
@@ -270,9 +261,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.inline_query.answer(results)
 
 
-async def championship_standings(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
@@ -284,8 +273,8 @@ async def championship_standings(
     standings = category.current_standings()
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
     for pos, (results, points) in enumerate(standings, start=1):
-        message += f"<b>{pos:>3} - {results[0].driver.psn_id}</b> <i>{points}</i>\n"
-    logging.info(f"{standings}")
+        message += f"<b>{pos}</b> - {results[0].driver.psn_id} <i>{points}</i>\n"
+
     await update.message.reply_text(message)
 
 
@@ -298,21 +287,48 @@ async def complete_championship_standings(
 
     teams = defaultdict(float)
     championship = get_championship()
+    message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
     for category in championship.categories:
         standings = category.current_standings()
-        message = f"<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
+        message += f"\n\n<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
         for pos, (results, points) in enumerate(standings, start=1):
             driver = results[0].driver
-            message += f"<b>{pos:>3} - {driver.psn_id}</b> <i>{points}</i>\n"
+            message += f"<b>{pos}</b> - <code>{driver.psn_id}</code> <i>{points}</i>\n"
             teams[driver.current_team().name] += points
-        await update.message.reply_text(message)
 
-    message = (
-        f"<i><b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b></i>\n\n"
-    )
-    for pos, (team, points) in enumerate(teams.items(), start=1):
-        message += f"{pos:>3} - {team} {points}"
+    message += f"\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
+    for pos, (team, points) in enumerate(
+        sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
+    ):
+        message += f"<b>{pos}</b> - {team} <i>{points}</i>\n"
     await update.message.reply_text(message)
+
+
+async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """When activated via the /risultati_gara command, it sends a message containing
+    the results of the user's last race."""
+
+    driver = get_driver(telegram_id=update.effective_user.id)
+
+    if not driver:
+        await update.message.reply_text(
+            "Per usare questo comando è necessario essere registrati."
+            " Puoi farlo tramite /registrami."
+        )
+        return
+
+    category = driver.current_category()
+    round = category.last_completed_round()
+
+    message = f"<i><b>RISULTATI {round.number}ª TAPPA</b></i>\n\n"
+
+    if round.has_sprint_race:
+        message += round.sprint_race.results()
+    message += round.long_race.results()
+
+    await update.message.reply_text(text=message)
+
+    return
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -326,7 +342,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         text = (
             f"<b>Segnalazioni Categoria {category.name}</b>\n"
             f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
-            f"#{championship.abbreviated_name} Tappa{championship_round.number} #{category.name}"
+            f"#{championship.abbreviated_name}Tappa{championship_round.number} #{category.name}"
         )
         await context.bot.send_message(
             chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
@@ -340,7 +356,13 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     championship = get_championship()
 
-    if championship.reporting_category():
+    if championship:
+        category = championship.reporting_category()
+        if not category.first_non_completed_round().reports:
+            await context.bot.send_message(
+                chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
+            )
+
         await context.bot.send_sticker(
             chat_id=config.REPORT_CHANNEL,
             sticker=open("./app/images/sticker.webp", "rb"),
@@ -368,7 +390,6 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     championship = get_championship()
     chat_data = context.chat_data
-
     if not (category := championship.current_racing_category()):
         return ConversationHandler.END
 
@@ -484,6 +505,7 @@ async def update_participation_list(
 def main() -> None:
     """Starts the bot."""
 
+    persistence = PicklePersistence("context")
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()
@@ -491,7 +513,7 @@ def main() -> None:
         .defaults(defaults)
         .post_init(post_init)
         .post_shutdown(post_shutdown)
-        .defaults(defaults)
+        .persistence(persistence)
         .build()
     )
 
@@ -535,13 +557,14 @@ def main() -> None:
     application.add_handler(report_creation)
     application.add_handler(save_results_conv)
 
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica", championship_standings))
     application.add_handler(
         CommandHandler("classifica_completa", complete_championship_standings)
     )
+    application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_error_handler(error_handler)
 
     application.run_polling(drop_pending_updates=True)
