@@ -499,7 +499,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     category: Category = user_data["category"]
 
     if not category.can_report_today():
-        text = "Troppo tardi :/ è già scoccata la mezzanotte."
+        text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
 
     if update.callback_query.data == "confirm":
@@ -526,7 +526,6 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
 
         report.channel_message_id = message.message_id
-        update_object()
 
         os.remove(report_document_name)
 
@@ -539,6 +538,14 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 ]
             ]
         )
+        if not report.is_complete():
+            await update.callback_query.edit_message_text(
+                "Qualcosa è andato storto... 😓\n"
+                "Prova a rifarla con /nuova_segnalazione. Se fallisce ancora chiedi aiuto a Sbinotto."
+            )
+            return
+
+        save_object(report)
 
         text = (
             "Segnalazione inviata!"
@@ -550,10 +557,12 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             text=text, reply_markup=reply_markup
         )
 
-    elif update.callback_query.data == "cancel":
+        return UNSEND
+
+    if update.callback_query.data == "cancel":
         user_data.clear()
-    save_object(report)
-    return UNSEND
+        await update.callback_query.edit_message_text("Segnalazione annullata!")
+        return ConversationHandler.END
 
 
 async def change_state_rep_creation(
