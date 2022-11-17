@@ -8,8 +8,14 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from app.components.utils import separate_car_classes
-from app.components.models import (Category, Championship, Driver,
-                                   QualifyingResult, RaceResult, Report)
+from app.components.models import (
+    Category,
+    Championship,
+    Driver,
+    QualifyingResult,
+    RaceResult,
+    Report,
+)
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc
 from sqlalchemy.exc import MultipleResultsFound
@@ -145,7 +151,7 @@ def save_object(obj) -> None:
 
     _session.add(obj)
     _session.commit()
-                
+
 
 def save_multiple_objects(objs: list) -> None:
     "Saves a list of objects to the database."
@@ -161,14 +167,12 @@ def save_qualifying_report(report: Report) -> None:
             and QualifyingResult.session_id == report.session_id
             and QualifyingResult.round_id == report.round_id
         )
-
     ).one_or_none()
     for driver_category in report.reported_driver.categories:
         if driver_category.category_id == report.category.category_id:
             driver_category.licence_points -= report.licence_points
             driver_category.warnings += report.warnings
-    
-    
+
     if quali_result:
         quali_result: QualifyingResult = quali_result[0]
         quali_result.warnings = report.warnings
@@ -193,7 +197,7 @@ def save_and_apply_report(report: Report) -> None:
         return
     if report.session.is_quali:
         save_qualifying_report(report)
-        return 
+        return
 
     rows = _session.execute(
         select(RaceResult)
@@ -212,26 +216,26 @@ def save_and_apply_report(report: Report) -> None:
             if race_result.driver_id == report.reported_driver.driver_id:
                 race_result.total_racetime += report.time_penalty
             race_results.append(race_result)
-            
+
     race_results.sort(key=lambda x: x.total_racetime)
-    
+
     for position, result in enumerate(race_results, start=1):
 
         result.finishing_position = position
-        
+
     for _, class_results in separate_car_classes(report.category, race_results).items():
         winners_racetime = race_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position
             race_result.gap_to_first = result.total_racetime - winners_racetime
-    
-    
+
     if not report.reporting_driver:
         update_object()
         save_object(report)
-        
+
     else:
         update_object()
+
 
 def update_object() -> None:
     """Calls Session.commit()"""

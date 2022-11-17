@@ -95,7 +95,9 @@ def separate_car_classes(
 
         for pos, result in enumerate(results, start=1):
             if result.car_class.car_class_id in separated_classes:
-                separated_classes[result.car_class.car_class_id].append(_prepare_result(result, best_laptime, pos))
+                separated_classes[result.car_class.car_class_id].append(
+                    _prepare_result(result, best_laptime, pos)
+                )
         return separated_classes
 
     best_laptime = results[0].total_racetime
@@ -103,7 +105,5 @@ def separate_car_classes(
     for pos, result in enumerate(results, start=1):
         car_class = result.driver.current_class().car_class_id
         if car_class in separated_classes:
-            separated_classes[car_class].append(
-                result
-            )
+            separated_classes[car_class].append(result)
         return separated_classes

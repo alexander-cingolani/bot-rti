@@ -168,7 +168,7 @@ class ReportDocument:
         pdf.drawString(
             50,
             540,
-            f"La scuderia {self.reporting_driver.current_team().name}"
+            f"La scuderia {self.reporting_driver.current_team().name} "
             "chiede la revisione del seguente incidente:",
         )
         pdf.drawString(

@@ -692,7 +692,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Adds the report to the queue or sends it, then ends the conversation"""
-    
+
     user_data = context.user_data
     report: Report = user_data["current_report"]
     if update.callback_query.data == "send_now":
@@ -703,7 +703,7 @@ async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         save_and_apply_report(report)
         text = "Penalità salvata e inviata."
-        
+
     if update.message:
         await update.message.reply_text(text)
     else:
