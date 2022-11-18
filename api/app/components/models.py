@@ -7,11 +7,8 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict
 from datetime import timedelta, time
-import logging
 import os
-from types import NoneType
 from typing import DefaultDict
-from uuid import uuid4
 import uuid
 from cachetools import TTLCache
 from sqlalchemy import (
@@ -27,6 +24,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    Enum,
     Text,
     Interval,
     UniqueConstraint,
@@ -44,31 +42,30 @@ class Report(Base):
     """This object represents a report.
     Each report is associated with two Drivers and their Teams,
     as well as the Category, Round and Session the reported incident happened in.
-    N.B. fact, penalty, penalty_reason and is_queued may only be provided after the report has been
-    reviewed
+    N.B. fact, penalty, penalty_reason and is_queued may only be provided after
+    the report has been reviewed.
 
     Attributes:
         report_id (int): Automatically generated unique ID assigned upon report creation.
-        number (int): The number of the report in the order of the batch it was received in.
-        incident_time (str): String formatted in mm:ss indicating the time when the accident
-            happened.
+        number (int): The number of the report in the order it was received in in a Round.
+        incident_time (str): String indicating the in-game time when the accident happened.
         report_reason (str): The reason provided by the reporter for making the report.
-        video_link: (str): The link towards a YouTube video showing the accident
-            happening in a qualifying session.
-
+        video_link (str): Link towards a YouTube video showing the accident happening.
+            (Only intended for qualifying sessions)
+        channel_message_id (int): ID of the message the report was sent by the user with.
+        report_time (datetime): Timestamp indicating when the report was made.
 
         fact (str): Brief description of the accident made by the Safety Commission.
-        penalty (str): The penalty inflicted to the driver. This attribute must be left empty
-            in case the reported_driver is not found culpable.
+        penalty (str): The penalty inflicted to the driver. This attribute must be
+            left empty in case the reported_driver is not found culpable.
         time_penalty (int): Seconds to add to the driver's total race time.
-        championship_penalty_points (int): Points to be subtracted from the driver's points tally.
+        championship_penalty_points (int): Points to be subtracted from the driver's
+            points tally.
         licence_points (int): Points to be subtracted from the driver's licence.
         warnings (int): Number of warnings received.
-        penalty_reason (str): Detailed explanation of the reason the penalty was inflicted for.
-        is_queued (bool): True if the reviewed report is in queue to be sent out
+        penalty_reason (str): Detailed explanation of the reason for the penalty
+        is_queued (bool): True if the reviewed report queued to be sent out
             to the reports channel.
-        report_time (datetime): Timestamp indicating when the report was made.
-        channel_message_id: ID of the message the report was sent by the user with.
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
@@ -137,6 +134,7 @@ class Report(Base):
         """Returns a new Report object."""
 
     def is_complete(self) -> bool:
+        """Returns True if all the necessary arguments have been provided."""
         return all(
             (
                 self.reported_driver,
@@ -207,10 +205,12 @@ class DriverCategory(Base):
     """This object creates a new association between a Driver and a Category.
 
     Attributes:
-        joined_on (date): The date the driver joined the category on.
+        joined_on (date): The date on which the driver joined the category.
+        left_on (date): The date on which the driver left the category.
         race_number (int): The number used by the driver in the category.
+        warnings (int): Number of warnings received in the category.
+        licence_points: Number of points remaining on the driver's licence.
 
-        driver_category_id (int): Automatically generated unique ID assigned upon object creation.
         driver_id (int): Unique ID of the driver joining the category.
         category_id (int): Unique ID of the category being joined by the driver.
 
@@ -218,6 +218,7 @@ class DriverCategory(Base):
 
         driver (Driver): Driver joining the category.
         category (Category): Category being joined by the driver.
+        car_class (CarClass): CarClass the driver is in.
     """
 
     __tablename__ = "drivers_categories"
@@ -388,10 +389,11 @@ class QualifyingResult(Base):
         qualifying_result_id (int): Automatically generated unique ID assigned upon
             object creation.
         position (int): Position the driver qualified in.
-        laptime (float): Best lap registered by the driver.
-        penalty_points (int): Points to be subracted from the driver's total.
-        warnings (int): Warnings to added to the driver's total.
-        licence_points (int): Points to be subtracted from the driver's licence.
+        relative_position (int): Qualifying position in the driver's car class.
+        gap_to_first (float): Seconds by which the laptime is off from the fastest lap
+            time in the driver's car class.
+        participated (bool): True if the driver participated to the Qualifying session.
+        laptime (float): Best lap registered by the driver in the.
 
         driver_id (int): Unique ID of the driver the result belongs to.
         round_id (int): Unique ID of the round the result was made in.
@@ -417,6 +419,7 @@ class QualifyingResult(Base):
     laptime: float = Column(Float)
     gap_to_first: float = Column(Float)
     participated: bool = Column(Boolean, default=False, nullable=False)
+
     driver_id: int = Column(ForeignKey("drivers.driver_id"), nullable=False)
     round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
@@ -502,10 +505,11 @@ class Team(Base):
     """This object represents a team.
 
     Attributes:
-        reports_made (list[Report]): All the reports made by the team.
-        received_reports (list[Report]): All the reports received by the team.
-        drivers (list[DriverAssignment]): All the driver acquisitions made by the team.
-        leader (Driver): Leader of the team.
+        reports_made (list[Report]): Reports made by the team.
+        received_reports (list[Report]): Reports received by the team.
+
+        drivers (list[DriverAssignment]): Drivers who are members of the team.
+        leader (Driver): Driver who is allowed to make reports for the team.
 
         team_id (int): The team's unique ID.
         name (str): The team's unique name.
@@ -726,7 +730,7 @@ class PointSystem(Base):
     Attributes:
         point_system_id (int): A unique ID.
         point_system (str): String containing the number of points for each position,
-            separated by a space. E.g. "25 18 15"
+            separated by a space. E.g. "25 18 15 .."
 
     """
 
@@ -754,8 +758,7 @@ class PointSystem(Base):
 
 
 class Round(Base):
-    """
-    This object represents a round of a specific category.
+    """This object represents a round of a specific category.
     It is used to group RaceResults and QualifyingResults registered on a specific date.
 
     Attributes:
@@ -763,7 +766,7 @@ class Round(Base):
         number (int): The number of the round in the calendar order.
         date (date): The date the round takes place on.
         circuit (str): The circuit the round takes place on.
-        completed (bool): Whether the round has been completed or not.
+        completed (bool): True if the round has been completed.
 
         category_id (int): Unique ID of the category the round belongs to.
         championship_id (int): Unique ID of the championship the round belongs to.
@@ -893,7 +896,9 @@ class Round(Base):
 
 
 class Session(Base):
-    """This object represents a session in one or multiple Category.
+    """This object represents a session.
+    Sessions can be either Race or Qualifying sessions, this is determined by the
+    name attribute.
 
     Attributes:
         session_id (int): Automatically generated unique ID assigned upon object creation.
@@ -904,17 +909,19 @@ class Session(Base):
         weather (str): In-game weather setting.
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
+        circuit (str): In-game setting for the circuit.
 
+        round_id (int): Unique ID of the round the session belongs to.
         point_system_id (int): Unique ID of the point system used in the session.
 
         point_system (PointSystem): The point system used to interpret the results of a race.
-        round (list[Category]): Categories the session is linked to. [Ordered by category_id]
+        round (Round): Round which the session belongs to.
     """
 
     __tablename__ = "sessions"
 
     session_id: int = Column(SmallInteger, primary_key=True)
-    name: str = Column(String(30), nullable=False)
+    name: str = Column(Enum("Gara 1", "Gara 2", "Gara", "Qualifica"), nullable=False)
     fuel_consumption: int = Column(SmallInteger, nullable=False)
     tyre_degradation: int = Column(SmallInteger, nullable=False)
     time_of_day: datetime.time = Column(Time, nullable=False)
@@ -923,13 +930,15 @@ class Session(Base):
     duration: datetime.timedelta = Column(Interval)
     circuit: str = Column(String(100), nullable=False)
 
+    round_id: int = Column(ForeignKey("rounds.round_id"))
     point_system_id: int = Column(
         ForeignKey("point_systems.point_system_id"), nullable=False
     )
+
     race_results: list[RaceResult] = relationship(
         "RaceResult", back_populates="session"
     )
-    round_id: int = Column(ForeignKey("rounds.round_id"))
+
     point_system: PointSystem = relationship("PointSystem")
     round: Round = relationship("Round", back_populates="sessions")
 
@@ -1010,8 +1019,9 @@ class RaceResult(Base):
     Attributes:
         result_id (int): Automatically generated unique ID assigned upon object creation.
         finishing_position (int): The position the driver finished in the race.
-        bonus_points (int): Points obtained from fastest lap/pole position.
-        penalty_points (int): Points to be subtracted from the driver's total.
+        relative_position (int): Position in the driver's class.
+        fastest_lap_points (int): Points obtained from fastest lap/pole position.
+        participated (bool): True if the driver participated to the race.
         gap_to_first (float): Difference between the driver's race time
             and the class winner's race time.
         total_racetime (float): Total time the driver took to complete the race.
