@@ -227,7 +227,7 @@ def save_and_apply_report(report: Report) -> None:
         winners_racetime = race_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position
-            race_result.gap_to_first = result.total_racetime - winners_racetime
+            race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
     if not report.reporting_driver:
         update_object()
