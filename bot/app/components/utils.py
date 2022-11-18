@@ -7,6 +7,9 @@ from app.components.models import CarClass, Category
 
 @dataclass
 class Result:
+    """Helper class to store data necessary to create a RaceResult
+    or a QualifyingResult
+    """
 
     driver: str
     seconds: float
@@ -21,6 +24,21 @@ class Result:
 
     def __hash__(self) -> int:
         return hash(str(self))
+
+    def prepare_result(self, best_time: float, position: int) -> None:
+        """Modifies Result to contain valid data for a RaceResult."""
+        if self.seconds is None:
+            self.position = None
+        elif self.seconds == 0:
+            self.seconds = None
+            self.position = position
+        elif position == 1:
+            self.position = position
+            self.seconds = best_time
+        else:
+            self.seconds = self.seconds + best_time
+            self.position = position
+        return self
 
 
 def string_to_seconds(string) -> float | None | str:
@@ -68,21 +86,6 @@ def string_to_seconds(string) -> float | None | str:
     ).total_seconds()
 
 
-def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
-    if raceres.seconds is None:
-        raceres.position = None
-    elif raceres.seconds == 0:
-        raceres.seconds = None
-        raceres.position = position
-    elif position == 1:
-        raceres.position = position
-        raceres.seconds = best_time
-    else:
-        raceres.seconds = raceres.seconds + best_time
-        raceres.position = position
-    return raceres
-
-
 def separate_car_classes(
     category: Category, results: list[Result]
 ) -> dict[CarClass, list[Result]]:
@@ -96,7 +99,7 @@ def separate_car_classes(
         for pos, result in enumerate(results, start=1):
             if result.car_class.car_class_id in separated_classes:
                 separated_classes[result.car_class.car_class_id].append(
-                    _prepare_result(result, best_laptime, pos)
+                    result.prepare_result(best_laptime, pos)
                 )
         return separated_classes
 
