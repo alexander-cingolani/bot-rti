@@ -192,7 +192,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     driver = get_driver(telegram_id=update.effective_user.id)
 
     if not driver:
-        message = "Per usare questa funzione devi essere registrato. Puoi farlo tramite /registrami."
+        message = "Per usare questa funzione devi essere registrato. Puoi farlo con /registrami."
         await update.message.reply_text(message)
         return
 
@@ -296,7 +296,7 @@ async def complete_championship_standings(
             message += f"<b>{pos}</b> - <code>{driver.psn_id}</code> <i>{points}</i>\n"
             teams[driver.current_team().name] += points
 
-    message += f"\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
+    message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
     for pos, (team, points) in enumerate(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
@@ -318,13 +318,13 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     category = driver.current_category()
-    round = category.last_completed_round()
+    championship_round = category.last_completed_round()
 
-    message = f"<i><b>RISULTATI {round.number}ª TAPPA</b></i>\n\n"
+    message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
 
-    if round.has_sprint_race:
-        message += round.sprint_race.results()
-    message += round.long_race.results()
+    if championship_round.has_sprint_race:
+        message += championship_round.sprint_race.results()
+    message += championship_round.long_race.results()
 
     await update.message.reply_text(text=message)
 

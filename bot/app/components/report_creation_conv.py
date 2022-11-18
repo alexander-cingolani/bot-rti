@@ -14,7 +14,6 @@ from app.components.queries import (
     get_last_report_by,
     get_last_report_number,
     save_object,
-    update_object,
 )
 from app.components.reportdoc import ReportDocument
 from more_itertools import chunked
@@ -541,7 +540,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if not report.is_complete():
             await update.callback_query.edit_message_text(
                 "Qualcosa è andato storto... 😓\n"
-                "Prova a rifarla con /nuova_segnalazione. Se fallisce ancora chiedi aiuto a Sbinotto."
+                "Prova a rifarla con /nuova_segnalazione. Se fallisce ancora chiedi"
+                f"aiuto a {config.OWNER.mention_html()}."
             )
             return
 
@@ -573,10 +573,11 @@ async def change_state_rep_creation(
     This function is called by the dispatcher whenever callback_query.data contains a number
     between 6 and 14.
 
-    It works by calling the callback function associated to the step of the conversation
-    (each step is represented by an integer between 6 and 14) contained in callback_query.data.
-    After the callback function has finished executing it returns the step in callbackquery.data + 1
-    in order to allow the conversation to continue.
+    It works by calling the callback function associated to the step of the
+    conversation (each step is represented by an integer between 6 and 14)
+    contained in callback_query.data. After the callback function has finished
+    executing it returns the step in callbackquery.data + 1 in order to allow the
+    conversation to continue.
     """
     category_handler = (
         create_late_report if context.user_data.get("late_report") else create_report
