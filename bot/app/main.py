@@ -357,17 +357,18 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     championship = get_championship()
 
     if championship:
-        category = championship.reporting_category()
-        if not category.first_non_completed_round().reports:
-            await context.bot.send_message(
-                chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
-            )
 
-        await context.bot.send_sticker(
-            chat_id=config.REPORT_CHANNEL,
-            sticker=open("./app/images/sticker.webp", "rb"),
-            disable_notification=True,
-        )
+        if category := championship.reporting_category():
+            if not category.first_non_completed_round().reports:
+                await context.bot.send_message(
+                    chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
+                )
+
+            await context.bot.send_sticker(
+                chat_id=config.REPORT_CHANNEL,
+                sticker=open("./app/images/sticker.webp", "rb"),
+                disable_notification=True,
+            )
 
 
 async def send_participation_list_command(
