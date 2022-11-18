@@ -7,7 +7,6 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict
 from datetime import timedelta, time
-import os
 from typing import DefaultDict
 import uuid
 from cachetools import TTLCache
@@ -28,11 +27,10 @@ from sqlalchemy import (
     Text,
     Interval,
     UniqueConstraint,
-    create_engine,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 cache = TTLCache(maxsize=3, ttl=timedelta(seconds=30))
@@ -42,7 +40,7 @@ class Report(Base):
     """This object represents a report.
     Each report is associated with two Drivers and their Teams,
     as well as the Category, Round and Session the reported incident happened in.
-    N.B. fact, penalty, penalty_reason and is_queued may only be provided after 
+    N.B. fact, penalty, penalty_reason and is_queued may only be provided after
     the report has been reviewed.
 
     Attributes:
@@ -54,7 +52,7 @@ class Report(Base):
             (Only intended for qualifying sessions)
         channel_message_id (int): ID of the message the report was sent by the user with.
         report_time (datetime): Timestamp indicating when the report was made.
-        
+
         fact (str): Brief description of the accident made by the Safety Commission.
         penalty (str): The penalty inflicted to the driver. This attribute must be
             left empty in case the reported_driver is not found culpable.
@@ -66,7 +64,7 @@ class Report(Base):
         penalty_reason (str): Detailed explanation of the reason for the penalty
         is_queued (bool): True if the reviewed report queued to be sent out
             to the reports channel.
-        
+
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
         session_id (int): Unique ID of the session where the incident happened.
@@ -210,7 +208,7 @@ class DriverCategory(Base):
         race_number (int): The number used by the driver in the category.
         warnings (int): Number of warnings received in the category.
         licence_points: Number of points remaining on the driver's licence.
-        
+
         driver_id (int): Unique ID of the driver joining the category.
         category_id (int): Unique ID of the category being joined by the driver.
 
@@ -419,7 +417,7 @@ class QualifyingResult(Base):
     laptime: float = Column(Float)
     gap_to_first: float = Column(Float)
     participated: bool = Column(Boolean, default=False, nullable=False)
-    
+
     driver_id: int = Column(ForeignKey("drivers.driver_id"), nullable=False)
     round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
@@ -897,8 +895,8 @@ class Round(Base):
 
 class Session(Base):
     """This object represents a session.
-    Sessions can be either Race or Qualifying sessions, this is determined by the 
-    name attribute. 
+    Sessions can be either Race or Qualifying sessions, this is determined by the
+    name attribute.
 
     Attributes:
         session_id (int): Automatically generated unique ID assigned upon object creation.
@@ -910,7 +908,7 @@ class Session(Base):
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
         circuit (str): In-game setting for the circuit.
-        
+
         round_id (int): Unique ID of the round the session belongs to.
         point_system_id (int): Unique ID of the point system used in the session.
 
@@ -934,11 +932,11 @@ class Session(Base):
     point_system_id: int = Column(
         ForeignKey("point_systems.point_system_id"), nullable=False
     )
-    
+
     race_results: list[RaceResult] = relationship(
         "RaceResult", back_populates="session"
     )
-    
+
     point_system: PointSystem = relationship("PointSystem")
     round: Round = relationship("Round", back_populates="sessions")
 
@@ -1227,16 +1225,3 @@ class Championship(Base):
             for driver in category.drivers:
                 drivers.append(driver.driver)
         return drivers
-
-
-def create_tables() -> None:
-    """Creates all the tables"""
-    engine = create_engine(os.environ.get("DB_URL"))
-    Session = sessionmaker(bind=engine)
-    with Session() as _session:
-        Base.metadata.create_all(engine)
-        _session.commit()
-
-
-if __name__ == "__main__":
-    create_tables()

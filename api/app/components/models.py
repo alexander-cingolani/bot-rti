@@ -1227,16 +1227,3 @@ class Championship(Base):
             for driver in category.drivers:
                 drivers.append(driver.driver)
         return drivers
-
-
-def create_tables() -> None:
-    """Creates all the tables"""
-    engine = create_engine(os.environ.get("DB_URL"))
-    Session = sessionmaker(bind=engine)
-    with Session() as _session:
-        Base.metadata.create_all(engine)
-        _session.commit()
-
-
-if __name__ == "__main__":
-    create_tables()
