@@ -39,6 +39,7 @@ from telegram.ext import (
     Defaults,
     InlineQueryHandler,
     PicklePersistence,
+    PersistenceInput,
     filters,
 )
 
@@ -506,7 +507,7 @@ async def update_participation_list(
 def main() -> None:
     """Starts the bot."""
 
-    persistence = PicklePersistence("context")
+    persistence = PicklePersistence(filepath="bot_context", store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False))
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()
