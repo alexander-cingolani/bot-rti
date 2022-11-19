@@ -131,10 +131,18 @@ class Report(Base):
     def __init__(self):
         """Returns a new Report object."""
 
+    def __str__(self) -> str:
+        return (
+            f"Report(number={self.number}, incident_time={self.incident_time},"
+            f" report_reason={self.report_reason}, reported_driver={self.reported_driver},"
+            f" reporting_driver={self.reporting_driver}, reported_team={self.reported_team})"
+        )
+
     def is_complete(self) -> bool:
         """Returns True if all the necessary arguments have been provided."""
         return all(
             (
+                self.incident_time,
                 self.reported_driver,
                 self.category,
                 self.round,
@@ -1039,9 +1047,6 @@ class RaceResult(Base):
     __table_args__ = (
         UniqueConstraint(
             "driver_id", "round_id", "session_id", name="_driver_round_session_uc"
-        ),
-        UniqueConstraint(
-            "finishing_position", "session_id", name="_finishing_position_session_uc"
         ),
     )
 
