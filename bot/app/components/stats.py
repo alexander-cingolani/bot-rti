@@ -106,7 +106,7 @@ def sportsmanship(driver: Driver) -> int:
     if not driver.received_reports:
         return 99
 
-    penalty_score = (rr.championship_penalty_points for rr in driver.received_reports)
+    penalty_score = (rr.time_penalty for rr in driver.received_reports)
 
     return round(99 - sum(penalty_score) * 10 / len(driver.race_results))
 
