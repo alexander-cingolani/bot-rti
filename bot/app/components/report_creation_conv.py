@@ -295,7 +295,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     text = "Chi è la vittima?"
     reply_markup = []
-    for i, driver in enumerate(user_data["category"].drivers):
+    for i, driver in enumerate(user_data["category"].active_drivers()):
         driver: Driver = driver.driver
         driver_alias = f"d{i}"
         if driver.current_team().leader.driver_id == user_data["leader"].driver_id:
@@ -343,7 +343,7 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     text = "Chi ritieni essere il colpevole?"
     reply_markup = []
     user_data["drivers"] = {}
-    for i, driver in enumerate(user_data["category"].drivers):
+    for i, driver in enumerate(user_data["category"].active_drivers()):
         driver: Driver = driver.driver
         driver_alias = f"d{i}"
         if driver.current_team().leader.driver_id != user_data["leader"].driver_id:
@@ -632,7 +632,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             delete_report(report)
         else:
-            text = "Troppo tardi, adesso ti attacchi!"
+            text = "Troppo tardi!"
         await update.callback_query.edit_message_text(text)
 
 

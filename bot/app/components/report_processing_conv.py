@@ -194,7 +194,7 @@ async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = "Quale pilota ha commesso l'infrazione?"
 
     buttons = []
-    for i, driver in enumerate(category.drivers):
+    for i, driver in enumerate(category.active_drivers()):
         buttons.append(
             InlineKeyboardButton(driver.driver.psn_id, callback_data=f"D{i}")
         )
@@ -224,7 +224,7 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_data = context.user_data
 
     if not update.callback_query.data.isnumeric():
-        driver: DriverCategory = user_data["category"].drivers[
+        driver: DriverCategory = user_data["category"].active_drivers()[
             int(update.callback_query.data.removeprefix("D"))
         ]
         user_data["current_report"].reported_team = driver.driver.current_team()
@@ -548,12 +548,12 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             if licence_points > 1:
                 user_data["licence_points_text"] = (
                     f"{licence_points} punti sulla licenza"
-                    f"({current_report.reported_driver.licence_points - licence_points}/10)"
+                    f" ({current_report.reported_driver.licence_points - licence_points}/10)"
                 )
             elif licence_points == 1:
                 user_data["licence_points_text"] = (
                     "1 punto sulla licenza"
-                    f"({current_report.reported_driver.licence_points - 1}/10)"
+                    f" ({current_report.reported_driver.licence_points - 1}/10)"
                 )
             else:
                 user_data["licence_points_text"] = ""
@@ -562,7 +562,7 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         user_data["current_report"].licence_points = licence_points
         user_data["licence_points_text"] = (
             f"{licence_points}punti sulla licenza"
-            f"({user_data['current_report'].reported_driver.licence_points - licence_points}/10)"
+            f" ({user_data['current_report'].reported_driver.licence_points - licence_points}/10)"
         )
     text = "Quanti warning sono stati dati?"
 
@@ -605,7 +605,7 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if warnings > 0:
                 user_data["warnings_text"] = (
                     f"{warnings} warning"
-                    f"({warnings + user_data['current_report'].reported_driver.warnings}/12)"
+                    f" ({warnings + user_data['current_report'].reported_driver.warnings}/12)"
                 )
             else:
                 user_data["warnings_text"] = ""
@@ -696,12 +696,14 @@ async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     user_data = context.user_data
     report: Report = user_data["current_report"]
     if update.callback_query.data == "send_now":
+        save_and_apply_report(report)
+
         file = ReviewedReportDocument(report).generate_document()
         await context.bot.send_document(
             chat_id=config.REPORT_CHANNEL,
             document=open(file, "rb"),
         )
-        save_and_apply_report(report)
+
         text = "Penalità salvata e inviata."
 
     if update.message:

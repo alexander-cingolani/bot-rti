@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict
 from datetime import timedelta, time
+
 from typing import DefaultDict
 import uuid
 from cachetools import TTLCache
@@ -528,6 +529,9 @@ class Team(Base):
     name: str = Column(String(20), unique=True, nullable=False)
     credits: int = Column("credits", SmallInteger, default=0, nullable=False)
 
+    championships: list[TeamChampionship] = relationship(
+        "TeamChampionship", back_populates="team"
+    )
     drivers: list[DriverAssignment] = relationship(
         "DriverAssignment", back_populates="team"
     )
@@ -556,7 +560,7 @@ class Team(Base):
         return NotImplemented
 
     def __key(self) -> tuple[int, str]:
-        return (self.leader_id, self.team_id)
+        return self.team_id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -567,6 +571,24 @@ class Team(Base):
         for driver in self.drivers:
             if driver.is_leader:
                 return driver.driver
+
+    def current_championship(self) -> TeamChampionship:
+        for championship in self.championships:
+            if championship.championship.is_active():
+                return championship
+
+
+class TeamChampionship(Base):
+    __tablename__ = "team_championships"
+
+    team_id: int = Column(ForeignKey("teams.team_id"), primary_key=True)
+    championship_id: int = Column(
+        ForeignKey("championships.championship_id"), primary_key=True
+    )
+    penalty_points: int = Column(SmallInteger, nullable=False, default=0)
+
+    team: Team = relationship("Team", back_populates="championships")
+    championship: Championship = relationship("Championship")
 
 
 class CategoryClass(Base):
@@ -695,14 +717,17 @@ class Category(Base):
             if round.date > datetime.datetime.now().date():
                 return round
 
+    def active_drivers(self) -> list[Driver]:
+        """Returns list of drivers who are currently competing in this category."""
+        return [driver for driver in self.drivers if not driver.left_on]
+
     @property
     def multi_class(self) -> bool:
         """True if this Category has multiple car classes competing together."""
         return len(self.car_classes) > 1
 
     def current_standings(self) -> list[list[list[RaceResult], int]]:
-        """Calculates the current championship standings. and returns a list
-        ordered by championship points.
+        """Calculates the current standings in this category.
 
         Returns:
             list[list[list[RaceResult], int]]: The first level of nesting contains
@@ -944,8 +969,11 @@ class Session(Base):
     race_results: list[RaceResult] = relationship(
         "RaceResult", back_populates="session"
     )
-
+    qualifying_results: list[QualifyingResult] = relationship(
+        "QualifyingResult", back_populates="session"
+    )
     point_system: PointSystem = relationship("PointSystem")
+    reports: list[Report] = relationship("Report", back_populates="session")
     round: Round = relationship("Round", back_populates="sessions")
 
     def __init__(self, name: str, point_system: PointSystem) -> None:
@@ -964,15 +992,31 @@ class Session(Base):
             f"round_id={self.round_id}, tyres={self.tyre_degradation})"
         )
 
+    def get_penalty_seconds_of(self, driver_id: int) -> list[Report]:
+        """Returns total time penalties received by a driver."""
+        seconds = 0
+        for report in self.reports:
+
+            if report.reported_driver.driver_id == driver_id:
+                seconds += report.time_penalty
+        return seconds
+
     def results(self) -> str:
         """Generates a message containing the results of this session."""
         message = f"<i>{self.name}</i>\n"
-        results = sorted(
-            self.race_results,
-            key=lambda x: x.total_racetime
-            if x.total_racetime is not None
-            else float("inf"),
-        )
+
+        if self.is_quali:
+            results = sorted(
+                self.qualifying_results,
+                key=lambda x: x.laptime if x.laptime is not None else float("inf"),
+            )
+        else:
+            results = sorted(
+                self.race_results,
+                key=lambda x: x.total_racetime
+                if x.total_racetime is not None
+                else float("inf"),
+            )
         for result in results:
             if result.participated:
                 if not result.gap_to_first:
@@ -1008,8 +1052,12 @@ class Session(Base):
             else:
                 position = result.relative_position
 
-            message += f"{position:>3} - {result.driver.psn_id} {gap}\n"
+            penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
 
+            message += f"{position:>3} - {result.driver.psn_id} {gap}"
+            if not self.is_quali and penalty_seconds:
+                message += f" (+{penalty_seconds}s)"
+            message += "\n"
         return message + "\n"
 
     @property
