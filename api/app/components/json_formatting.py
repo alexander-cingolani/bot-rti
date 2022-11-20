@@ -1,4 +1,3 @@
-import logging
 from app.components.models import RaceResult
 from app.components.queries import get_championship
 
@@ -40,7 +39,6 @@ def get_calendar(championship_id: int, category_id: int):
 
     for championship_round in category.rounds:
         sprint_race = championship_round.has_sprint_race
-        logging.log(logging.INFO, f"{sprint_race}, {championship_round.sessions}")
         if sprint_race:
             info = [
                 {
