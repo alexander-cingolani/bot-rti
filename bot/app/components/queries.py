@@ -215,13 +215,11 @@ def save_and_apply_report(report: Report) -> None:
 
             race_results.append(race_result)
 
-
     race_results.sort(key=lambda x: x.total_racetime)
 
     for position, result in enumerate(race_results, start=1):
         result.finishing_position = position
 
-    separated_car_classes = separate_car_classes(report.category, race_results)
     for _, class_results in separate_car_classes(report.category, race_results).items():
         winners_racetime = class_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
