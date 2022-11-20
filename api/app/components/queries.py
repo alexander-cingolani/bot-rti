@@ -162,11 +162,10 @@ def save_multiple_objects(objs: list) -> None:
 def save_qualifying_report(report: Report) -> None:
     """Saves and applies a penalty to a driver in qualifying."""
     quali_result = _session.execute(
-        select(QualifyingResult).where(
-            QualifyingResult.driver_id == report.reported_driver_id
-            and QualifyingResult.session_id == report.session_id
-            and QualifyingResult.round_id == report.round_id
-        )
+        select(QualifyingResult)
+        .where(QualifyingResult.driver_id == report.reported_driver_id)
+        .where(QualifyingResult.session_id == report.session_id)
+        .where(QualifyingResult.round_id == report.round_id)
     ).one_or_none()
     for driver_category in report.reported_driver.categories:
         if driver_category.category_id == report.category.category_id:
@@ -201,30 +200,28 @@ def save_and_apply_report(report: Report) -> None:
 
     rows = _session.execute(
         select(RaceResult)
-        .where(
-            RaceResult.category_id == report.category.category_id
-            and RaceResult.round_id == report.round_id
-            and RaceResult.session_id == report.session_id
-        )
+        .where(RaceResult.category_id == report.category.category_id)
+        .where(RaceResult.round_id == report.round.round_id)
+        .where(RaceResult.session_id == report.session.session_id)
         .order_by(RaceResult.finishing_position)
     ).all()
 
     race_results: list[RaceResult] = []
     for row in rows:
-        race_result = row[0]
+        race_result: RaceResult = row[0]
         if race_result.total_racetime:
             if race_result.driver_id == report.reported_driver.driver_id:
                 race_result.total_racetime += report.time_penalty
+
             race_results.append(race_result)
 
     race_results.sort(key=lambda x: x.total_racetime)
 
     for position, result in enumerate(race_results, start=1):
-
         result.finishing_position = position
 
     for _, class_results in separate_car_classes(report.category, race_results).items():
-        winners_racetime = race_results[0].total_racetime
+        winners_racetime = class_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
