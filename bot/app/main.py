@@ -7,8 +7,8 @@ import os
 import traceback
 from collections import defaultdict
 from datetime import time
-from uuid import uuid4
 
+from uuid import uuid4
 import pytz
 from app.components import config
 from app.components.driver_registration import driver_registration
@@ -215,35 +215,53 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = update.inline_query.query
     results = []
+
     drivers = get_championship().driver_list
 
     for driver in drivers:
 
         if query.lower() in driver.psn_id.lower():
-
-            wins, podiums, poles, fastest_laps, races_disputed = stats(driver)
+            wins, podiums, poles, fastest_laps, races_disputed, avg_position = stats(
+                driver
+            )
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
-            current_team = driver.current_team().name
+            current_team = driver.current_team()
+            if not current_team:
+                current_team = "/"
+            else:
+                current_team = current_team.name
             unique_teams = unique_teams.replace(
                 current_team, f"{current_team} [Attuale]"
             )
+            if not unique_teams:
+                unique_teams = "/"
 
-            if (const := consistency(driver)) <= 0:
-                const = "N.D."
-            if (sprt := sportsmanship(driver)) <= 0:
-                sprt = "N.D."
-            if (pace := race_pace(driver)) <= 0:
-                pace = "N.D."
-            if (quali_pace := speed(driver)) <= 0:
-                quali_pace = "N.D."
+            const = consistency(driver)
+            sprt = sportsmanship(driver)
+            pace = race_pace(driver)
+            quali_pace = speed(driver)
+
+            overall = sum((const, sprt, quali_pace, pace)) // 4
+
+            if const <= 0:
+                const = "dati insuff."
+            if sprt <= 0:
+                sprt = "dati insuff."
+            if pace <= 0:
+                pace = "dati insuff."
+            if quali_pace <= 0:
+                quali_pace = "dati insuff."
+            if overall <= 0:
+                overall = "dati insuff."
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.psn_id,
                 input_message_content=InputTextMessageContent(
                     (
-                        f"<i><b>PROFILO {driver.psn_id.upper()}</b></i>\n\n"
+                        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+                        f"<b>Overall:</b> <i>{overall}</i>\n"
                         f"<b>Affidabilità:</b> <i>{const}</i>\n"
                         f"<b>Sportività:</b> <i>{sprt}</i>\n"
                         f"<b>Qualifica:</b> <i>{quali_pace}</i>\n"
@@ -253,6 +271,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Pole:</b> <i>{poles}</i>\n"
                         f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
                         f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
+                        f"<b>Posizione media (Gara):</b> <i>{avg_position}</i>\n"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
@@ -294,14 +313,19 @@ async def complete_championship_standings(
         message += f"\n\n<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
         for pos, (results, points) in enumerate(standings, start=1):
             driver = results[0].driver
-            message += f"<b>{pos}</b> - <code>{driver.psn_id}</code> <i>{points}</i>\n"
-            teams[driver.current_team().name] += points
+            message += f"{pos} - {driver.psn_id} <i>{points}</i>\n"
+
+            if (
+                team := driver.current_team()
+            ):  # Check in case a driver has left the team
+                teams[team] += points
 
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
     for pos, (team, points) in enumerate(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
-        message += f"<b>{pos}</b> - {team} <i>{points}</i>\n"
+        points -= team.current_championship().penalty_points
+        message += f"<b>{pos}</b> - {team.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
 
 
@@ -323,6 +347,8 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 
     message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
 
+    message += championship_round.qualifying_session.results()
+
     if championship_round.has_sprint_race:
         message += championship_round.sprint_race.results()
     message += championship_round.long_race.results()
@@ -330,6 +356,23 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(text=message)
 
     return
+
+
+async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE):
+    championship = get_championship()
+    message = ""
+    for category in championship.categories:
+        championship_round = category.last_completed_round()
+
+        message += f"<i><b>RISULTATI {championship_round.number}ª TAPPA #{championship.abbreviated_name}</b></i>\n\n"
+
+        message += championship_round.qualifying_session.results()
+
+        if championship_round.has_sprint_race:
+            message += championship_round.sprint_race.results()
+        message += championship_round.long_race.results()
+
+    await update.message.reply_text(text=message)
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -345,6 +388,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
             f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
             f"#{championship.abbreviated_name}Tappa{championship_round.number} #{category.name}"
         )
+
         await context.bot.send_message(
             chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
         )
@@ -507,7 +551,10 @@ async def update_participation_list(
 def main() -> None:
     """Starts the bot."""
 
-    persistence = PicklePersistence(filepath="bot_context", store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False))
+    persistence = PicklePersistence(
+        filepath="bot_context",
+        store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False),
+    )
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()
@@ -567,6 +614,7 @@ def main() -> None:
         CommandHandler("classifica_completa", complete_championship_standings)
     )
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
+    application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
     application.add_error_handler(error_handler)
 
     application.run_polling(drop_pending_updates=True)

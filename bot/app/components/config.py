@@ -21,7 +21,8 @@ BASE_COMMANDS = [
         "Classifiche piloti e costruttori del campionato in corso.",
     ),
     ("prossima_gara", "Info sulla tua prossima gara."),
-    ("ultima_gara", "Risultati della scorsa gara con le penalità applicate."),
+    ("ultima_gara", "Risultati della tua scorsa gara."),
+    ("ultime_gare", "Risultati delle gare delle ultime gare."),
     ("help", "Info sull'utilizzo del bot."),
 ]
 
@@ -48,7 +49,6 @@ REASONS = [
 FACTS = [
     "Collisione con vettura no.{a}.",
     "Bandiere blu non rispettate nei confronti della vettura no.{a}.",
-    "Benzina esaurita prima del traguardo.",
 ]
 
 INFRACTIONS = [
