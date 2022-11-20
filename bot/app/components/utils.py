@@ -109,4 +109,4 @@ def separate_car_classes(
         car_class = result.driver.current_class().car_class_id
         if car_class in separated_classes:
             separated_classes[car_class].append(result)
-        return separated_classes
+    return separated_classes

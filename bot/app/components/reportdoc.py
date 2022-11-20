@@ -9,7 +9,7 @@ from reportlab.pdfgen import canvas
 
 class ReviewedReportDocument:
     def __init__(self, report: Report) -> None:
-        if not report.time_penalty or not report.championship_penalty_points:
+        if not report.time_penalty and not report.championship_penalty_points:
             self.filename = (
                 f"{report.number} - Decisione {report.reported_driver.psn_id}.pdf"
             )

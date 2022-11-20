@@ -31,7 +31,7 @@ def consistency(driver: Driver) -> int:
     return round((99 - (stdev(positions) * 10)) * participation_ratio)
 
 
-@cached(cache=TTLCache(maxsize=50, ttl=30))
+@cached(cache=TTLCache(maxsize=50, ttl=240))
 def speed(driver: Driver) -> int:
     """This statistic is calculated based on the average gap between
     the driver's qualifying times and the pole man's.
@@ -58,7 +58,7 @@ def speed(driver: Driver) -> int:
     return 0
 
 
-@cached(cache=TTLCache(maxsize=50, ttl=30))
+@cached(cache=TTLCache(maxsize=50, ttl=240))
 def experience(driver: Driver, max_races: int) -> int:
     """This statistic is calculated based on the maximum number of races
     completed by any driver in the database. The closer the amount of races
@@ -89,7 +89,7 @@ def experience(driver: Driver, max_races: int) -> int:
     return round(99 - ((max_races - len(disputed_rounds)) / max_races * 99) * 0.6)
 
 
-@cached(cache=TTLCache(maxsize=50, ttl=30))
+@cached(cache=TTLCache(maxsize=50, ttl=240))
 def sportsmanship(driver: Driver) -> int:
     """This statistic is calculated based on the amount and gravity of reports received.
 
@@ -100,18 +100,24 @@ def sportsmanship(driver: Driver) -> int:
         int: Sportsmanship rating. (0-99)
     """
 
-    if not driver.race_results:
+    if len(driver.race_results) < 2:
         return 0
 
     if not driver.received_reports:
         return 99
 
-    penalty_score = (rr.time_penalty for rr in driver.received_reports)
+    penalties = (
+        rr.time_penalty
+        + rr.warnings
+        + rr.licence_points
+        + rr.championship_penalty_points
+        for rr in driver.received_reports
+    )
 
-    return round(99 - sum(penalty_score) * 10 / len(driver.race_results))
+    return round(99 - sum(penalties) * 10 / len(driver.race_results))
 
 
-# @cached(cache=cache)
+@cached(cache=TTLCache(maxsize=50, ttl=240))
 def race_pace(driver: Driver) -> int:
     """This statistic is calculated based on the average gap from the race winner
     in all of the races completed by the driver.
@@ -135,7 +141,7 @@ def race_pace(driver: Driver) -> int:
     )
 
 
-@cached(cache=TTLCache(maxsize=50, ttl=30))
+@cached(cache=TTLCache(maxsize=50, ttl=240))
 def stats(driver: Driver) -> tuple[int, int, int]:
     """Calculates the number of wins, podiums and poles achieved by the driver.
 
@@ -150,12 +156,18 @@ def stats(driver: Driver) -> tuple[int, int, int]:
     fastest_laps = 0
     poles = 0
     no_participation = 0
+    average_position = 0
+    if not driver.race_results:
+        return 0, 0, 0, 0, 0, 0
 
+    positions = []
     for race_result in driver.race_results:
         if not race_result.participated:
             no_participation += 1
             continue
 
+        if race_result.relative_position:
+            positions.append(race_result.relative_position)
         if race_result.relative_position == 1:
             wins += 1
         if race_result.relative_position <= 3:
@@ -168,4 +180,7 @@ def stats(driver: Driver) -> tuple[int, int, int]:
                 poles += 1
 
     races_completed = len(driver.race_results) - no_participation
-    return wins, podiums, poles, fastest_laps, races_completed
+    if positions:
+        average_position = round(sum(positions) / len(positions), 2)
+
+    return wins, podiums, poles, fastest_laps, races_completed, average_position
