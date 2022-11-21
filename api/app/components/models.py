@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
-from datetime import timedelta, time
+from datetime import timedelta
 
 from typing import DefaultDict
 import uuid
@@ -1005,6 +1005,7 @@ class Session(Base):
         """Generates a message containing the results of this session."""
         message = f"<i>{self.name}</i>\n"
 
+        # Sorts results, drivers who didn't participate are put to the back of the list.
         if self.is_quali:
             results = sorted(
                 self.qualifying_results,
@@ -1017,47 +1018,36 @@ class Session(Base):
                 if x.total_racetime is not None
                 else float("inf"),
             )
+
         for result in results:
             if result.participated:
-                if not result.gap_to_first:
-                    result.gap_to_first = 0
-                if "." not in str(result.gap_to_first):
-                    second = int(result.gap_to_first)
-                    millisecond = 0
+                minutes, seconds = divmod(result.gap_to_first, 60)
+                milliseconds = (seconds % 1) * 1000
+
+                if not minutes:
+                    gap = "+<i>{:01}.{:03}</i>".format(int(seconds), int(milliseconds))
                 else:
-                    second, millisecond = str(result.gap_to_first).split(".")
-                    millisecond = millisecond[:3]
-                    second = int(second)
-                    millisecond = int(millisecond)
-
-                if second <= 59:
-                    gap = time(second=second, microsecond=millisecond * 1000).strftime(
-                        "%S.%f"
-                    )[:-3]
-                else:
-                    t = timedelta(seconds=second, milliseconds=millisecond)
-                    gap = time(
-                        minute=t.seconds // 60,
-                        second=t.seconds % 60,
-                        microsecond=t.microseconds,
-                    ).strftime("%M:%S.%f")[:-3]
-
-                gap = "+" + gap
-
+                    gap = "+<i>{:01}:{:02}.{:03}</i>".format(
+                        int(minutes), int(seconds), int(milliseconds)
+                    )
+                position = result.relative_position
+                
             else:
                 gap = "<i>assente</i>"
-
-            if not result.relative_position:
                 position = "/"
-            else:
-                position = result.relative_position
 
             penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
 
-            message += f"{position:>3} - {result.driver.psn_id} {gap}"
-            if not self.is_quali and penalty_seconds:
+            message += f"{position} - {result.driver.psn_id} {gap}"
+
+            if penalty_seconds:
                 message += f" (+{penalty_seconds}s)"
+
+            if getattr(result, "fastest_lap_points", 0):
+                message += " GV"
+
             message += "\n"
+
         return message + "\n"
 
     @property
