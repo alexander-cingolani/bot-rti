@@ -54,7 +54,7 @@ def speed(driver: Driver) -> int:
         )
 
     if percentages:
-        return round(99 - sum(percentages) / len(percentages) * 8)
+        return round(99 - sum(percentages) / len(percentages) * 9)
     return 0
 
 
@@ -114,7 +114,7 @@ def sportsmanship(driver: Driver) -> int:
         for rr in driver.received_reports
     )
 
-    return round(99 - sum(penalties) * 10 / len(driver.race_results))
+    return round(99 - sum(penalties) * 7 / len(driver.race_results))
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
