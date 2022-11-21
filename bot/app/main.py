@@ -442,7 +442,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (championship_round := category.first_non_completed_round()):
         return ConversationHandler.END
 
-    drivers = category.drivers
+    drivers = category.active_drivers()
     text = (
         f"<b>{championship_round.number}ᵃ Tappa {category.name}</b>\n"
         f"Circuito: <b>{championship_round.circuit}</b>"
