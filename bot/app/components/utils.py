@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from app.components.models import CarClass, Category
-
+from telegram import Update
 
 @dataclass
 class Result:
@@ -110,3 +110,19 @@ def separate_car_classes(
         if car_class in separated_classes:
             separated_classes[car_class].append(result)
     return separated_classes
+
+
+async def send_or_edit_message(update: Update, message, reply_markup = None) -> None:
+    if update.callback_query:
+        if not reply_markup:
+            await update.callback_query.edit_message_text(text=message)
+            return
+        await update.callback_query.edit_message_text(text=message, reply_markup=reply_markup)
+        return
+    
+    if not reply_markup:
+        await update.message.reply_text(message)
+        return
+    
+    await update.message.reply_text(text=message, reply_markup=reply_markup)
+    return

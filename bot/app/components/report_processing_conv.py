@@ -26,6 +26,8 @@ from telegram.ext import (
     filters,
 )
 
+from bot.app.components.utils import send_or_edit_message
+
 (
     NEW_REPORT,
     ASK_ROUND,
@@ -75,10 +77,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, reply_markup)
 
     return ASK_ROUND
 
@@ -174,12 +173,7 @@ async def ask_incident_time(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             ]
         ]
     )
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text=text, reply_markup=reply_markup
-        )
-    else:
-        update.message.reply_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, reply_markup)
     return ASK_DRIVER
 
 
@@ -251,11 +245,12 @@ async def report_processing_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Asks the user which category he wants to view reports from,
-    after the /start_reviewing command is issued"""
+    after the /start_reviewing command is issued."""
 
     championship = get_championship()
     context.user_data["championship"] = championship
     user = update.effective_user
+    
     if user.id not in config.ADMINS:
         text = "Questa funzione è riservata agli admin di RTI.\n"
         button = InlineKeyboardButton(
@@ -302,12 +297,7 @@ async def report_processing_entry_point(
     category_buttons.append([InlineKeyboardButton("Annulla", callback_data="cancel")])
     reply_markup = InlineKeyboardMarkup(category_buttons)
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text=text, reply_markup=reply_markup
-        )
-    else:
-        await update.message.reply_text(text=text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, reply_markup)
     return ASK_CATEGORY
 
 
@@ -418,12 +408,10 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                 )
                 await ask_licence_points(update, context)
                 return ASK_WARNINGS
-            else:
-                user_data["current_report"].fact = config.FACTS[
-                    int(update.callback_query.data.removeprefix("f"))
-                ].format(
-                    a=user_data["current_report"].reporting_driver.current_race_number
-                )
+
+            user_data["current_report"].fact = config.FACTS[
+                int(update.callback_query.data.removeprefix("f"))
+            ].format(a=user_data["current_report"].reporting_driver.current_race_number)
 
     else:
         user_data["current_report"].fact = update.message.text
@@ -458,10 +446,7 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     )
     reply_markup = InlineKeyboardMarkup(reply_markup)
 
-    if not update.callback_query:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-    else:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, reply_markup)
 
     return ASK_LICENCE_POINTS
 
@@ -527,10 +512,8 @@ async def ask_licence_points(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = (
         "Quanti punti licenza sono stati detratti? (Scrivi o scegli una tra le opzioni)"
     )
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+    
+    await send_or_edit_message(update, text, reply_markup)
 
     return ASK_WARNINGS
 
@@ -586,10 +569,8 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+    send_or_edit_message(update, text, reply_markup)
+    
     return ASK_PENALTY_REASON
 
 
@@ -621,10 +602,7 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     text = "Scrivi la motivazione:"
-    if not update.callback_query:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-    else:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, reply_markup)
 
     return ASK_QUEUE_OR_SEND
 
@@ -679,14 +657,8 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             "\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
         )
 
-    if not update.callback_query:
-        await update.message.reply_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
-    else:
-        await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
+    await send_or_edit_message(update, text, InlineKeyboardMarkup(reply_markup))
+    
     return ASK_IF_NEXT
 
 
@@ -706,39 +678,8 @@ async def add_to_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
         text = "Penalità salvata e inviata."
 
-    if update.message:
-        await update.message.reply_text(text)
-    else:
-        await update.callback_query.edit_message_text(text)
-    # elif update.callback_query.data == "add_to_queue":
-    #     report.is_reviewed = True
-    #     report.is_queued = True
-    #     text = "Penalità salvata e aggiunta alla coda"
+    await send_or_edit_message(update, text)
 
-    # text += f"\nOra ne rimangono {len(user_data['unreviewed_reports'])}."
-    # reply_markup = [
-    #     [
-    #         InlineKeyboardButton(
-    #             "Prossima segnalazione",
-    #             callback_data=str(ASK_CATEGORY)
-    #             if len(user_data["unreviewed_reports"]) == 0
-    #             else "start_reviewing",
-    #         ),
-    #     ]
-    # ]
-
-    # if len(context.user_data["unreviewed_reports"]) == 1:
-    #     reply_markup.append(
-    #         [
-    #             InlineKeyboardButton(
-    #                 "Invia tutti i messaggi in coda", callback_data="send_all"
-    #             )
-    #         ]
-    #     )
-
-    # await update.callback_query.edit_message_text(
-    #     text, reply_markup=InlineKeyboardMarkup(reply_markup)
-    # )
     return ConversationHandler.END
 
 

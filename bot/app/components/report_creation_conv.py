@@ -27,6 +27,8 @@ from telegram.ext import (
     filters,
 )
 
+from bot.app.components.utils import send_or_edit_message
+
 (
     CATEGORY,
     SESSION,
@@ -322,14 +324,11 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 "Pilota colpevole »", callback_data=str(REPORTING_DRIVER)
             )
         )
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
-    else:
-        await update.message.reply_text(
-            text=text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
+
+    await send_or_edit_message(
+        update=update, message=text, reply_markup=InlineKeyboardMarkup(reply_markup)
+    )
+
     return REPORTING_DRIVER
 
 
@@ -430,14 +429,11 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         reply_markup[-1].append(
             InlineKeyboardButton("Avanti »", callback_data=str(REPORT_REASON))
         )
-    if not update.callback_query:
-        await update.message.reply_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
-    else:
-        await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
-        )
+
+    await send_or_edit_message(
+        update=update, message=text, reply_markup=InlineKeyboardMarkup(reply_markup)
+    )
+
     return REPORT_REASON
 
 
@@ -481,12 +477,7 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         ]
     )
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text=text, reply_markup=reply_markup
-        )
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update=update, message=text, reply_markup=reply_markup)
     return SEND
 
 
@@ -596,7 +587,9 @@ async def change_state_rep_creation(
         SEND: send_report,
     }
     state = int(update.callback_query.data)
+    
     await callbacks.get(state)(update, context)
+    
     return (
         state
         if context.user_data.get("late_report") and (state == 7 or state is None)
@@ -608,10 +601,7 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """Clears user_data and ends the conversation"""
     context.user_data.clear()
     text = "Segnalazione annullata."
-    if update.message:
-        await update.message.reply_text(text)
-    else:
-        await update.callback_query.edit_message_text(text)
+    await send_or_edit_message(update, text)
     return ConversationHandler.END
 
 
