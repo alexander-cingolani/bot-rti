@@ -5,6 +5,8 @@ This module contains all the callbacks necessary to allow users to create report
 import os
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
 from app.components import config
 from app.components.models import Category, Driver, Report
 from app.components.queries import (
@@ -16,6 +18,7 @@ from app.components.queries import (
     save_object,
 )
 from app.components.reportdoc import ReportDocument
+from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -26,8 +29,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
-from bot.app.components.utils import send_or_edit_message
 
 (
     CATEGORY,
@@ -514,10 +515,19 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         message = await context.bot.send_document(
             chat_id=channel, document=open(report_document_name, "rb")
         )
-
         report.channel_message_id = message.message_id
 
-        os.remove(report_document_name)
+        try:
+            save_object(report)
+        except IntegrityError:
+            os.remove(report_document_name)
+            await message.delete()
+            await update.callback_query.edit_message_text(
+                "Problemi, problemi, problemi! 😓\n"
+                f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
+                "Non farti problemi ad insultarlo in chat."
+            )
+            return ConversationHandler.END
 
         reply_markup = InlineKeyboardMarkup(
             [
@@ -528,15 +538,6 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 ]
             ]
         )
-        if not report.is_complete():
-            await update.callback_query.edit_message_text(
-                "Qualcosa è andato storto... 😓\n"
-                "Prova a rifarla con /nuova_segnalazione. Se fallisce ancora chiedi"
-                f"aiuto a {config.OWNER.mention_html()}."
-            )
-            return
-
-        save_object(report)
 
         text = (
             "Segnalazione inviata!"
@@ -587,9 +588,9 @@ async def change_state_rep_creation(
         SEND: send_report,
     }
     state = int(update.callback_query.data)
-    
+
     await callbacks.get(state)(update, context)
-    
+
     return (
         state
         if context.user_data.get("late_report") and (state == 7 or state is None)
@@ -629,9 +630,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 report_creation = ConversationHandler(
     allow_reentry=True,
     entry_points=[
-        CommandHandler(
-            "nuova_segnalazione", create_report, filters=filters.ChatType.PRIVATE
-        ),
+        CommandHandler("segnala", create_report, filters=filters.ChatType.PRIVATE),
         CommandHandler(
             "segnalazione_ritardataria",
             create_late_report,
@@ -658,7 +657,7 @@ report_creation = ConversationHandler(
         REPORTED_DRIVER: [CallbackQueryHandler(reported_driver, r"^d[0-9]{1,}$")],
         MINUTE: [
             MessageHandler(
-                filters.Regex(r"^.{3,50}$"),
+                filters.Regex(r"^.{2,50}$"),
                 save_minute,
             )
         ],
