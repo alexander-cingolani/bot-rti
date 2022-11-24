@@ -6,8 +6,7 @@ from app.components import config
 from app.components.models import Category, QualifyingResult, RaceResult, Round
 from app.components.ocr import (
     Result,
-    recognize_quali_results,
-    recognize_race_results,
+    recognize_results,
     string_to_seconds,
 )
 from app.components.queries import (
@@ -16,7 +15,7 @@ from app.components.queries import (
     save_multiple_objects,
     update_object,
 )
-from app.components.utils import separate_car_classes
+from app.components.utils import send_or_edit_message, separate_car_classes
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
@@ -220,8 +219,8 @@ async def download_quali_results(
             await file.download("results.jpg")
 
             driver_names = [driver.driver.psn_id for driver in category.drivers]
-            success, user_data["quali_results"] = recognize_quali_results(
-                "results.jpg", driver_names, category.game.name
+            success, user_data["quali_results"] = recognize_results(
+                "results.jpg", driver_names
             )
 
             os.remove("results.jpg")
@@ -276,11 +275,7 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         text = "Inviami lo screenshot dei risultati di gara."
 
-    reply_markup = InlineKeyboardMarkup([buttons])
-    if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-    else:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+    await send_or_edit_message(update, text, InlineKeyboardMarkup([buttons]))
     return DOWNLOAD_RACE_1_RESULTS
 
 
@@ -302,63 +297,23 @@ async def download_race_1_results(
         return SAVE_RACE_1_RESULTS
 
     drivers = [driver.driver.psn_id for driver in category.drivers]
-    game = category.game.name
 
-    # gt7 needs 2 screenshots, therefore after the first screenshot is received
-    # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
     if update.message:
+
         if update.message.text:
             results = text_to_results(update.message.text, category=category)
         else:
-            if game == "gt7":
-                if os.path.exists("results_1.jpg") and not os.path.exists(
-                    "results_2.jpg"
-                ):
 
-                    await update.effective_chat.send_action(ChatAction.TYPING)
+            await update.effective_chat.send_action(ChatAction.TYPING)
 
-                    try:
-                        file = await update.message.document.get_file()
-                    except AttributeError:
-                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                        return
-                    screenshot = await file.download("results_2.jpg")
+            try:
+                file = await update.message.document.get_file()
+            except AttributeError:
+                await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                return
 
-                    if not user_data.get("partial_race_1_results"):
-                        user_data["partial_race_1_results"] = {}
-                    results = user_data["partial_race_1_results"]
-
-                    results.update(
-                        dict.fromkeys(
-                            recognize_race_results(screenshot, drivers, game)[1]
-                        )
-                    )
-                    results = list(results.keys())
-                    user_data["partial_race_1_results"].clear()
-                    os.remove("results_1.jpg")
-                    os.remove("results_2.jpg")
-                elif not os.path.exists("results_1.jpg"):
-
-                    try:
-                        file = await update.message.document.get_file()
-                    except AttributeError:
-                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                        return
-
-                    screenshot = await file.download("results_1.jpg")
-                    results = dict.fromkeys(
-                        recognize_race_results(screenshot, drivers, game)[1]
-                    )
-                    return DOWNLOAD_RACE_1_RESULTS
-            else:
-                await update.effective_chat.send_action(ChatAction.TYPING)
-                try:
-                    file = await update.message.document.get_file()
-                except AttributeError:
-                    await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                    return
-                screenshot = await file.download("results_1.jpg")
-                results = recognize_race_results(screenshot, drivers, game)[1]
+            screenshot = await file.download("results_1.jpg")
+            results = recognize_results(screenshot, drivers)[1]
 
     user_data["race_1_results"] = results
     text = ""
@@ -370,16 +325,24 @@ async def download_race_1_results(
             racetime = "/"
         else:
             racetime = seconds_to_str(result.seconds)
+
         text += f"\n{result.driver} {racetime}"
+
     await update.message.reply_text(text)
 
-    buttons = [
-        InlineKeyboardButton(
-            "« Usa un'altra immagine", callback_data=str(SAVE_QUALI_RESULTS)
-        ),
-        InlineKeyboardButton("Giro veloce »", callback_data="race_1_results_ok"),
-    ]
-    reply_markup = InlineKeyboardMarkup([buttons])
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "« Usa un'altra immagine", callback_data=str(SAVE_QUALI_RESULTS)
+                ),
+                InlineKeyboardButton(
+                    "Giro veloce »", callback_data="race_1_results_ok"
+                ),
+            ]
+        ]
+    )
+
     text = (
         "Controlla che i risultati siano corretti."
         " Per correggere copia il messaggio sopra."
@@ -443,12 +406,14 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if category.multi_class:
         return ASK_2ND_FASTEST_LAP_1
+
     return SAVE_RACE_1_RESULTS
 
 
 async def ask_2nd_fastest_lap_1(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+
     user_data = context.user_data
     category = cast(Category, user_data["category"])
 
@@ -526,8 +491,11 @@ async def save_race_1_results(
                 ]
             ]
         )
+
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
         return DOWNLOAD_RACE_2_RESULTS
+
     text = "Dopo aver controllato che i risultati siano corretti, premi conferma per salvarli."
     reply_markup = InlineKeyboardMarkup(
         [
@@ -541,13 +509,16 @@ async def save_race_1_results(
             ]
         ]
     )
+
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
     return PERSIST_RESULTS
 
 
 async def download_race_2_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+
     if update.callback_query:
         await update.callback_query.edit_message_text(
             "Inviami i risultati di gara 2 corretti:"
@@ -558,7 +529,6 @@ async def download_race_2_results(
     category = cast(Category, user_data["category"])
 
     drivers = [driver.driver.psn_id for driver in category.drivers]
-    game = category.game.name
 
     # gt7 needs 2 screenshots, therefore after the first screenshot is received
     # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
@@ -566,54 +536,17 @@ async def download_race_2_results(
         if update.message.text:
             results = text_to_results(update.message.text, category=category)
         else:
-            if game == "gt7":
-                if os.path.exists("results_1.jpg") and not os.path.exists(
-                    "results_2.jpg"
-                ):
 
-                    await update.effective_chat.send_action(ChatAction.TYPING)
-                    try:
-                        file = await update.message.document.get_file()
-                    except AttributeError:
-                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                        return
-                    screenshot = await file.download("results_2.jpg")
+            await update.effective_chat.send_action(ChatAction.TYPING)
 
-                    if not user_data.get("partial_race_2_results"):
-                        user_data["partial_race_2_results"] = {}
-                    results = user_data["partial_race_2_results"]
+            try:
+                file = await update.message.document.get_file()
+            except AttributeError:
+                await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                return
 
-                    results.update(
-                        dict.fromkeys(
-                            recognize_race_results(screenshot, drivers, game)[1]
-                        )
-                    )
-                    results = list(results.keys())
-                    user_data["partial_race_2_results"].clear()
-                    os.remove("results_1.jpg")
-                    os.remove("results_2.jpg")
-
-                elif not os.path.exists("results_1.jpg"):
-                    try:
-                        file = await update.message.document.get_file()
-                    except AttributeError:
-                        await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                        return
-                    screenshot = await file.download("results_1.jpg")
-                    results = dict.fromkeys(
-                        recognize_race_results(screenshot, drivers, game)[1]
-                    )
-                    return DOWNLOAD_RACE_2_RESULTS
-
-            else:
-                await update.effective_chat.send_action(ChatAction.TYPING)
-                try:
-                    file = await update.message.document.get_file()
-                except AttributeError:
-                    await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
-                    return
-                screenshot = await file.download("results_1.jpg")
-                results = recognize_race_results(screenshot, drivers, game)[1]
+            screenshot = await file.download("results_1.jpg")
+            results = recognize_results(screenshot, drivers)[1]
 
     user_data["race_2_results"] = results
     text = ""
@@ -628,18 +561,25 @@ async def download_race_2_results(
         text += f"\n{result.driver} {racetime}"
     await update.message.reply_text(text)
 
-    buttons = [
-        InlineKeyboardButton(
-            "« Usa un'altra immagine", callback_data=str(SAVE_RACE_1_RESULTS)
-        ),
-        InlineKeyboardButton("Giro veloce »", callback_data="race_2_results_ok"),
-    ]
-    reply_markup = InlineKeyboardMarkup([buttons])
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "« Usa un'altra immagine", callback_data=str(SAVE_RACE_1_RESULTS)
+                ),
+                InlineKeyboardButton(
+                    "Giro veloce »", callback_data="race_2_results_ok"
+                ),
+            ]
+        ]
+    )
+
     text = (
-        "Controlla che i risultati siano corretti."
-        " Per correggere copia il messaggio sopra."
+        "Controlla che i risultati siano corretti. "
+        "Per correggere copia il messaggio sopra."
     )
     await update.message.reply_text(text, reply_markup=reply_markup)
+
     return ASK_FASTEST_LAP_2
 
 
@@ -678,12 +618,14 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
     return SAVE_RACE_2_RESULTS
 
 
 async def save_race_2_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+
     user_data = context.user_data
     category = cast(Category, user_data["category"])
 
@@ -707,11 +649,14 @@ async def save_race_2_results(
             ]
         ]
     )
+
     await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+
     return PERSIST_RESULTS
 
 
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+
     user_data = context.user_data
     category = cast(Category, user_data["category"])
     championship_round: Round = user_data["round"]
@@ -807,6 +752,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     championship = user_data["championship"]
     user_data.clear()
     user_data["championship"] = championship
+
     return ASK_QUALI_RESULTS
 
 
