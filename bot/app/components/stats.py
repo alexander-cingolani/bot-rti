@@ -107,10 +107,7 @@ def sportsmanship(driver: Driver) -> int:
         return 99
 
     penalties = (
-        rr.time_penalty
-        + rr.warnings
-        + rr.licence_points
-        + rr.championship_penalty_points
+        rr.time_penalty + rr.warnings + rr.licence_points + rr.penalty_points
         for rr in driver.received_reports
     )
 
