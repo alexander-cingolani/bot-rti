@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, time, datetime as dt
 
 from typing import DefaultDict
 import uuid
@@ -17,8 +17,8 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
-    DateTime,
     Time,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -33,8 +33,144 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 
+# pylint: disable=too-many-lines, redefined-builtin
+# In this project "round" always refers to an instance of a Round object.
+
 Base = declarative_base()
 cache = TTLCache(maxsize=3, ttl=timedelta(seconds=30))
+
+
+class Penalty(Base):
+    """This class represents a penalty applied to a driver in a given session.
+
+    Args:
+        time_penalty (int): Seconds to add to the driver's total race time.
+        penalty_points (int): Points to be subtracted from the driver's
+            points tally.
+        licence_points (int): Points to be subtracted from the driver's licence.
+        warnings (int): Number of warnings received.
+
+        category_id (int): Unique ID of the category where incident happened.
+        round_id (int): Unique ID of the round where the incident happened.
+        session_id (int): Unique ID of the session where the incident happened.
+
+        reported_driver_id (int): Unique ID of the driver receiving the report.
+        reported_team_id (int): Unique ID of the team receiving the report.
+    """
+
+    # pylint: disable=too-many-instance-attributes, too-many-arguments
+
+    __tablename__ = "penalties"
+
+    incident_time: str
+    fact: str
+    decision: str
+    report_reason: str
+
+    penalty_id = Column(Integer, primary_key=True)
+    time_penalty: int = Column(SmallInteger, default=0, nullable=False)
+    licence_points: int = Column(SmallInteger, default=0, nullable=False)
+    warnings: int = Column(SmallInteger, default=0, nullable=False)
+    penalty_points: float = Column(SmallInteger, default=0, nullable=False)
+    number: int = Column(Integer, nullable=False)
+
+    category: Category = relationship("Category")
+    round: Round = relationship("Round", back_populates="penalties")
+    session: Session = relationship("Session")
+
+    category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
+    round_id: int = Column(ForeignKey("rounds.round_id"), nullable=False)
+    session_id: str = Column(ForeignKey("sessions.session_id"), nullable=False)
+    reported_driver_id: str = Column(ForeignKey("drivers.driver_id"), nullable=False)
+    reported_team_id: int = Column(ForeignKey("teams.team_id"), nullable=False)
+
+    reported_driver: Driver = relationship(
+        "Driver", back_populates="received_penalties", foreign_keys=[reported_driver_id]
+    )
+    reported_team: Team = relationship(
+        "Team", back_populates="received_penalties", foreign_keys=[reported_team_id]
+    )
+
+    def __init__(
+        self,
+        reported_driver: Driver = None,
+        time_penalty: int = 0,
+        warnings: int = 0,
+        licence_points: int = 0,
+        penalty_points: int = 0,
+        session: Session = None,
+        round: Round = None,
+        category: Category = None,
+    ) -> None:
+        """Initializes a Penalty form scratch.
+
+        Args:
+            reported_driver (Driver) = None
+            time_penalty (int): Seconds to add to the driver's total race time.
+            penalty_points (int): Points to be subtracted from the driver's
+                points tally.
+            licence_points (int): Points to be subtracted from the driver's licence.
+            warnings (int): Number of warnings received.
+        """
+        self.reported_driver = reported_driver
+        self.time_penalty = time_penalty
+        self.warnings = warnings
+        self.licence_points = licence_points
+        self.penalty_points = penalty_points
+        self.session = session
+        self.round = round
+        self.category = category
+        if self.reported_driver:
+            self.reported_team = reported_driver.current_team()
+
+    @classmethod
+    def from_report(
+        cls,
+        report: Report,
+        time_penalty: int = 0,
+        licence_points: int = 0,
+        warnings: int = 0,
+        penalty_points: int = 0,
+    ) -> Penalty:
+        """Initializes a Penalty object from a Report object.
+
+        Args:
+            report (Report): Report to initialize the Penalty object from.
+            time_penalty (int): Time penalty applied to the driver. (Default: 0)
+            licence_points (int): Licence points deducted from the driver's licence. (Default: 0)
+            warnings (int): Warnings given to the driver. (Default: 0)
+            penalty_points (int): Points to be deducted from the driver's points tally.
+                (Default: 0)
+
+        Raises:
+            TypeError: Raised if report is not of type `Report`.
+
+        Returns:
+            Penalty: The new object initialized with the given arguments.
+        """
+
+        if not isinstance(report, Penalty):
+            raise TypeError(f"Cannot initialize Penalty object from {type(report)}.")
+
+        return cls(
+            reported_driver=report.reported_driver,
+            time_penalty=time_penalty,
+            licence_points=licence_points,
+            warnings=warnings,
+            penalty_points=penalty_points,
+        )
+
+    def is_complete(self) -> bool:
+        """Returns True if all the necessary arguments have been provided."""
+        return all(
+            (
+                self.reported_driver,
+                self.reported_team,
+                self.category,
+                self.round,
+                self.session,
+            )
+        )
 
 
 class Report(Base):
@@ -54,18 +190,6 @@ class Report(Base):
         channel_message_id (int): ID of the message the report was sent by the user with.
         report_time (datetime): Timestamp indicating when the report was made.
 
-        fact (str): Brief description of the accident made by the Safety Commission.
-        penalty (str): The penalty inflicted to the driver. This attribute must be
-            left empty in case the reported_driver is not found culpable.
-        time_penalty (int): Seconds to add to the driver's total race time.
-        championship_penalty_points (int): Points to be subtracted from the driver's
-            points tally.
-        licence_points (int): Points to be subtracted from the driver's licence.
-        warnings (int): Number of warnings received.
-        penalty_reason (str): Detailed explanation of the reason for the penalty
-        is_queued (bool): True if the reviewed report queued to be sent out
-            to the reports channel.
-
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
         session_id (int): Unique ID of the session where the incident happened.
@@ -83,24 +207,21 @@ class Report(Base):
         reporting_team (Team): The team making the report.
     """
 
+    # pylint: disable=too-many-instance-attributes, too-many-arguments
+
     __tablename__ = "reports"
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
+
+    video_link: str
 
     report_id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     number: int = Column(SmallInteger, nullable=False)
     incident_time: str = Column(String(12), nullable=False)
     report_reason: str = Column(String(2000), nullable=False)
-    video_link: str = Column(String(80))
-    fact: str = Column(String(400))
-    penalty: str = Column(String(300))
-    time_penalty: int = Column(SmallInteger, default=0, nullable=False)
-    licence_points: int = Column(SmallInteger, default=0, nullable=False)
-    warnings: int = Column(SmallInteger, default=0, nullable=False)
-    championship_penalty_points = Column(SmallInteger, default=0, nullable=False)
-    penalty_reason: str = Column(String(2000))
-    is_reviewed: bool = Column(Boolean, default=False, nullable=False)
-    is_queued: bool = Column(Boolean, default=False, nullable=False)
-    report_time: datetime = Column(DateTime, server_default=func.now())
+    is_reviewed: str = Column(Boolean, nullable=False, default=False)
+    report_time: str = Column(
+        DateTime, nullable=False, server_default="current_timestamp"
+    )
     channel_message_id: int = Column(BigInteger)
 
     category_id: int = Column(ForeignKey("categories.category_id"), nullable=False)
@@ -116,21 +237,33 @@ class Report(Base):
     category: Category = relationship("Category")
     round: Round = relationship("Round", back_populates="reports")
     session: Session = relationship("Session")
-    reported_driver: Driver = relationship(
-        "Driver", back_populates="received_reports", foreign_keys=[reported_driver_id]
-    )
+    reported_driver: Driver = relationship("Driver", foreign_keys=[reported_driver_id])
     reporting_driver: Driver = relationship(
         "Driver", back_populates="reports_made", foreign_keys=[reporting_driver_id]
     )
-    reported_team: Team = relationship(
-        "Team", back_populates="received_reports", foreign_keys=[reported_team_id]
-    )
+    reported_team: Team = relationship("Team", foreign_keys=[reported_team_id])
     reporting_team: Team = relationship(
         "Team", back_populates="reports_made", foreign_keys=[reporting_team_id]
     )
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         """Returns a new Report object."""
+        self.number = kwargs.get("number")
+        self.incident_time = kwargs.get("incident_time")
+        self.report_reason = kwargs.get("report_reason")
+        self.video_link = kwargs.get("video_link")
+        self.channel_message_id = kwargs.get("channel_message_id")
+
+        self.category = kwargs.get("category")
+        self.round = kwargs.get("round")
+        self.session = kwargs.get("session")
+        self.reported_driver = kwargs.get("reported_driver")
+        self.reporting_driver = kwargs.get("reporting_driver")
+
+        if self.reporting_driver:
+            self.reporting_team = self.reporting_driver.current_team()
+        if self.reported_driver:
+            self.reported_team = self.reported_driver.current_team()
 
     def __str__(self) -> str:
         return (
@@ -145,13 +278,12 @@ class Report(Base):
             (
                 self.incident_time,
                 self.reported_driver,
+                self.reporting_driver,
                 self.category,
                 self.round,
                 self.session,
-                self.fact,
-                self.penalty,
                 self.reported_team,
-                self.penalty_reason,
+                self.reporting_team,
                 self.number,
             )
         )
@@ -199,7 +331,7 @@ class DriverAssignment(Base):
             driver (Driver): Driver joining the team.
             team (Team): Team acquiring the driver.
 
-        Keyword Args:
+        Optional Keyword Args:
             bought_for (int): Price the team paid to acquire the driver.
         """
         self.driver = driver
@@ -230,7 +362,7 @@ class DriverCategory(Base):
 
     __tablename__ = "drivers_categories"
 
-    __table_args__ = (UniqueConstraint("joined_on", "driver_id", "category_id"),)
+    __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
     joined_on: datetime.date = Column(Date, server_default=func.now())
     left_on: datetime.date = Column(Date)
@@ -286,10 +418,11 @@ class Driver(Base):
     """
 
     __tablename__ = "drivers"
+    __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
     driver_id: int = Column(SmallInteger, primary_key=True)
     psn_id: str = Column(String(16), unique=True, nullable=False)
-    _telegram_id: str = Column("telegram_id", Text)
+    _telegram_id: str = Column("telegram_id", Text, unique=True)
 
     teams: list[DriverAssignment] = relationship(
         "DriverAssignment", back_populates="driver"
@@ -298,10 +431,8 @@ class Driver(Base):
         "DriverCategory", back_populates="driver"
     )
     race_results: list[RaceResult] = relationship("RaceResult", back_populates="driver")
-    received_reports: list[Report] = relationship(
-        "Report",
-        back_populates="reported_driver",
-        foreign_keys=[Report.reported_driver_id],
+    received_penalties: list[Penalty] = relationship(
+        "Penalty", back_populates="reported_driver"
     )
     reports_made: list[Report] = relationship(
         "Report",
@@ -378,12 +509,14 @@ class Driver(Base):
 
     @property
     def warnings(self) -> int:
+        """The amount of active warnings this driver has currently."""
         for category in self.categories:
             if not category.left_on:
                 return category.warnings
 
     @property
     def licence_points(self) -> int:
+        """The amount of licence points this driver has currently."""
         for driver_category in self.categories:
             if not driver_category.left_on:
                 return driver_category.licence_points
@@ -413,11 +546,13 @@ class QualifyingResult(Base):
         session (Session): Session the result was made in.
     """
 
+    # pylint: disable=too-many-instance-attributes, too-many-arguments
+
     __tablename__ = "qualifying_results"
 
     __table_args__ = (
-        UniqueConstraint("driver_id", "round_id"),
-        UniqueConstraint("position", "session_id", name="_position_session_uc"),
+        UniqueConstraint("driver_id", "session_id", "round_id"),
+        UniqueConstraint("position", "session_id", name="position_session_uq"),
     )
 
     qualifying_result_id: int = Column(SmallInteger, primary_key=True)
@@ -480,6 +615,21 @@ class QualifyingResult(Base):
 
 
 class CarClass(Base):
+    """This object represents an in-game car class.
+    CarClass records are meant to be reused multiple times for different categories
+    and championships, their function is mainly to identify which type of car is
+    assigned to drivers within the same category, this therefore allows to calculate
+    statistics separately from one class and another.
+
+    Attributes:
+        car_class_id (int): Unique ID of the car class.
+        name (str): Name of the car class.
+
+        game_id (int): Unique ID of the game the car class is in.
+
+        game (Game): Game object the car class is associated to.
+    """
+
     __tablename__ = "car_classes"
 
     car_class_id: int = Column(Integer, primary_key=True)
@@ -540,10 +690,10 @@ class Team(Base):
         back_populates="reporting_team",
         foreign_keys=[Report.reporting_team_id],
     )
-    received_reports: list[Report] = relationship(
-        "Report",
+    received_penalties: list[Penalty] = relationship(
+        "Penalty",
         back_populates="reported_team",
-        foreign_keys=[Report.reported_team_id],
+        foreign_keys=[Penalty.reported_team_id],
     )
 
     def __init__(self, name: str) -> None:
@@ -573,12 +723,18 @@ class Team(Base):
                 return driver.driver
 
     def current_championship(self) -> TeamChampionship:
+        """Returns the championship which is still underway."""
         for championship in self.championships:
             if championship.championship.is_active():
                 return championship
 
 
 class TeamChampionship(Base):
+    """This class binds a Team and a Championship together.
+    It allows to keep track of the Championships to which teams have participated,
+    while also allowing to add penalties to a team's points tally.
+    """
+
     __tablename__ = "team_championships"
 
     team_id: int = Column(ForeignKey("teams.team_id"), primary_key=True)
@@ -592,6 +748,9 @@ class TeamChampionship(Base):
 
 
 class CategoryClass(Base):
+    """This class binds a Category to a CarClass.
+    It allows for a Category to be associated with multiple CarClasses and vice versa.
+    """
 
     __tablename__ = "category_classes"
 
@@ -713,9 +872,9 @@ class Category(Base):
 
     def next_round(self) -> Round | None:
         """Returns the next round on the calendar."""
-        for round in self.rounds:
-            if round.date > datetime.datetime.now().date():
-                return round
+        for championship_round in self.rounds:
+            if dt.combine(championship_round.date, time(hour=23)) >= dt.now():
+                return championship_round
 
     def active_drivers(self) -> list[Driver]:
         """Returns list of drivers who are currently competing in this category."""
@@ -827,6 +986,7 @@ class Round(Base):
     category: Category = relationship("Category", back_populates="rounds")
     race_results: list[RaceResult] = relationship("RaceResult", back_populates="round")
     reports: list[Report] = relationship("Report")
+    penalties: list[Penalty] = relationship("Penalty")
     qualifying_results: list[QualifyingResult] = relationship(
         "QualifyingResult",
         back_populates="round",
@@ -974,6 +1134,7 @@ class Session(Base):
     )
     point_system: PointSystem = relationship("PointSystem")
     reports: list[Report] = relationship("Report", back_populates="session")
+    penalties: list[Penalty] = relationship("Penalty", back_populates="session")
     round: Round = relationship("Round", back_populates="sessions")
 
     def __init__(self, name: str, point_system: PointSystem) -> None:
@@ -992,13 +1153,26 @@ class Session(Base):
             f"round_id={self.round_id}, tyres={self.tyre_degradation})"
         )
 
-    def get_penalty_seconds_of(self, driver_id: int) -> list[Report]:
+    def participating_drivers(self) -> list[Driver]:
+        """Returns a list of drivers who have participated to this session."""
+        drivers = []
+        if self.is_quali:
+            for quali_result in self.qualifying_results:
+                if quali_result.participated:
+                    drivers.append(quali_result.driver)
+            return drivers
+
+        for race_result in self.race_results:
+            if race_result.participated:
+                drivers.append(race_result.driver)
+        return drivers
+
+    def get_penalty_seconds_of(self, driver_id: int) -> list[Penalty]:
         """Returns total time penalties received by a driver."""
         seconds = 0
-        for report in self.reports:
-
-            if report.reported_driver.driver_id == driver_id:
-                seconds += report.time_penalty
+        for penalty in self.penalties:
+            if penalty.reported_driver_id == driver_id:
+                seconds += penalty.time_penalty
         return seconds
 
     def results(self) -> str:
@@ -1021,17 +1195,15 @@ class Session(Base):
 
         for result in results:
             if result.participated:
+                position = result.relative_position
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
 
                 if not minutes:
-                    gap = "+<i>{:01}.{:03}</i>".format(int(seconds), int(milliseconds))
+                    gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
                 else:
-                    gap = "+<i>{:01}:{:02}.{:03}</i>".format(
-                        int(minutes), int(seconds), int(milliseconds)
-                    )
-                position = result.relative_position
-                
+                    gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+
             else:
                 gap = "<i>assente</i>"
                 position = "/"
@@ -1052,6 +1224,7 @@ class Session(Base):
 
     @property
     def is_quali(self) -> bool:
+        """Is True if this session is a qualifying session."""
         return "quali" in self.name.lower()
 
 
@@ -1080,6 +1253,8 @@ class RaceResult(Base):
         category (Category): Category the result is registered to.
         session (Session): Session the result was registered in.
     """
+
+    # pylint: disable=too-many-instance-attributes, too-many-arguments
 
     __tablename__ = "race_results"
     __table_args__ = (
