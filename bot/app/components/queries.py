@@ -12,6 +12,7 @@ from app.components.models import (
     Category,
     Championship,
     Driver,
+    Penalty,
     QualifyingResult,
     RaceResult,
     Report,
@@ -146,6 +147,20 @@ def get_last_report_number(category_id: int, round_id: int) -> int:
     return 0
 
 
+def get_last_penalty_number(round_id: int) -> int:
+    """Returns the last penalty number for any given round.
+    0 is returned if no penalties have been given in that round."""
+    result = _session.execute(
+        select(Penalty.number)
+        .where(Penalty.round_id == round_id)
+        .order_by(desc(Penalty.number))
+    ).first()
+
+    if result:
+        return result[0]
+    return 0
+
+
 def save_object(obj) -> None:
     """Saves the object if it doesn't already exist in the database"""
 
@@ -159,50 +174,54 @@ def save_multiple_objects(objs: list) -> None:
     _session.commit()
 
 
-def save_qualifying_report(report: Report) -> None:
+def save_qualifying_penalty(penalty: Penalty) -> None:
     """Saves and applies a penalty to a driver in qualifying."""
     quali_result = _session.execute(
         select(QualifyingResult)
-        .where(QualifyingResult.driver_id == report.reported_driver_id)
-        .where(QualifyingResult.session_id == report.session_id)
-        .where(QualifyingResult.round_id == report.round_id)
+        .where(QualifyingResult.driver_id == penalty.reported_driver_id)
+        .where(QualifyingResult.session_id == penalty.session_id)
     ).one_or_none()
-    for driver_category in report.reported_driver.categories:
-        if driver_category.category_id == report.category.category_id:
-            driver_category.licence_points -= report.licence_points
-            driver_category.warnings += report.warnings
 
-    if quali_result:
-        quali_result: QualifyingResult = quali_result[0]
-        quali_result.warnings = report.warnings
-        quali_result.licence_points = report.licence_points
-        quali_result.penalty_points = report.championship_penalty_points
-        update_object()
-        return
-    raise Exception("QualifyingResult not found")
+    if not quali_result:
+        raise Exception("QualifyingResult not found")
+
+    for driver_category in penalty.reported_driver.categories:
+        if driver_category.category_id == penalty.category.category_id:
+            driver_category.licence_points -= penalty.licence_points
+            driver_category.warnings += penalty.warnings
+
+    quali_result: QualifyingResult = quali_result[0]
+    quali_result.warnings = penalty.warnings
+    quali_result.licence_points = penalty.licence_points
+    quali_result.penalty_points = penalty.penalty_points
+
+    _session.commit()
+    penalty.reported_driver_id = penalty.reported_driver.driver_id
+    save_object(penalty)
 
 
-def save_and_apply_report(report: Report) -> None:
+def save_and_apply_penalty(penalty: Penalty) -> None:
     """Saves a report and applies the time penalty, changing the finishing positions
     of the other drivers as well if needed."""
 
-    report.is_reviewed = True
+    for driver_category in penalty.reported_driver.categories:
+        if driver_category.category_id == penalty.category.category_id:
+            driver_category.licence_points -= penalty.licence_points
+            driver_category.warnings += penalty.warnings
 
-    if not report.time_penalty:
-        if not report.reporting_driver:
-            save_object(report)
-        else:
-            update_object()
+    if not penalty.time_penalty:
+        if not penalty.reporting_driver:
+            _session.commit()
+            save_object(penalty)
+            return
         return
-    if report.session.is_quali:
-        save_qualifying_report(report)
+    if penalty.session.is_quali:
+        save_qualifying_penalty(penalty)
         return
 
     rows = _session.execute(
         select(RaceResult)
-        .where(RaceResult.category_id == report.category.category_id)
-        .where(RaceResult.round_id == report.round.round_id)
-        .where(RaceResult.session_id == report.session.session_id)
+        .where(RaceResult.session_id == penalty.session.session_id)
         .order_by(RaceResult.finishing_position)
     ).all()
 
@@ -210,8 +229,8 @@ def save_and_apply_report(report: Report) -> None:
     for row in rows:
         race_result: RaceResult = row[0]
         if race_result.total_racetime:
-            if race_result.driver_id == report.reported_driver.driver_id:
-                race_result.total_racetime += report.time_penalty
+            if race_result.driver_id == penalty.reported_driver.driver_id:
+                race_result.total_racetime += penalty.time_penalty
 
             race_results.append(race_result)
 
@@ -220,18 +239,18 @@ def save_and_apply_report(report: Report) -> None:
     for position, result in enumerate(race_results, start=1):
         result.finishing_position = position
 
-    for _, class_results in separate_car_classes(report.category, race_results).items():
+    for _, class_results in separate_car_classes(
+        penalty.category, race_results
+    ).items():
         winners_racetime = class_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    if not report.reporting_driver:
-        update_object()
-        save_object(report)
-
-    else:
-        update_object()
+    _session.commit()
+    penalty.reported_driver_id = penalty.reported_driver.driver_id
+    save_object(penalty)
+    return
 
 
 def update_object() -> None:
@@ -239,6 +258,7 @@ def update_object() -> None:
     _session.commit()
 
 
-def delete_report(report: Report) -> None:
+def delete_report(report: Penalty) -> None:
     """Deletes the given report from the database."""
     _session.execute(delete(Report).where(Report.report_id == report.report_id))
+    _session.expire_all()
