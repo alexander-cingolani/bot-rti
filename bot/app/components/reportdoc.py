@@ -1,41 +1,36 @@
 from datetime import datetime
 from textwrap import wrap
 
-from app.components.models import Driver, Report
+from app.components.models import Driver, Penalty, Report
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
+pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
+pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
 
-class ReviewedReportDocument:
-    def __init__(self, report: Report) -> None:
-        if not report.time_penalty and not report.championship_penalty_points:
-            self.filename = (
-                f"{report.number} - Decisione {report.reported_driver.psn_id}.pdf"
+
+class PenaltyDocument:
+    def __init__(
+        self,
+        penalty: Penalty,
+    ) -> None:
+        if not penalty.time_penalty and not penalty.penalty_points:
+            filename = (
+                f"{penalty.number} - Decisione {penalty.reported_driver.psn_id}.pdf"
             )
         else:
-            self.filename = (
-                f"{report.number} - Penalità {report.reported_driver.psn_id}.pdf"
+            filename = (
+                f"{penalty.number} - Penalità {penalty.reported_driver.psn_id}.pdf"
             )
 
-        self.report: Report = report
-        self.subtitle: str = f"{report.round.number}ª Tappa | {report.round.circuit}"
-        self.reported_driver: Driver = report.reported_driver
-        self.reporting_driver: Driver = report.reporting_driver
-        self.date: str = datetime.now().date().strftime("%d %b %Y")
-        self.time: str = datetime.now().time().strftime("%H:%M")
+        self.penalty: Penalty = penalty
+        self.reported_driver: Driver = penalty.reported_driver
+        self.canvas = canvas.Canvas(filename=filename)
+        self.canvas.setTitle(filename)
 
-    filename: str
-
-    def generate_document(self) -> str:
-        """Generates the report document named as the filename attribute"""
-        pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
-        pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
-
-        pdf = canvas.Canvas(filename=self.filename)
-        pdf.setTitle(self.filename)
-
-        pdf.drawImage(
+    def _header(self):
+        self.canvas.drawImage(
             "./app/images/logo_rti.jpg",
             x=220,
             y=715,
@@ -44,73 +39,90 @@ class ReviewedReportDocument:
             preserveAspectRatio=True,
         )
 
-        pdf.setLineWidth(0.1)
-        pdf.line(x1=50, x2=550, y1=640, y2=640)
-        pdf.line(x1=50, x2=550, y1=560, y2=560)
+        self.canvas.setLineWidth(0.1)
+        self.canvas.line(x1=50, x2=550, y1=640, y2=640)
+        self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
-        pdf.setFont("arialB", 24)
-        pdf.drawCentredString(297, 680, f"CATEGORIA {self.report.category.name}")
+        self.canvas.setFont("arialB", 24)
+        self.canvas.drawCentredString(
+            297, 680, f"CATEGORIA {self.penalty.category.name}"
+        )
 
-        pdf.setFont("arialB", 14)
-        pdf.drawCentredString(297, 663, self.subtitle)
+        self.canvas.setFontSize(14)
+        self.canvas.drawCentredString(
+            297,
+            663,
+            f"{self.penalty.round.number}ª Tappa | {self.penalty.round.circuit}",
+        )
 
-        pdf.setFont("arialB", 11)
-        pdf.drawString(50, 620, "Da")
-        pdf.drawString(50, 600, "Per")
-        pdf.drawString(410, 620, "Documento")
-        pdf.drawString(410, 600, "Data")
-        pdf.drawString(410, 580, "Orario")
-        pdf.setFont("arial", 11)
-        pdf.drawString(
+        self.canvas.setFontSize(11)
+        self.canvas.drawString(50, 620, "Da")
+        self.canvas.drawString(50, 600, "Per")
+        self.canvas.drawString(410, 620, "Documento")
+        self.canvas.drawString(410, 600, "Data")
+        self.canvas.drawString(410, 580, "Orario")
+        self.canvas.drawString(75, 619, "Safety Commission")
+        self.canvas.drawString(75, 599, "Capo Scuderia,")
+
+        self.canvas.setFont("arial", 11)
+        self.canvas.drawString(
+            75, 585, f"Scuderia {self.reported_driver.current_team().name}"
+        )
+        self.canvas.drawString(480, 619, str(self.penalty.number))
+        self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
+        self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
+
+    def _body(self):
+        self.canvas.setFont("arialB", 11.5)
+        self.canvas.drawString(50, 500, "No / Pilota")
+        self.canvas.drawString(50, 475, "Scuderia")
+        self.canvas.drawString(50, 450, "Minuto")
+        self.canvas.drawString(50, 425, "Sessione")
+        self.canvas.drawString(50, 400, "Fatto")
+        self.canvas.drawString(50, 375, "Violazione")
+        self.canvas.drawString(50, 350, "Decisione")
+        self.canvas.drawString(50, 325, "Motivazioni")
+
+        self.canvas.setFont("arial", 11)
+        self.canvas.drawString(
             50,
             540,
             "La Safety Commission, in seguito alla segnalazione ricevuta, ha analizzato"
             " l'episodio e determina che:",
         )
-        pdf.setFont("arialB", 11.5)
-        pdf.drawString(50, 500, "No / Pilota")
-        pdf.drawString(50, 475, "Scuderia")
-        pdf.drawString(50, 450, "Minuto")
-        pdf.drawString(50, 425, "Sessione")
-        pdf.drawString(50, 400, "Fatto")
-        pdf.drawString(50, 375, "Violazione")
-        pdf.drawString(50, 350, "Decisione")
-        pdf.drawString(50, 325, "Motivazioni")
-        pdf.setFont("arial", 11)
 
-        reported_driver_team_name = self.reported_driver.current_team().name
-
-        pdf.drawString(75, 619, "Safety Commission")
-        pdf.drawString(75, 599, "Capo Scuderia,")
-        pdf.drawString(75, 585, f"Scuderia {reported_driver_team_name}")
-        pdf.drawString(480, 619, str(self.report.number))
-        pdf.drawString(480, 599, self.date)
-        pdf.drawString(480, 579, self.time)
-        pdf.setFontSize(11)
-        pdf.drawString(
+        self.canvas.drawString(
             135,
             499,
             f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
         )
-        pdf.drawString(135, 475, reported_driver_team_name)
-        pdf.drawString(135, 450, self.report.incident_time)
-        pdf.drawString(135, 425, self.report.session.name)
-        text = self.report.penalty_reason
+        self.canvas.drawString(135, 475, self.reported_driver.current_team().name)
+        self.canvas.drawString(135, 450, self.penalty.incident_time)
+        self.canvas.drawString(135, 425, self.penalty.session.name)
+        self.canvas.drawString(135, 400, self.penalty.fact)
+        self.canvas.drawString(135, 375, "Regolamento Sportivo RTI")
+        self.canvas.drawString(135, 350, self.penalty.decision)
+
+        text = self.penalty.penalty_reason
         text = "\n".join(wrap(text, 80)).split("\n")
-        pdf.drawString(135, 400, self.report.fact)
-        pdf.drawString(135, 375, "Regolamento Sportivo RTI")
-        pdf.drawString(135, 350, self.report.penalty)
-        y0 = 325
+        y_coord = 325
         for line in text:
-            pdf.drawString(135, y0, line)
-            y0 -= 15
+            self.canvas.drawString(135, y_coord, line)
+            y_coord -= 15
 
-        pdf.setFont("arialB", 11.5)
-        pdf.drawString(50, y0 - 55, "Direzione Gara")
-        pdf.drawString(295, y0 - 55, "Safety Commission")
+        self.canvas.setFont("arialB", 11.5)
+        self.canvas.drawString(50, y_coord - 55, "Direzione Gara")
+        self.canvas.drawString(295, y_coord - 55, "Safety Commission")
 
-        pdf.save()
-        return self.filename
+    def generate_document(self) -> str:
+        """Generates the report document named as the filename attribute"""
+
+        self._header()
+        self._body()
+
+        self.canvas.save()
+
+        return self.canvas._filename
 
 
 class ReportDocument:
@@ -130,8 +142,6 @@ class ReportDocument:
 
     def generate_document(self) -> str:
         pdf = canvas.Canvas(self.filename)
-        pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
-        pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
 
         pdf.setTitle(self.filename)
         logo_rti = "./app/images/logo_rti.jpg"
