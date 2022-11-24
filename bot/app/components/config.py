@@ -5,6 +5,7 @@ from telegram import User
 
 REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
 TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))
+LATE_REPORT_CHAT = int(os.environ.get("LATE_REPORT_CHAT"))
 GROUP_CHAT = int(os.environ.get("GROUP_CHAT"))
 DEVELOPER_CHAT = int(os.environ.get("DEVELOPER_CHAT"))
 TEAM_LEADER_CHAT = int(os.environ.get("TEAM_LEADER_CHAT"))
@@ -31,7 +32,7 @@ ADMIN_CHAT_COMMANDS = BASE_COMMANDS + [
 ]
 
 LEADER_COMMANDS = BASE_COMMANDS + [
-    ("nuova_segnalazione", "Crea una nuova segnalazione."),
+    ("segnala", "Crea una nuova segnalazione."),
 ]
 
 ADMIN_COMMANDS = LEADER_COMMANDS + [

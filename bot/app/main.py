@@ -214,11 +214,9 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """
 
     query = update.inline_query.query
+
     results = []
-
-    drivers = get_championship().driver_list
-
-    for driver in drivers:
+    for driver in get_championship().driver_list:
 
         if query.lower() in driver.psn_id.lower():
             wins, podiums, poles, fastest_laps, races_disputed, avg_position = stats(
@@ -231,9 +229,11 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 current_team = "/"
             else:
                 current_team = current_team.name
+
             unique_teams = unique_teams.replace(
                 current_team, f"{current_team} [Attuale]"
             )
+
             if not unique_teams:
                 unique_teams = "/"
 
@@ -245,15 +245,15 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             overall = sum((const, sprt, quali_pace, pace)) // 4
 
             if const <= 0:
-                const = "dati insuff."
+                const = "dati insufficienti"
             if sprt <= 0:
-                sprt = "dati insuff."
+                sprt = "dati insufficienti"
             if pace <= 0:
-                pace = "dati insuff."
+                pace = "dati insufficienti"
             if quali_pace <= 0:
-                quali_pace = "dati insuff."
+                quali_pace = "dati insufficienti"
             if overall <= 0:
-                overall = "dati insuff."
+                overall = "dati insufficienti"
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
@@ -324,7 +324,7 @@ async def complete_championship_standings(
     for pos, (team, points) in enumerate(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
-        points -= team.current_championship().penalty_points
+        points += team.current_championship().penalty_points
         message += f"<b>{pos}</b> - {team.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
 
@@ -359,12 +359,17 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE):
+    """Sends a message containing the race and qualifying results of the last completed
+    round in each category of the current championship."""
     championship = get_championship()
     message = ""
     for category in championship.categories:
         championship_round = category.last_completed_round()
 
-        message += f"<i><b>RISULTATI {championship_round.number}ª TAPPA #{championship.abbreviated_name}</b></i>\n\n"
+        message += (
+            f"<i><b>RISULTATI {championship_round.number}ª "
+            f"TAPPA #{championship.abbreviated_name}</b></i>\n\n"
+        )
 
         message += championship_round.qualifying_session.results()
 
