@@ -289,7 +289,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the link provided by the user and asks who is considered to be the victim."""
     user_data = context.user_data
-
+    
     if (
         not getattr(update.callback_query, "data", "").isdigit()
         and not user_data["report"].session.is_quali
@@ -489,7 +489,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     category: Category = user_data["category"]
 
-    if not category.can_report_today():
+    if not category.can_report_today() and not user_data.get("late_report"):
         text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
 
