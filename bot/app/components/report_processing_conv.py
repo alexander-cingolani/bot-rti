@@ -3,9 +3,11 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
+import os
 from collections import defaultdict
 
 from app.components import config
+from app.components.docs import PenaltyDocument
 from app.components.models import Category, DriverCategory, Penalty, Report
 from app.components.queries import (
     get_championship,
@@ -13,9 +15,10 @@ from app.components.queries import (
     get_reports,
     save_and_apply_penalty,
 )
-from app.components.reportdoc import PenaltyDocument
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -44,6 +47,10 @@ from telegram.ext import (
 ) = range(12, 26)
 
 
+engine = create_engine(os.environ.get("DB_URL"))
+_Session = sessionmaker(bind=engine, autoflush=False)
+
+
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Allows admins to create penalties without a pre-existing report made by a leader."""
 
@@ -51,7 +58,10 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text="Questo comando è riservato agli admin.")
         return ConversationHandler.END
 
-    championship = get_championship()
+    session = _Session()
+    context.user_data["sqla_session"] = session
+
+    championship = get_championship(session)
     context.user_data["championship"] = championship
 
     if update.message:
@@ -123,6 +133,7 @@ async def ask_session(update: Update, context: ContextTypes) -> int:
         ]
         user_data["penalty"].number = (
             get_last_penalty_number(
+                user_data["sqla_session"],
                 round_id=user_data["penalty"].round.round_id,
             )
             + 1
@@ -241,7 +252,9 @@ async def report_processing_entry_point(
     """Asks the user which category he wants to view reports from,
     after the /start_reviewing command is issued."""
 
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
+    context.user_data["sqla_session"] = session
     context.user_data["championship"] = championship
     user = update.effective_user
 
@@ -252,13 +265,17 @@ async def report_processing_entry_point(
         )
         reply_markup = InlineKeyboardMarkup([[button]])
         await update.message.reply_text(text, reply_markup=reply_markup)
+        session.close()
+        context.user_data.clear()
         return ConversationHandler.END
 
-    reports = get_reports(is_reviewed=False)
+    reports = get_reports(session, is_reviewed=False)
 
     if not reports:
         text = "Non ci sono segnalazioni da processare."
         await send_or_edit_message(update, text)
+        session.close()
+        context.user_data.clear()
         return ConversationHandler.END
 
     context.user_data["unreviewed_reports"] = reports
@@ -655,7 +672,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data = context.user_data
     penalty: Penalty = user_data["penalty"]
 
-    save_and_apply_penalty(penalty)
+    save_and_apply_penalty(user_data["sqla_session"], penalty)
     file = PenaltyDocument(penalty).generate_document()
     await context.bot.send_document(
         chat_id=config.REPORT_CHANNEL,
@@ -664,7 +681,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     text = "Penalità salvata e inviata."
 
     await send_or_edit_message(update, text)
-
+    user_data["sqla_session"].close()
+    context.user_data.clear()
     return ConversationHandler.END
 
 
@@ -674,6 +692,8 @@ async def cancel_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await update.message.reply_text(
         "Ok! I dati raccolti per quest'ultima segnalazione sono stati cancellati."
     )
+    context.user_data["sqla_session"].close()
+    context.user_data.clear()
     return ConversationHandler.END
 
 
@@ -713,9 +733,11 @@ async def go_back_handler_report_processing(
 
 async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clears user_data and ends the conversation"""
-    context.user_data.clear()
     text = "Penalità annullata."
     await send_or_edit_message(update, text)
+
+    context.user_data["sqla_session"].close()
+    context.user_data.clear()
     return ConversationHandler.END
 
 

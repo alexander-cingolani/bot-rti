@@ -4,22 +4,24 @@ This module contains all the callbacks necessary to allow users to create report
 
 import os
 from datetime import datetime, timedelta
-
-from sqlalchemy.exc import IntegrityError
+from zoneinfo import ZoneInfo
 
 from app.components import config
+from app.components.docs import ReportDocument
 from app.components.models import Category, Driver, Report
 from app.components.queries import (
     delete_report,
     get_championship,
     get_driver,
-    get_last_report_by,
     get_last_report_number,
+    get_report,
     save_object,
 )
-from app.components.reportdoc import ReportDocument
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
+from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -42,17 +44,27 @@ from telegram.ext import (
     UNSEND,
 ) = range(3, 12)
 
+from telegram.error import BadRequest
+
+engine = create_engine(os.environ.get("DB_URL"))
+_Session = sessionmaker(bind=engine, autoflush=False)
+
 
 async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user which category he wants to create a report in."""
-    championship = get_championship()
+
     user_data = context.user_data
     user_data.clear()
+
+    session = _Session()
+    championship = get_championship(session)
+
+    user_data["sqla_session"] = session
     user_data["championship"] = championship
     user_data["categories"] = {}
     reply_markup = []
 
-    user_data["leader"] = get_driver(telegram_id=update.effective_user.id)
+    user_data["leader"] = get_driver(session, telegram_id=update.effective_user.id)
     if user_data["leader"].current_team().leader != user_data["leader"]:
 
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
@@ -67,6 +79,8 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ]
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
     for i, category in enumerate(championship.categories):
@@ -80,6 +94,8 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not reply_markup:
         text = "Il campionato è terminato! Non è più possibile effettuare segnalazioni."
         await update.message.reply_text(text)
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
     text = "Scegli la categoria dove vuoi creare la segnalazione:"
@@ -88,7 +104,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
-    context.user_data["late_report"] = True
+    context.chat_data["late_report"] = True
     return CATEGORY
 
 
@@ -142,12 +158,16 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     user_data = context.user_data
     user_data.clear()
-    user_data["leader"] = get_driver(telegram_id=user.id)
+    session = _Session()
+    user_data["leader"] = get_driver(session, telegram_id=user.id)
+    user_data["sqla_session"] = session
 
     if not user_data["leader"]:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"
         )
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
     if user_data["leader"].current_team().leader != user_data["leader"]:
@@ -163,13 +183,16 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             ]
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
-    championship = get_championship()
+    championship = get_championship(session)
 
     if not championship:
         text = "Il campionato è terminato! Non puoi più fare segnalazioni."
         await update.message.reply_text(text)
+        user_data["sqla_session"].close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -194,6 +217,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             ]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
     user_data["category"] = category
@@ -248,7 +273,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                 )
         reply_markup = list(chunked(reply_markup, 2))
         callback_function = (
-            str(SESSION) if user_data.get("late_report") else "create_report"
+            str(SESSION) if context.chat_data.get("late_report") else "create_report"
         )
         reply_markup.append(
             [
@@ -271,7 +296,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "fornire un video dell'episodio. Incolla il link al video YouTube qui sotto."
     )
     callback_function = (
-        str(SESSION) if user_data.get("late_report") else "create_report"
+        str(SESSION) if context.chat_data.get("late_report") else "create_report"
     )
     reply_markup = InlineKeyboardMarkup(
         [[InlineKeyboardButton("« Modifica sessione", callback_data=callback_function)]]
@@ -289,10 +314,10 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the link provided by the user and asks who is considered to be the victim."""
     user_data = context.user_data
-    
+
     if (
         not getattr(update.callback_query, "data", "").isdigit()
-        and not user_data["report"].session.is_quali
+        and user_data["report"].session.is_quali
     ):
         user_data["report"].video_link = update.message.text
 
@@ -313,7 +338,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             InlineKeyboardButton(
                 "« Sessione",
                 callback_data=str(SESSION)
-                if context.user_data.get("late_report")
+                if context.chat_data.get("late_report")
                 else "create_report",
             )
         ]
@@ -489,7 +514,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     category: Category = user_data["category"]
 
-    if not category.can_report_today() and not user_data.get("late_report"):
+    if not category.can_report_today() and not context.chat_data.get("late_report"):
         text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
 
@@ -501,12 +526,15 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         report.reported_team = report.reported_driver.current_team()
         report.reporting_team = report.reporting_driver.current_team()
         report.number = (
-            get_last_report_number(category.category_id, report.round.round_id) + 1
+            get_last_report_number(
+                user_data["sqla_session"], category.category_id, report.round.round_id
+            )
+            + 1
         )
 
         channel = (
             config.LATE_REPORT_CHAT
-            if user_data.get("late_report")
+            if context.chat_data.get("late_report")
             else config.REPORT_CHANNEL
         )
 
@@ -518,7 +546,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         report.channel_message_id = message.message_id
 
         try:
-            save_object(report)
+            save_object(user_data["sqla_session"], report)
         except IntegrityError:
             os.remove(report_document_name)
             await message.delete()
@@ -527,13 +555,21 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
                 "Non farti problemi ad insultarlo in chat."
             )
+            user_data["sqla_session"].close()
+            user_data.clear()
             return ConversationHandler.END
 
+        callback_data = (
+            f"withdraw_late_report_{report.report_id}"
+            if context.chat_data.get("late_report")
+            else f"withdraw_late_report{report.report_id}"
+        )
         reply_markup = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "Ritira segnalazione ↩", callback_data="withdraw_report"
+                        "Ritira segnalazione ↩",
+                        callback_data=callback_data,
                     )
                 ]
             ]
@@ -552,8 +588,9 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return UNSEND
 
     if update.callback_query.data == "cancel":
-        user_data.clear()
         await update.callback_query.edit_message_text("Segnalazione annullata!")
+        user_data["sqla_session"].close()
+        user_data.clear()
         return ConversationHandler.END
 
 
@@ -572,10 +609,10 @@ async def change_state_rep_creation(
     conversation to continue.
     """
     category_handler = (
-        create_late_report if context.user_data.get("late_report") else create_report
+        create_late_report if context.chat_data.get("late_report") else create_report
     )
     session_handler = (
-        save_category if context.user_data.get("late_report") else create_report
+        save_category if context.chat_data.get("late_report") else create_report
     )
     callbacks = {
         CATEGORY: category_handler,
@@ -593,38 +630,55 @@ async def change_state_rep_creation(
 
     return (
         state
-        if context.user_data.get("late_report") and (state == 7 or state is None)
+        if context.chat_data.get("late_report") and (state == 7 or state is None)
         else state + 1
     )
 
 
 async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Clears user_data and ends the conversation"""
-    context.user_data.clear()
+
     text = "Segnalazione annullata."
     await send_or_edit_message(update, text)
+    context.user_data["sqla_session"].close()
+    context.user_data.clear()
     return ConversationHandler.END
 
 
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
+    if "late" in update.callback_query.data:
+        report_id = update.callback_query.data.removeprefix("withdraw_late_report_")
+    else:
+        report_id = update.callback_query.data.removeprefix("withdraw_report_")
 
-    reporting_team_id = (
-        get_driver(telegram_id=update.effective_user.id).current_team().team_id
-    )
-    report = get_last_report_by(reporting_team_id)
+    report = get_report(context.user_data["sqla_session"], report_id)
     if report:
-        if (report.report_time - datetime.now()) < timedelta(minutes=30):
+        if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
+            minutes=30
+        ):
 
-            await context.bot.delete_message(
-                chat_id=config.REPORT_CHANNEL, message_id=report.channel_message_id
-            )
+            text = f"<i><b>[segnalazione ritirata]</b></i>"
+            try:
+                await context.bot.edit_message_caption(
+                    chat_id=config.REPORT_CHANNEL,
+                    message_id=report.channel_message_id,
+                    caption=text,
+                )
+            except BadRequest:
+                await context.bot.edit_message_caption(
+                    chat_id=config.LATE_REPORT_CHAT,
+                    message_id=report.channel_message_id,
+                    caption=text,
+                )
+
             text = "Segnalazione ritirata."
 
-            delete_report(report)
+            delete_report(context.user_data["sqla_session"], report_id)
         else:
-            text = "Troppo tardi!"
+            text = "Troppo tardi per ritirarla!"
         await update.callback_query.edit_message_text(text)
+    context.chat_data.clear()
 
 
 report_creation = ConversationHandler(
@@ -636,8 +690,8 @@ report_creation = ConversationHandler(
             create_late_report,
             filters=filters.ChatType.PRIVATE,
         ),
-        CallbackQueryHandler(create_report, "^create_report$"),
-        CallbackQueryHandler(create_late_report, "^create_late_report$"),
+        CallbackQueryHandler(create_report, r"^create_report$"),
+        CallbackQueryHandler(create_late_report, r"^create_late_report$"),
     ],
     states={
         CATEGORY: [CallbackQueryHandler(save_category, r"^c[0-9]{1,}$")],
@@ -668,12 +722,19 @@ report_creation = ConversationHandler(
                 r"^r[0-9]{1,}$",
             ),
         ],
-        SEND: [CallbackQueryHandler(send_report, "confirm")],
-        UNSEND: [CallbackQueryHandler(withdraw_report, "withdraw_report")],
+        SEND: [CallbackQueryHandler(send_report, r"^confirm$")],
+        UNSEND: [
+            CallbackQueryHandler(
+                withdraw_report,
+                r"^withdraw_(late_)?report_"
+                r"[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b"
+                r"-[0-9a-fA-F]{12}$",
+            )
+        ],
     },
     fallbacks=[
         CommandHandler("esci", exit_conversation),
-        CallbackQueryHandler(exit_conversation, "cancel"),
+        CallbackQueryHandler(exit_conversation, r"^cancel$"),
         CallbackQueryHandler(change_state_rep_creation, r"^[3-9]$|^1[0-1]$"),
     ],
 )

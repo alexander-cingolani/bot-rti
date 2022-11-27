@@ -28,7 +28,7 @@ def consistency(driver: Driver) -> int:
     positions = [race_result.relative_position for race_result in race_results]
     participation_ratio = len(race_results) / len(driver.race_results)
 
-    return round((99 - (stdev(positions) * 10)) * participation_ratio)
+    return round((99 - (stdev(positions) * 8)) * participation_ratio)
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -43,19 +43,23 @@ def speed(driver: Driver) -> int:
         int: Speed rating. (0-99)
     """
 
-    percentages = []
-    for quali_result in filter(lambda x: x.laptime, driver.qualifying_results):
-        percentages.append(
-            (
-                quali_result.gap_to_first
-                / (quali_result.gap_to_first + quali_result.laptime)
-            )
-            * 100
-        )
+    qualifying_results = list(
+        filter(lambda x: x.participated, driver.qualifying_results)
+    )
 
-    if percentages:
-        return round(99 - sum(percentages) / len(percentages) * 9)
-    return 0
+    if not qualifying_results:
+        return 0
+
+    a = 0
+    for quali_result in qualifying_results:
+        a += (
+            quali_result.gap_to_first
+            / (quali_result.laptime - quali_result.gap_to_first)
+        ) * 100
+
+    a *= 10
+
+    return round(99 - a / len(qualifying_results))
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -103,15 +107,15 @@ def sportsmanship(driver: Driver) -> int:
     if len(driver.race_results) < 2:
         return 0
 
-    if not driver.received_reports:
+    if not driver.received_penalties:
         return 99
 
     penalties = (
         rr.time_penalty + rr.warnings + rr.licence_points + rr.penalty_points
-        for rr in driver.received_reports
+        for rr in driver.received_penalties
     )
 
-    return round(99 - sum(penalties) * 7 / len(driver.race_results))
+    return round(99 - sum(penalties) * 5 / len(driver.race_results))
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -129,13 +133,16 @@ def race_pace(driver: Driver) -> int:
     if not race_results:
         return 0
 
-    return round(
-        99
-        - (
-            sum(race_result.gap_to_first for race_result in race_results)
-            / (len(race_results) * 3)
+    a = 0
+    for race_res in race_results:
+        a += (
+            race_res.gap_to_first
+            / (race_res.total_racetime - race_res.gap_to_first)
+            * 100
         )
-    )
+    a *= 7
+
+    return round(99 - a / len(race_results))
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))

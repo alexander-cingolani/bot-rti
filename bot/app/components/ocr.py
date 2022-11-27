@@ -1,19 +1,21 @@
 from difflib import get_close_matches
 
-from app.components.utils import Result, string_to_seconds
 from app.components.queries import get_driver
+from app.components.utils import Result, string_to_seconds
 from PIL import Image, ImageOps
 from PIL.ImageEnhance import Contrast
 from pytesseract import image_to_string
 
-LEFT_1, RIGHT_1 = 380, 580
-LEFT_2, RIGHT_2 = 1330, 1445
-TOP_START = 201
-BOTTOM_START = 237
-INCREMENT = 51
+LEFT_1, RIGHT_1 = 400, 580
+LEFT_2, RIGHT_2 = 1280, 1500
+TOP_START = 200
+BOTTOM_START = 250
+INCREMENT = 50
 
 
-def recognize_results(image: str, expected_drivers: list[str]) -> list[list[Result]]:
+def recognize_results(
+    session, image: str, expected_drivers: list[str]
+) -> list[list[Result]]:
 
     image = Image.open(image)
 
@@ -30,15 +32,15 @@ def recognize_results(image: str, expected_drivers: list[str]) -> list[list[Resu
     for _ in range(len(expected_drivers)):
         name_box = image.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image.crop((LEFT_2, top, RIGHT_2, bottom))
+        name_box.show()
+        driver = image_to_string(name_box).strip()
+        s = image_to_string(laptime_box)
+        seconds = string_to_seconds(s)
 
-        driver = image_to_string(name_box, config="--psm 8").strip()
-        seconds = string_to_seconds(image_to_string(laptime_box, config="--psm 8"))
-
-        matches = get_close_matches(driver, remaining_drivers, cutoff=0.3)
-
+        matches = get_close_matches(driver, remaining_drivers, cutoff=0.1)
         if matches and len(driver) >= 3:
             race_res = Result(matches[0], seconds)
-            race_res.car_class = get_driver(race_res.driver).current_class()
+            race_res.car_class = get_driver(session, race_res.driver).current_class()
             results.append(race_res)
             remaining_drivers.remove(matches[0])
         elif seconds:
@@ -49,7 +51,7 @@ def recognize_results(image: str, expected_drivers: list[str]) -> list[list[Resu
 
     for driver in remaining_drivers:
         race_res = Result(driver, None)
-        race_res.car_class = get_driver(driver).current_class()
+        race_res.car_class = get_driver(session, driver).current_class()
         results.append(race_res)
 
     return success, results

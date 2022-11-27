@@ -3,28 +3,29 @@ This module contains class-specific queries to the database; as well as
 general purpose functions such as save_object and update_object.
 """
 
-import logging
-import os
-from datetime import datetime, timedelta
-
 import sqlalchemy as sa
-from app.components.utils import separate_car_classes
 from app.components.models import (
-    Category,
     Championship,
     Driver,
+    DriverAssignment,
     Penalty,
     QualifyingResult,
     RaceResult,
     Report,
+    Team,
+    TeamChampionship,
 )
+from app.components.utils import separate_car_classes
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.future import select
+from sqlalchemy.orm import Session as SQLASession
 
 
-def get_championship(session, championship_id: int = None) -> Championship | None:
+def get_championship(
+    session: SQLASession, championship_id: int = None
+) -> Championship | None:
     """Returns the current championship if not given a specific championship_id."""
 
     if championship_id:
@@ -40,18 +41,36 @@ def get_championship(session, championship_id: int = None) -> Championship | Non
     return None
 
 
-def get_current_category(session) -> Category | None:
-    """Returns the current championship's category whose race_weekday corresponds to yesterday."""
+"""
+select * from drivers
+inner join driver_assignments da on drivers.driver_id = da.driver_id
+inner join teams t on da.team_id = t.team_id
+inner join team_championships tc on t.team_id = tc.team_id
+inner join championships c on c.championship_id = tc.championship_id
+where c."end" is null and da.is_leader = true
+"""
 
-    return session.execute(
-        select(Category).where(
-            Category.round_weekday == (datetime.today() - timedelta(days=1)).weekday()
+
+def get_current_team_leaders(session: SQLASession) -> list[Driver]:
+
+    statement = (
+        select(Driver)
+        .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
+        .join(Team, DriverAssignment.team_id == Team.team_id)
+        .where(DriverAssignment.is_leader == True)
+        .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
+        .join(
+            Championship,
+            Championship.championship_id == TeamChampionship.championship_id,
         )
-    ).all()
+    )
+    q = session.execute(statement).all()
+
+    return q
 
 
 def get_reports(
-    session,
+    session: SQLASession,
     round_id: int = None,
     is_reviewed: bool = None,
     is_queued: bool = None,
@@ -75,21 +94,10 @@ def get_reports(
     return [res[0] for res in result]
 
 
-def get_last_report_by(session, reporting_team_id: int) -> Report | None:
-    """Returns the last report made by the given leader."""
-
-    result = session.execute(
-        select(Report)
-        .where(Report.reporting_team_id == reporting_team_id)
-        .order_by(desc(Report.report_time))
-    ).first()
-    if result:
-        return result[0]
-    return result
-
-
 @cached(cache=TTLCache(maxsize=50, ttl=30))
-def get_driver(session, psn_id: str = None, telegram_id: str = None) -> Driver | None:
+def get_driver(
+    session: SQLASession, psn_id: str = None, telegram_id: str = None
+) -> Driver | None:
     """Returns corresponding Driver object to the given psn_id or telegram_id."""
     statement = select(Driver)
     if psn_id:
@@ -105,7 +113,17 @@ def get_driver(session, psn_id: str = None, telegram_id: str = None) -> Driver |
     return result[0] if result else None
 
 
-def get_similar_driver(session, psn_id: str) -> Driver | None:
+def get_report(session: SQLASession, report_id: int) -> Report | None:
+
+    result = session.execute(
+        select(Report).where(Report.report_id == report_id)
+    ).one_or_none()
+    if result:
+        return result[0]
+    return None
+
+
+def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     """Returns the Driver object with the psn_id most similar to the one given."""
     result = session.execute(
         select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.4)
@@ -116,7 +134,9 @@ def get_similar_driver(session, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_report_number(session, category_id: int, round_id: int) -> int:
+def get_last_report_number(
+    session: SQLASession, category_id: int, round_id: int
+) -> int:
     """Gets the number of the last report made in a specific category and round.
 
     Args:
@@ -138,7 +158,7 @@ def get_last_report_number(session, category_id: int, round_id: int) -> int:
     return 0
 
 
-def get_last_penalty_number(session, round_id: int) -> int:
+def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
     """Returns the last penalty number for any given round.
     0 is returned if no penalties have been given in that round."""
     result = session.execute(
@@ -152,20 +172,20 @@ def get_last_penalty_number(session, round_id: int) -> int:
     return 0
 
 
-def save_object(session, obj) -> None:
+def save_object(session: SQLASession, obj) -> None:
     """Saves the object if it doesn't already exist in the database"""
 
     session.add(obj)
     session.commit()
 
 
-def save_multiple_objects(session, objs: list) -> None:
+def save_multiple_objects(session: SQLASession, objs: list) -> None:
     "Saves a list of objects to the database."
     session.add_all(objs)
     session.commit()
 
 
-def save_qualifying_penalty(session, penalty: Penalty) -> None:
+def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     """Saves and applies a penalty to a driver in qualifying."""
     quali_result = session.execute(
         select(QualifyingResult)
@@ -191,7 +211,7 @@ def save_qualifying_penalty(session, penalty: Penalty) -> None:
     save_object(session, penalty)
 
 
-def save_and_apply_penalty(session, penalty: Penalty) -> None:
+def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     """Saves a report and applies the time penalty, changing the finishing positions
     of the other drivers as well if needed."""
 
@@ -207,7 +227,7 @@ def save_and_apply_penalty(session, penalty: Penalty) -> None:
             return
         return
     if penalty.session.is_quali:
-        save_qualifying_penalty(penalty)
+        save_qualifying_penalty(session, penalty)
         return
 
     rows = session.execute(
@@ -249,7 +269,8 @@ def update_object(session) -> None:
     session.commit()
 
 
-def delete_report(session, report: Penalty) -> None:
+def delete_report(session: SQLASession, report_id: str) -> None:
     """Deletes the given report from the database."""
-    session.execute(delete(Report).where(Report.report_id == report.report_id))
+    session.execute(delete(Report).where(Report.report_id == report_id))
+    session.commit()
     session.expire_all()

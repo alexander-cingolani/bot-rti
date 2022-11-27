@@ -7,16 +7,22 @@ import os
 import traceback
 from collections import defaultdict
 from datetime import time
-
 from uuid import uuid4
+
 import pytz
 from app.components import config
 from app.components.driver_registration import driver_registration
-from app.components.queries import get_championship, get_driver
+from app.components.queries import (
+    get_championship,
+    get_current_team_leaders,
+    get_driver,
+)
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
 from app.components.stats import consistency, race_pace, speed, sportsmanship, stats
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
@@ -26,6 +32,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineQueryResultArticle,
     InputTextMessageContent,
+    Message,
     Update,
 )
 from telegram.constants import ChatType, ParseMode
@@ -38,8 +45,8 @@ from telegram.ext import (
     ConversationHandler,
     Defaults,
     InlineQueryHandler,
-    PicklePersistence,
     PersistenceInput,
+    PicklePersistence,
     filters,
 )
 
@@ -51,30 +58,46 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get("BOT_TOKEN")
 
 
-async def set_admin_commands(bot):
-    """Sets admin commands in group & private chats."""
-    try:
-        await bot.set_my_commands(
-            config.ADMIN_CHAT_COMMANDS,
-            BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
-        )
-    except BadRequest:
-        pass
-
-    for admin in config.ADMINS:
-        try:
-            await bot.set_my_commands(config.ADMIN_COMMANDS, BotCommandScopeChat(admin))
-        except BadRequest:
-            pass
+engine = create_engine(os.environ.get("DB_URL"))
+_Session = sessionmaker(bind=engine, autoflush=False)
 
 
 async def post_init(application: Application) -> None:
     """Sets commands for every user."""
 
+    session = _Session()
+    leaders = get_current_team_leaders(session)
+    session.close()
+
+    # Set base user commands
     await application.bot.set_my_commands(
         config.BASE_COMMANDS, BotCommandScopeAllPrivateChats()
     )
-    await set_admin_commands(application.bot)
+
+    # Set leader commands
+    for driver in leaders:
+        try:
+            await application.bot.set_my_commands(
+                config.LEADER_COMMANDS, BotCommandScopeChat(driver[0].telegram_id)
+            )
+        except BadRequest:
+            pass
+
+    # Set admin commands in group and private chats
+    for admin_id in config.ADMINS:
+        try:
+            await application.bot.set_my_commands(
+                config.ADMIN_COMMANDS, BotCommandScopeChat(admin_id)
+            )
+        except BadRequest:
+            pass
+        try:
+            await application.bot.set_my_commands(
+                config.ADMIN_CHAT_COMMANDS,
+                BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
+            )
+        except BadRequest:
+            pass
 
 
 async def post_shutdown(_: Application) -> None:
@@ -148,12 +171,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
-    if update.effective_user.id in config.ADMINS:
-        await context.bot.set_my_commands(
-            config.ADMIN_COMMANDS, BotCommandScopeChat(update.effective_user.id)
-        )
-
-    driver = get_driver(telegram_id=update.effective_user.id)
+    session = _Session()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -161,10 +180,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Questa operazione va fatta solo una volta, a meno che tu non decida"
             " di usare un account Telegram diverso in futuro."
         )
-    elif driver.current_team().leader.driver_id == update.effective_user.id:
+    elif driver.current_team().leader.telegram_id == update.effective_user.id:
         await context.bot.set_my_commands(
             config.LEADER_COMMANDS, BotCommandScopeChat(update.effective_user.id)
         )
+    session.close()
 
 
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -189,8 +209,8 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-
-    driver = get_driver(telegram_id=update.effective_user.id)
+    session = _Session()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
         message = "Per usare questa funzione devi essere registrato. Puoi farlo con /registrami."
@@ -204,6 +224,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         msg = championship_round.generate_info_message()
 
     await update.message.reply_text(msg)
+    session.close()
     return
 
 
@@ -214,9 +235,9 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """
 
     query = update.inline_query.query
-
+    session = _Session()
     results = []
-    for driver in get_championship().driver_list:
+    for driver in get_championship(session).driver_list:
 
         if query.lower() in driver.psn_id.lower():
             wins, podiums, poles, fastest_laps, races_disputed, avg_position = stats(
@@ -285,17 +306,19 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-    driver = get_driver(telegram_id=update.effective_user.id)
+    session = _Session()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
     if not driver:
         return
 
     category = driver.current_category()
-    standings = category.current_standings()
+    standings = category.standings()
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
     for pos, (results, points) in enumerate(standings, start=1):
         message += f"<b>{pos}</b> - {results[0].driver.psn_id} <i>{points}</i>\n"
 
     await update.message.reply_text(message)
+    session.close()
 
 
 async def complete_championship_standings(
@@ -304,20 +327,27 @@ async def complete_championship_standings(
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-
+    session = _Session()
     teams = defaultdict(float)
-    championship = get_championship()
+    championship = get_championship(session)
     message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
     for category in championship.categories:
-        standings = category.current_standings()
-        message += f"\n\n<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
-        for pos, (results, points) in enumerate(standings, start=1):
-            driver = results[0].driver
-            message += f"{pos} - {driver.psn_id} <i>{points}</i>\n"
 
-            if (
-                team := driver.current_team()
-            ):  # Check in case a driver has left the team
+        standings = category.standings(-1)
+        message += f"\n\n<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
+
+        for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
+
+            if diff > 0:
+                diff = f" ↓{abs(diff)}"
+            elif diff < 0:
+                diff = f" ↑{abs(diff)}"
+            else:
+                diff = ""
+
+            message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
+
+            if team := driver.current_team():  # Check if the driver has left the team
                 teams[team] += points
 
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
@@ -327,13 +357,15 @@ async def complete_championship_standings(
         points += team.current_championship().penalty_points
         message += f"<b>{pos}</b> - {team.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
+    session.close()
 
 
 async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """When activated via the /risultati_gara command, it sends a message containing
     the results of the user's last race."""
 
-    driver = get_driver(telegram_id=update.effective_user.id)
+    session = _Session()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -354,14 +386,15 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
     message += championship_round.long_race.results()
 
     await update.message.reply_text(text=message)
-
+    session.close()
     return
 
 
 async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Sends a message containing the race and qualifying results of the last completed
     round in each category of the current championship."""
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
     message = ""
     for category in championship.categories:
         championship_round = category.last_completed_round()
@@ -378,14 +411,15 @@ async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYP
         message += championship_round.long_race.results()
 
     await update.message.reply_text(text=message)
+    session.close()
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message to the report channel announcing that the report window
     has opened for a specific category.
     """
-
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
     if category := championship.reporting_category():
         championship_round = category.first_non_completed_round()
         text = (
@@ -397,6 +431,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(
             chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
         )
+    session.close()
 
 
 async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -404,7 +439,8 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     reports has closed.
     """
 
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
 
     if championship:
 
@@ -419,6 +455,15 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
                 sticker=open("./app/images/sticker.webp", "rb"),
                 disable_notification=True,
             )
+    session.close()
+
+
+async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Freezes the participation list sent earlier during the day."""
+    message: Message = context.chat_data.get("participation_list_message")
+    if message:
+        await message.edit_reply_markup()  # Deletes the buttons.
+    context.chat_data.clear()
 
 
 async def send_participation_list_command(
@@ -439,8 +484,10 @@ async def send_participation_list_command(
 async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
     chat_data = context.chat_data
+    chat_data["participation_list_sqlasession"] = session
     if not (category := championship.current_racing_category()):
         return ConversationHandler.END
 
@@ -483,6 +530,8 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id=chat_id, text=text, reply_markup=reply_markup
     )
 
+    chat_data["participation_list_message"] = message
+
     await context.bot.pin_chat_message(
         message_id=message.message_id,
         chat_id=message.chat_id,
@@ -498,6 +547,10 @@ async def update_participation_list(
     if not context.chat_data.get("participants"):
         return
 
+    session = context.chat_data.get("participation_list_sqlasession")
+    if not session:
+        return
+
     user_id = update.effective_user.id
     user_psn_id = None
 
@@ -506,7 +559,7 @@ async def update_participation_list(
     # the user has registered since the participation list was last sent
     for psn_id, (tg_id, status) in context.chat_data["participants"].items():
         if not tg_id:
-            driver = get_driver(psn_id=psn_id)
+            driver = get_driver(session, psn_id=psn_id)
             chat_data["participants"][psn_id] = [
                 driver.telegram_id,
                 status,

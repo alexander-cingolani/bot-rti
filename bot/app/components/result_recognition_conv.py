@@ -4,11 +4,7 @@ from typing import cast
 
 from app.components import config
 from app.components.models import Category, QualifyingResult, RaceResult, Round
-from app.components.ocr import (
-    Result,
-    recognize_results,
-    string_to_seconds,
-)
+from app.components.ocr import Result, recognize_results, string_to_seconds
 from app.components.queries import (
     get_championship,
     get_driver,
@@ -17,6 +13,8 @@ from app.components.queries import (
 )
 from app.components.utils import send_or_edit_message, separate_car_classes
 from more_itertools import chunked
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -52,8 +50,11 @@ WRONG_FILE_FORMAT_MESSAGE = (
     "e dei tempi di gara."
 )
 
+engine = create_engine(os.environ.get("DB_URL"))
+_Session = sessionmaker(bind=engine, autoflush=False)
 
-def text_to_results(text: str, category: Category) -> list[Result]:
+
+def text_to_results(session, text: str, category: Category) -> list[Result]:
     """This is a helper function for ask_fastest_lap callbacks.
     It receives the block of text sent by the user to correct race/qualifying results
     and transforms it into a list of Result objects. Driver psn id's don't have to be
@@ -68,17 +69,17 @@ def text_to_results(text: str, category: Category) -> list[Result]:
     """
     results = list(chunked(text.split(), 2))
     driver_classes = {
-        driver.driver.psn_id: driver.car_class for driver in category.drivers
+        driver.driver.psn_id: driver.car_class for driver in category.active_drivers()
     }
-    drivers = [driver.driver.psn_id for driver in category.drivers]
+    drivers = [driver.driver.psn_id for driver in category.active_drivers()]
     for i, (driver, gap) in enumerate(results):
         if driver not in drivers:
             driver = get_close_matches(driver, drivers, cutoff=0.2)[0]
-            driver_obj = get_driver(psn_id=driver)
+            driver_obj = get_driver(session, psn_id=driver)
             if driver:
                 drivers.remove(driver)
         else:
-            driver_obj = get_driver(driver)
+            driver_obj = get_driver(session, driver)
             drivers.remove(driver)
         seconds = string_to_seconds(gap)
 
@@ -87,7 +88,7 @@ def text_to_results(text: str, category: Category) -> list[Result]:
             result.car_class = driver_classes[driver_obj.psn_id]
             results[i] = result
     for driver in drivers:
-        driver_obj = get_driver(psn_id=driver)
+        driver_obj = get_driver(session, psn_id=driver)
         result = Result(driver_obj.psn_id, 0)
 
         result.car_class = driver_classes[driver_obj.psn_id]
@@ -107,7 +108,9 @@ async def results_input_entry_point(
             f" se credi di doverlo essere, contatta {config.OWNER}"
         )
 
-    championship = get_championship()
+    session = _Session()
+    championship = get_championship(session)
+    context.user_data["sqla_session"] = session
     context.user_data["championship"] = championship
 
     reply_markup = InlineKeyboardMarkup(
@@ -125,6 +128,8 @@ async def results_input_entry_point(
         await update.message.reply_text(
             "Il campionato è finito! Non ci sono più risultati da aggiungere."
         )
+        context.user_data["sqla_session"].close()
+        context.user_data.clear()
         return ConversationHandler.END
     await update.message.reply_text(text=text, reply_markup=reply_markup)
     return ASK_QUALI_RESULTS
@@ -206,7 +211,9 @@ async def download_quali_results(
     # Save the photo containing the results.
     if update.message:
         if update.message.text:
-            results = text_to_results(update.message.text, category=category)
+            results = text_to_results(
+                user_data["sqla_session"], update.message.text, category=category
+            )
             user_data["quali_results"] = results
             success = True
         else:
@@ -218,9 +225,11 @@ async def download_quali_results(
                 return
             await file.download("results.jpg")
 
-            driver_names = [driver.driver.psn_id for driver in category.drivers]
+            driver_names = [
+                driver.driver.psn_id for driver in category.active_drivers()
+            ]
             success, user_data["quali_results"] = recognize_results(
-                "results.jpg", driver_names
+                user_data["sqla_session"], "results.jpg", driver_names
             )
 
             os.remove("results.jpg")
@@ -262,7 +271,7 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not update.callback_query:
         text = update.message.text
-        results = text_to_results(text, category)
+        results = text_to_results(user_data["sqla_session"], text, category)
         user_data["quali_results"] = results
     buttons = [
         InlineKeyboardButton(
@@ -296,12 +305,14 @@ async def download_race_1_results(
         )
         return SAVE_RACE_1_RESULTS
 
-    drivers = [driver.driver.psn_id for driver in category.drivers]
+    drivers = [driver.driver.psn_id for driver in category.active_drivers()]
 
     if update.message:
 
         if update.message.text:
-            results = text_to_results(update.message.text, category=category)
+            results = text_to_results(
+                user_data["sqla_session"], update.message.text, category=category
+            )
         else:
 
             await update.effective_chat.send_action(ChatAction.TYPING)
@@ -313,7 +324,9 @@ async def download_race_1_results(
                 return
 
             screenshot = await file.download("results_1.jpg")
-            results = recognize_results(screenshot, drivers)[1]
+            results = recognize_results(user_data["sqla_session"], screenshot, drivers)[
+                1
+            ]
 
     user_data["race_1_results"] = results
     text = ""
@@ -358,7 +371,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     buttons = []
     car_class = category.car_classes[0].car_class
-    for i, driver in enumerate(category.drivers):
+    for i, driver in enumerate(category.active_drivers()):
         if driver.car_class_id == car_class.car_class_id:
             buttons.append(
                 InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
@@ -397,7 +410,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Saves corrected results if a message was sent.
     if update.message:
         user_data["race_1_results"] = text_to_results(
-            update.message.text, user_data["category"]
+            user_data["sqla_session"], update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
 
@@ -419,13 +432,13 @@ async def ask_2nd_fastest_lap_1(
 
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
-        user_data["fastest_lap_1"] = category.drivers[
+        user_data["fastest_lap_1"] = category.active_drivers()[
             int(update.callback_query.data[1])
         ].driver
 
     buttons = []
     car_class = category.car_classes[1].car_class
-    for i, driver in enumerate(category.drivers):
+    for i, driver in enumerate(category.active_drivers()):
         if driver.car_class_id == car_class.car_class_id:
             buttons.append(
                 InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
@@ -454,7 +467,7 @@ async def ask_2nd_fastest_lap_1(
 
     if update.message:
         user_data["race_1_results"] = text_to_results(
-            update.message.text, user_data["category"]
+            user_data["sqla_session"], update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
@@ -472,11 +485,11 @@ async def save_race_1_results(
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
         if not category.multi_class:
-            user_data["fastest_lap_1"] = category.drivers[
+            user_data["fastest_lap_1"] = category.active_drivers()[
                 int(update.callback_query.data[1])
             ].driver
         else:
-            user_data["2nd_fastest_lap_1"] = category.drivers[
+            user_data["2nd_fastest_lap_1"] = category.active_drivers()[
                 int(update.callback_query.data[1])
             ].driver
 
@@ -528,13 +541,15 @@ async def download_race_2_results(
     user_data = context.user_data
     category = cast(Category, user_data["category"])
 
-    drivers = [driver.driver.psn_id for driver in category.drivers]
+    drivers = [driver.driver.psn_id for driver in category.active_drivers()]
 
     # gt7 needs 2 screenshots, therefore after the first screenshot is received
     # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
     if update.message:
         if update.message.text:
-            results = text_to_results(update.message.text, category=category)
+            results = text_to_results(
+                user_data["sqla_session"], update.message.text, category=category
+            )
         else:
 
             await update.effective_chat.send_action(ChatAction.TYPING)
@@ -546,7 +561,9 @@ async def download_race_2_results(
                 return
 
             screenshot = await file.download("results_1.jpg")
-            results = recognize_results(screenshot, drivers)[1]
+            results = recognize_results(user_data["sqla_session"], screenshot, drivers)[
+                1
+            ]
 
     user_data["race_2_results"] = results
     text = ""
@@ -589,7 +606,7 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     category = cast(Category, user_data["category"])
 
     buttons = []
-    for i, driver in enumerate(category.drivers):
+    for i, driver in enumerate(category.active_drivers()):
         buttons.append(
             InlineKeyboardButton(driver.driver.psn_id, callback_data=f"d{i}")
         )
@@ -613,7 +630,7 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Saves corrected results if a message was sent.
     if update.message:
         user_data["race_2_results"] = text_to_results(
-            update.message.text, user_data["category"]
+            user_data["sqla_session"], update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
@@ -631,7 +648,7 @@ async def save_race_2_results(
 
     # Saves driver who scored the fastest lap.
     if update.callback_query.data != "save_race_2_results":
-        user_data["fastest_lap_2"] = category.drivers[
+        user_data["fastest_lap_2"] = category.active_drivers()[
             int(update.callback_query.data[1])
         ].driver
 
@@ -680,7 +697,9 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         position=quali_res.position,
                         gap_to_first=gap_to_first,
                         laptime=quali_res.seconds,
-                        driver=get_driver(psn_id=quali_res.driver),
+                        driver=get_driver(
+                            user_data["sqla_session"], psn_id=quali_res.driver
+                        ),
                         round=championship_round,
                         participated=bool(quali_res.position),
                         relative_position=pos,
@@ -723,7 +742,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 result = RaceResult(
                     finishing_position=result.position,
                     fastest_lap_points=bonus_points,
-                    driver=get_driver(result.driver),
+                    driver=get_driver(user_data["sqla_session"], result.driver),
                     session=session,
                     round=championship_round,
                     gap_to_first=gap_to_first,
@@ -740,9 +759,9 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 InlineKeyboardButton(f"{category.name}", callback_data=f"c{i}")
             )
 
-    save_multiple_objects(result_objs)
+    save_multiple_objects(user_data["sqla_session"], result_objs)
     championship_round.completed = True
-    update_object()
+    update_object(user_data["sqla_session"])
 
     reply_markup = InlineKeyboardMarkup([buttons])
     await update.callback_query.edit_message_text(
