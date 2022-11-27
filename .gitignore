@@ -1,6 +1,6 @@
 .venv
 .env
-*.todo
+TODO
 __pycache__
 screenshots
 todo.txt
@@ -9,3 +9,4 @@ todo.txt
 .vscode
 *pdf
 postgres-data
+.idea
