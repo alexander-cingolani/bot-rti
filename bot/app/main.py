@@ -293,7 +293,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
                         f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
                         f"<b>Piazzamento medio (Gara):</b> <i>{avg_position}</i>\n"
-                        f"<b>Piazzamento medio (Qualifica): <i>{avg_quali_position}</i>"
+                        f"<b>Piazzamento medio (Qualifica)</b>: <i>{avg_quali_position}</i>"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
@@ -324,7 +324,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             else:
                 diff = ""
 
-            message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
+            message += f"{pos} - {driver.psn_id} <i>{points}{diff} {driver.current_team().name if driver.current_team() else ''}</i>\n"
 
 
     await update.message.reply_text(message)
@@ -354,8 +354,8 @@ async def complete_championship_standings(
                 diff = f" ↑{abs(diff)}"
             else:
                 diff = ""
-
-            message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
+            team = f"{driver.current_team().name}" if driver.current_team() else ''
+            message += f"{pos} - {team} {driver.psn_id} <i>{points}{diff}</i>\n"
 
             if team := driver.current_team():  # Check if the driver has left the team
                 teams[team] += points
@@ -365,7 +365,7 @@ async def complete_championship_standings(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
         points += team.current_championship().penalty_points
-        message += f"<b>{pos}</b> - {team.name} <i>{points}</i>\n"
+        message += f"{pos}- {team.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
     session.close()
 
