@@ -50,7 +50,9 @@ def string_to_seconds(string) -> float | None | str:
     Returns:
         float: Number of seconds.
     """
-    match = re.search(r"((([0-9]){1,2}:)){0,2}[0-9]{1,2}((\.|,)[0-9]{1,3})?", string)
+    match = re.search(
+        r"([0-9]{1,2}:)?([0-9]{1,2}:){0,2}[0-9]{1,2}(\.|,)[0-9]{1,3}", string
+    )
     if not match:
         if (
             "gir" in string
@@ -77,7 +79,10 @@ def string_to_seconds(string) -> float | None | str:
     elif other.count(":") == 1:
         minutes, seconds = other.split(":")
     else:
-        seconds = other
+        if len(other) > 2:
+            seconds = other[-2:]
+        else:
+            seconds = other
 
     return timedelta(
         hours=int(hours),
