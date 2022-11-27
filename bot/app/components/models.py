@@ -5,11 +5,12 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
-from collections import defaultdict
-from datetime import timedelta, time, datetime as dt
-
-from typing import DefaultDict
 import uuid
+from collections import defaultdict
+from datetime import datetime as dt
+from datetime import time, timedelta
+from typing import DefaultDict
+
 from cachetools import TTLCache
 from sqlalchemy import (
     BigInteger,
@@ -17,16 +18,16 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
-    Time,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Integer,
+    Interval,
     SmallInteger,
     String,
-    Enum,
     Text,
-    Interval,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -455,6 +456,9 @@ class Driver(Base):
         self.psn_id = psn_id
         self.telegram_id = kwargs.get("telegram_id")
 
+    def __repr__(self) -> None:
+        return f"Driver(psn_id={self.psn_id}, driver_id={self.driver_id})"
+
     def __eq__(self, other: Driver) -> bool:
         if isinstance(other, Driver):
             return self.driver_id == other.driver_id
@@ -647,7 +651,7 @@ class CarClass(Base):
         return f"CarClass(car_class_id={self.car_class_id}, name={self.name})"
 
     def __key(self) -> tuple[int, str]:
-        return (self.car_class_id, self.name)
+        return self.car_class_id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -744,7 +748,7 @@ class TeamChampionship(Base):
     penalty_points: int = Column(SmallInteger, nullable=False, default=0)
 
     team: Team = relationship("Team", back_populates="championships")
-    championship: Championship = relationship("Championship")
+    championship: Championship = relationship("Championship", back_populates="teams")
 
 
 class CategoryClass(Base):
@@ -880,12 +884,80 @@ class Category(Base):
         """Returns list of drivers who are currently competing in this category."""
         return [driver for driver in self.drivers if not driver.left_on]
 
+    def number_of_race_sessions(self):
+        n = 0
+        for session in self.rounds[0].sessions:
+            if not session.is_quali:
+                n += 1
+        return n
+
     @property
     def multi_class(self) -> bool:
         """True if this Category has multiple car classes competing together."""
         return len(self.car_classes) > 1
 
-    def current_standings(self) -> list[list[list[RaceResult], int]]:
+    def standings(self, n=0) -> DefaultDict[Driver, int]:
+        """Calculates the current standings in this category.
+
+        Args (Optional):
+            n (int): Number of races to go back. (Must be 0 or negative)
+
+        Returns:
+            DefaultDict[Driver, [int, int]]: DefaultDict containing Drivers as keys
+                and a list containing the total points and the number of positions
+                gained by the driver in the championship standings  since the last n
+                number of races.
+        """
+
+        if n > 0:
+            raise ValueError("n must be less or equals to 0")
+
+        if n == 0:
+            n = len(self.race_results)
+
+        results: DefaultDict[Driver, int] = defaultdict(lambda: 0)
+
+        n = n * len(self.active_drivers()) * self.number_of_race_sessions()
+
+        for race_result in self.race_results[:n]:
+            results[race_result.driver] += race_result.points_earned
+
+        for qualifying_result in self.qualifying_results[:n]:
+            results[qualifying_result.driver] += qualifying_result.points_earned
+
+        results = sorted(results.items(), key=lambda x: x[1], reverse=True)
+
+        if n == len(self.race_results):
+            return results
+
+        results = {driver: points for driver, points in results}
+
+        # Calculate the points earned in the last n races
+        results_2: DefaultDict[Driver, int] = defaultdict(lambda: 0)
+        for race_result in self.race_results[n:]:
+            results_2[race_result.driver] += race_result.points_earned
+        for qualifying_result in self.qualifying_results[n:]:
+            results_2[qualifying_result.driver] += qualifying_result.points_earned
+
+        complete_results = defaultdict(lambda: [0, 0])
+        for driver, points in results.items():
+            complete_results[driver][0] += points + results_2[driver]
+
+        complete_results = sorted(
+            complete_results.items(), key=lambda x: x[1], reverse=True
+        )
+        complete_results = {
+            driver: [points, pos] for driver, (points, pos) in complete_results
+        }
+
+        for i, driver in enumerate(complete_results):
+            for i2, driver2 in enumerate(results):
+                if driver2 == driver:
+                    complete_results[driver][1] = i - i2
+                    break
+        return complete_results
+
+    def standings_with_results(self):
         """Calculates the current standings in this category.
 
         Returns:
@@ -897,6 +969,7 @@ class Category(Base):
         results: DefaultDict[Driver, list[list[RaceResult], int]] = defaultdict(
             lambda: [[], 0]
         )
+
         for race_result in self.race_results:
             results[race_result.driver][0].append(race_result)
             points_earned = race_result.points_earned
@@ -921,7 +994,6 @@ class PointSystem(Base):
         point_system_id (int): A unique ID.
         point_system (str): String containing the number of points for each position,
             separated by a space. E.g. "25 18 15 .."
-
     """
 
     __tablename__ = "point_systems"
@@ -1366,7 +1438,9 @@ class Championship(Base):
     categories: list[Category] = relationship(
         "Category", back_populates="championship", order_by="Category.round_weekday"
     )
-
+    teams: list[TeamChampionship] = relationship(
+        "TeamChampionship", back_populates="championship"
+    )
     rounds: list[Round] = relationship(
         "Round", back_populates="championship", order_by="Round.date"
     )
