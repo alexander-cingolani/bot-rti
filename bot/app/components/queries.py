@@ -3,6 +3,7 @@ This module contains class-specific queries to the database; as well as
 general purpose functions such as save_object and update_object.
 """
 
+import logging
 import os
 from datetime import datetime, timedelta
 
@@ -20,40 +21,29 @@ from app.components.models import (
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc
 from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.future import create_engine, select
-from sqlalchemy.orm import joinedload, sessionmaker
-
-engine = create_engine(os.environ.get("DB_URL"))
-_Session = sessionmaker(bind=engine, autoflush=False)
-_session = _Session()
+from sqlalchemy.future import select
 
 
-def get_championship(championship_id: int = None) -> Championship | None:
-    """Returns the current championship if not given a specific ID."""
+def get_championship(session, championship_id: int = None) -> Championship | None:
+    """Returns the current championship if not given a specific championship_id."""
+
     if championship_id:
-        result = _session.execute(
-            select(Championship).where(Championship.championship_id == championship_id)
-        ).one_or_none()
-        if result:
-            return result[0]
-        return None
-
-    result = _session.execute(
-        select(Championship)
-        .order_by(desc(Championship.start))
-        .options(
-            joinedload(Championship.categories),
+        statement = select(Championship).where(
+            Championship.championship_id == championship_id
         )
-    ).first()
+    else:
+        statement = select(Championship).order_by(desc(Championship.start))
+
+    result = session.execute(statement).one_or_none()
     if result:
         return result[0]
     return None
 
 
-def get_current_category() -> Category | None:
+def get_current_category(session) -> Category | None:
     """Returns the current championship's category whose race_weekday corresponds to yesterday."""
 
-    return _session.execute(
+    return session.execute(
         select(Category).where(
             Category.round_weekday == (datetime.today() - timedelta(days=1)).weekday()
         )
@@ -61,6 +51,7 @@ def get_current_category() -> Category | None:
 
 
 def get_reports(
+    session,
     round_id: int = None,
     is_reviewed: bool = None,
     is_queued: bool = None,
@@ -72,7 +63,7 @@ def get_reports(
         is_reviewed (bool, optional): If the report is reviewed or not. Defaults to None.
         is_queued (bool, optional): If the report is queued or not. Defaults to None.
     """
-    statement = select(Report).options(joinedload(Report.category))
+    statement = select(Report)
     if round_id:
         statement = statement.where(Report.round_id == round_id)
     if is_reviewed is not None:
@@ -80,14 +71,14 @@ def get_reports(
     if is_queued is not None:
         statement = statement.where(Report.is_queued == is_queued)
 
-    result = _session.execute(statement.order_by(Report.number)).all()
+    result = session.execute(statement.order_by(Report.number)).all()
     return [res[0] for res in result]
 
 
-def get_last_report_by(reporting_team_id: int) -> Report | None:
+def get_last_report_by(session, reporting_team_id: int) -> Report | None:
     """Returns the last report made by the given leader."""
 
-    result = _session.execute(
+    result = session.execute(
         select(Report)
         .where(Report.reporting_team_id == reporting_team_id)
         .order_by(desc(Report.report_time))
@@ -98,7 +89,7 @@ def get_last_report_by(reporting_team_id: int) -> Report | None:
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))
-def get_driver(psn_id: str = None, telegram_id: str = None) -> Driver | None:
+def get_driver(session, psn_id: str = None, telegram_id: str = None) -> Driver | None:
     """Returns corresponding Driver object to the given psn_id or telegram_id."""
     statement = select(Driver)
     if psn_id:
@@ -107,16 +98,16 @@ def get_driver(psn_id: str = None, telegram_id: str = None) -> Driver | None:
         statement = statement.where(Driver._telegram_id == str(telegram_id))
 
     try:
-        result = _session.execute(statement).one_or_none()
+        result = session.execute(statement).one_or_none()
 
     except MultipleResultsFound:
         return None
     return result[0] if result else None
 
 
-def get_similar_driver(psn_id: str) -> Driver | None:
+def get_similar_driver(session, psn_id: str) -> Driver | None:
     """Returns the Driver object with the psn_id most similar to the one given."""
-    result = _session.execute(
+    result = session.execute(
         select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.4)
     ).first()
 
@@ -125,7 +116,7 @@ def get_similar_driver(psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_report_number(category_id: int, round_id: int) -> int:
+def get_last_report_number(session, category_id: int, round_id: int) -> int:
     """Gets the number of the last report made in a specific category and round.
 
     Args:
@@ -136,7 +127,7 @@ def get_last_report_number(category_id: int, round_id: int) -> int:
         int: _description_
     """
 
-    result = _session.execute(
+    result = session.execute(
         select(Report)
         .where(Report.category_id == category_id)
         .where(Report.round_id == round_id)
@@ -147,10 +138,10 @@ def get_last_report_number(category_id: int, round_id: int) -> int:
     return 0
 
 
-def get_last_penalty_number(round_id: int) -> int:
+def get_last_penalty_number(session, round_id: int) -> int:
     """Returns the last penalty number for any given round.
     0 is returned if no penalties have been given in that round."""
-    result = _session.execute(
+    result = session.execute(
         select(Penalty.number)
         .where(Penalty.round_id == round_id)
         .order_by(desc(Penalty.number))
@@ -161,22 +152,22 @@ def get_last_penalty_number(round_id: int) -> int:
     return 0
 
 
-def save_object(obj) -> None:
+def save_object(session, obj) -> None:
     """Saves the object if it doesn't already exist in the database"""
 
-    _session.add(obj)
-    _session.commit()
+    session.add(obj)
+    session.commit()
 
 
-def save_multiple_objects(objs: list) -> None:
+def save_multiple_objects(session, objs: list) -> None:
     "Saves a list of objects to the database."
-    _session.add_all(objs)
-    _session.commit()
+    session.add_all(objs)
+    session.commit()
 
 
-def save_qualifying_penalty(penalty: Penalty) -> None:
+def save_qualifying_penalty(session, penalty: Penalty) -> None:
     """Saves and applies a penalty to a driver in qualifying."""
-    quali_result = _session.execute(
+    quali_result = session.execute(
         select(QualifyingResult)
         .where(QualifyingResult.driver_id == penalty.reported_driver_id)
         .where(QualifyingResult.session_id == penalty.session_id)
@@ -195,12 +186,12 @@ def save_qualifying_penalty(penalty: Penalty) -> None:
     quali_result.licence_points = penalty.licence_points
     quali_result.penalty_points = penalty.penalty_points
 
-    _session.commit()
+    session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-    save_object(penalty)
+    save_object(session, penalty)
 
 
-def save_and_apply_penalty(penalty: Penalty) -> None:
+def save_and_apply_penalty(session, penalty: Penalty) -> None:
     """Saves a report and applies the time penalty, changing the finishing positions
     of the other drivers as well if needed."""
 
@@ -211,15 +202,15 @@ def save_and_apply_penalty(penalty: Penalty) -> None:
 
     if not penalty.time_penalty:
         if not penalty.reporting_driver:
-            _session.commit()
-            save_object(penalty)
+            session.commit()
+            save_object(session, penalty)
             return
         return
     if penalty.session.is_quali:
         save_qualifying_penalty(penalty)
         return
 
-    rows = _session.execute(
+    rows = session.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.session_id)
         .order_by(RaceResult.finishing_position)
@@ -247,18 +238,18 @@ def save_and_apply_penalty(penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    _session.commit()
+    session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-    save_object(penalty)
+    save_object(session, penalty)
     return
 
 
-def update_object() -> None:
+def update_object(session) -> None:
     """Calls Session.commit()"""
-    _session.commit()
+    session.commit()
 
 
-def delete_report(report: Penalty) -> None:
+def delete_report(session, report: Penalty) -> None:
     """Deletes the given report from the database."""
-    _session.execute(delete(Report).where(Report.report_id == report.report_id))
-    _session.expire_all()
+    session.execute(delete(Report).where(Report.report_id == report.report_id))
+    session.expire_all()
