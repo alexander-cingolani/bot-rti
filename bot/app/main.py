@@ -293,7 +293,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
                         f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
                         f"<b>Piazzamento medio (Gara):</b> <i>{avg_position}</i>\n"
-                        f"<b>Piazzamento medio (Qualifica)</b>: <i>{avg_quali_position}</i>"
+                        f"<b>Piazzamento medio (Qualifica)</b>: <i>{avg_quali_position}</i>\n"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
