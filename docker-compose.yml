@@ -23,7 +23,7 @@ services:
       - backend
     depends_on:
       - db
-    restart: on-failure
+    restart: on-failure:3
 
   api:
     build: ./api
@@ -36,7 +36,7 @@ services:
       - .env
     networks:
       - backend
-    restart: on-failure
+    restart: on-failure:3
     
 volumes:
   postgres-data:
