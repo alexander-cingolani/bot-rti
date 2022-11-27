@@ -185,7 +185,8 @@ def stats(driver: Driver) -> tuple[int, int, int]:
         if quali_result:
             if quali_result.relative_position == 1:
                 poles += 1
-                quali_positions +=quali_result.relative_position
+            if quali_result.participated:
+                quali_positions += quali_result.relative_position
 
     races_completed = len(driver.race_results) - no_participation
     if positions:
@@ -194,7 +195,7 @@ def stats(driver: Driver) -> tuple[int, int, int]:
         average_position = 0
     
     if quali_positions:
-        average_quali_position = round(quali_positions / (len(driver.race_results) - no_quali_participation))
+        average_quali_position = round(quali_positions / (len(driver.race_results) - no_quali_participation), 2)
     else:
         average_quali_position = 0
     
