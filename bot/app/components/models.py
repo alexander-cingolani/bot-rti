@@ -67,7 +67,7 @@ class Penalty(Base):
     fact: str
     decision: str
     report_reason: str
-
+    
     penalty_id = Column(Integer, primary_key=True)
     time_penalty: int = Column(SmallInteger, default=0, nullable=False)
     licence_points: int = Column(SmallInteger, default=0, nullable=False)
@@ -121,6 +121,8 @@ class Penalty(Base):
         self.session = session
         self.round = round
         self.category = category
+        self.reporting_driver = None
+        
         if self.reported_driver:
             self.reported_team = reported_driver.current_team()
 
@@ -150,16 +152,23 @@ class Penalty(Base):
             Penalty: The new object initialized with the given arguments.
         """
 
-        if not isinstance(report, Penalty):
+        if not isinstance(report, Report):
             raise TypeError(f"Cannot initialize Penalty object from {type(report)}.")
 
-        return cls(
+        c = cls(
             reported_driver=report.reported_driver,
+            
             time_penalty=time_penalty,
             licence_points=licence_points,
             warnings=warnings,
             penalty_points=penalty_points,
         )
+        c.incident_time = report.incident_time
+        c.category = report.category
+        c.round = report.round
+        c.session = report.session
+        c.reporting_driver = report.reporting_driver
+        return c
 
     def is_complete(self) -> bool:
         """Returns True if all the necessary arguments have been provided."""

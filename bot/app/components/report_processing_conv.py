@@ -3,6 +3,7 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
+import logging
 import os
 from collections import defaultdict
 
@@ -329,7 +330,17 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 f"<b>Minuto incidente</b>: {report.incident_time}\n"
                 f"<b>Motivo segnalazione</b>: {report.report_reason}"
             )
-            context.user_data["penalty"] = report
+            penalty = Penalty.from_report(report)
+            penalty.number = (
+                get_last_penalty_number(
+                    user_data["sqla_session"],
+                    round_id=penalty.round.round_id,
+                )
+                + 1
+            )
+            logging.info(penalty.round.number)
+            context.user_data["penalty"] = penalty
+            context.user_data["current_report"] = report
             reply_markup = [
                 InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
                 InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
@@ -353,7 +364,9 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     for i, fact in enumerate(config.FACTS):
         callback_data = (
-            f"qf{i}" if context.user_data["penalty"].session.is_quali else f"f{i}"
+            f"qf{i}"
+            if context.user_data["current_report"].session.is_quali
+            else f"f{i}"
         )
         buttons.append(
             InlineKeyboardButton(
@@ -363,12 +376,12 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
 
         text += f"\n{i + 1} - {fact}".format(
-            a=penalty.reporting_driver.current_race_number
+            a=context.user_data["current_report"].reporting_driver.current_race_number
         )
 
     buttons = list(chunked(buttons, 4))
 
-    if context.user_data["penalty"].session.is_quali:
+    if context.user_data["current_report"].session.is_quali:
 
         next_step = ASK_LICENCE_POINTS
         next_step_button = InlineKeyboardButton(
@@ -406,7 +419,7 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                 int(update.callback_query.data.removeprefix("i"))
             ]
         elif not update.callback_query.data.isdigit():
-            if user_data["penalty"].session.is_quali:
+            if user_data["current_report"].session.is_quali:
                 user_data["penalty"].fact = config.FACTS[
                     int(update.callback_query.data.removeprefix("qf"))
                 ].format(a=user_data["penalty"].reported_driver.current_race_number)
@@ -415,7 +428,7 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
             user_data["penalty"].fact = config.FACTS[
                 int(update.callback_query.data.removeprefix("f"))
-            ].format(a=user_data["penalty"].reporting_driver.current_race_number)
+            ].format(a=user_data["current_report"].reporting_driver.current_race_number)
 
     else:
         user_data["penalty"].fact = update.message.text
@@ -535,12 +548,12 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             if licence_points > 1:
                 user_data["licence_points_text"] = (
                     f"{licence_points} punti sulla licenza"
-                    f" ({penalty.reported_driver.licence_points - licence_points}/10)"
+                    f" ({user_data['penalty'].reported_driver.licence_points - licence_points}/10)"
                 )
             elif licence_points == 1:
                 user_data["licence_points_text"] = (
                     "1 punto sulla licenza"
-                    f" ({penalty.reported_driver.licence_points - 1}/10)"
+                    f" ({user_data['penalty'].reported_driver.licence_points - 1}/10)"
                 )
             else:
                 user_data["licence_points_text"] = ""
@@ -548,7 +561,7 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         licence_points = int(update.message.text.split()[0])
         user_data["penalty"].licence_points = licence_points
         user_data["licence_points_text"] = (
-            f"{licence_points}punti sulla licenza"
+            f"{licence_points} punti sulla licenza"
             f" ({user_data['penalty'].reported_driver.licence_points - licence_points}/10)"
         )
     text = "Quanti warning sono stati dati?"
@@ -638,6 +651,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     text = (
         f"<b>Segnalazione no.{penalty.number}</b> - Recap dati inseriti\n\n"
         f"<b>Tappa</b>: {penalty.round.number if penalty.round else '-'}\n"
+        f"<b>Sessione</b>: {penalty.session.name}\n"
         f"<b>Pilota</b>: {penalty.reported_driver.psn_id if penalty.reported_driver else '-'}\n"
         f"<b>Fatto</b>: {penalty.fact if penalty.fact else '-'}\n"
         f"<b>Decisione</b>: {penalty.decision if penalty.decision else '-'}\n"
@@ -670,6 +684,13 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     """Adds the report to the queue or sends it, then ends the conversation"""
 
     user_data = context.user_data
+    
+    if user_data.get("current_report"):
+        report = user_data["current_report"]
+        report.is_reviewed = True
+        user_data["sqla_session"].commit()
+
+    
     penalty: Penalty = user_data["penalty"]
 
     save_and_apply_penalty(user_data["sqla_session"], penalty)

@@ -258,9 +258,12 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
+    
     session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-    save_object(session, penalty)
+    
+    session.add(penalty)
+    session.commit()
     return
 
 
