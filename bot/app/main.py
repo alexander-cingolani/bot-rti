@@ -240,7 +240,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     for driver in get_championship(session).driver_list:
 
         if query.lower() in driver.psn_id.lower():
-            wins, podiums, poles, fastest_laps, races_disputed, avg_position = stats(
+            wins, podiums, poles, fastest_laps, races_disputed, avg_position, avg_quali_position = stats(
                 driver
             )
 
@@ -292,7 +292,8 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Pole:</b> <i>{poles}</i>\n"
                         f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
                         f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
-                        f"<b>Posizione media (Gara):</b> <i>{avg_position}</i>\n"
+                        f"<b>Piazzamento medio (Gara):</b> <i>{avg_position}</i>\n"
+                        f"<b>Piazzamento medio (Qualifica): <i>{avg_quali_position}</i>"
                         f"<b>Team:</b> <i>{unique_teams}</i>"
                     ),
                 ),
@@ -312,10 +313,19 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         return
 
     category = driver.current_category()
-    standings = category.standings()
+    standings = category.standings(-1)
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
-    for pos, (results, points) in enumerate(standings, start=1):
-        message += f"<b>{pos}</b> - {results[0].driver.psn_id} <i>{points}</i>\n"
+    for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
+
+            if diff > 0:
+                diff = f" ↓{abs(diff)}"
+            elif diff < 0:
+                diff = f" ↑{abs(diff)}"
+            else:
+                diff = ""
+
+            message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
+
 
     await update.message.reply_text(message)
     session.close()

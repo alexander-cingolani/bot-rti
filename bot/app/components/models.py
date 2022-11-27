@@ -912,21 +912,27 @@ class Category(Base):
         if n > 0:
             raise ValueError("n must be less or equals to 0")
 
+        completed_rounds: list[Round] = []
+        for round in self.rounds:
+            if round.completed:
+                completed_rounds.append(round)
+    
         if n == 0:
-            n = len(self.race_results)
-
+            n = len(completed_rounds)    
+    
         results: DefaultDict[Driver, int] = defaultdict(lambda: 0)
 
-        n = n * len(self.active_drivers()) * self.number_of_race_sessions()
+        for round in completed_rounds[:n]:
+            for race_result in round.race_results:
+                results[race_result.driver] += race_result.points_earned
 
-        for race_result in self.race_results[:n]:
-            results[race_result.driver] += race_result.points_earned
+            for qualifying_result in round.qualifying_results:
+                results[qualifying_result.driver] += qualifying_result.points_earned
 
-        for qualifying_result in self.qualifying_results[:n]:
-            results[qualifying_result.driver] += qualifying_result.points_earned
-
+        
+        
         results = sorted(results.items(), key=lambda x: x[1], reverse=True)
-
+        
         if n == len(self.race_results):
             return results
 
@@ -934,27 +940,43 @@ class Category(Base):
 
         # Calculate the points earned in the last n races
         results_2: DefaultDict[Driver, int] = defaultdict(lambda: 0)
-        for race_result in self.race_results[n:]:
-            results_2[race_result.driver] += race_result.points_earned
-        for qualifying_result in self.qualifying_results[n:]:
-            results_2[qualifying_result.driver] += qualifying_result.points_earned
+        
+        for round in completed_rounds[n:]:
+            
+            for race_result in round.race_results:
+                results_2[race_result.driver] += race_result.points_earned
+            for qualifying_result in round.qualifying_results:
+                results_2[qualifying_result.driver] += qualifying_result.points_earned
 
+        sorted_results_2 = sorted(
+            results_2.items(), key=lambda x: x[1], reverse=True
+        )
+        
         complete_results = defaultdict(lambda: [0, 0])
         for driver, points in results.items():
             complete_results[driver][0] += points + results_2[driver]
 
+        
+        for driver, points in results_2.items():
+            if driver not in complete_results:
+                complete_results[driver] = [points, 0]
+                
         complete_results = sorted(
             complete_results.items(), key=lambda x: x[1], reverse=True
         )
         complete_results = {
             driver: [points, pos] for driver, (points, pos) in complete_results
         }
+        
+        
 
         for i, driver in enumerate(complete_results):
             for i2, driver2 in enumerate(results):
                 if driver2 == driver:
                     complete_results[driver][1] = i - i2
                     break
+
+
         return complete_results
 
     def standings_with_results(self):
