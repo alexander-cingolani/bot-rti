@@ -1,3 +1,4 @@
+import logging
 import os
 from difflib import get_close_matches
 from typing import cast
@@ -728,14 +729,14 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         separated_results = separate_car_classes(category, results)
 
         for class_results in separated_results.values():
-            class_pole_time = class_results[0].seconds
+            winners_racetime = class_results[0].seconds
             for pos, result in enumerate(class_results, start=1):
 
                 bonus_points = 0
                 if result.driver in fastest_lap_drivers:
                     bonus_points += 1
                 if result.seconds:
-                    gap_to_first = result.seconds - class_pole_time
+                    gap_to_first = result.seconds - winners_racetime
                 else:
                     gap_to_first = None
                     pos = None

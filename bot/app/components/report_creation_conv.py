@@ -31,6 +31,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.error import BadRequest
 
 (
     CATEGORY,
@@ -44,7 +45,6 @@ from telegram.ext import (
     UNSEND,
 ) = range(3, 12)
 
-from telegram.error import BadRequest
 
 engine = create_engine(os.environ.get("DB_URL"))
 _Session = sessionmaker(bind=engine, autoflush=False)
@@ -658,7 +658,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             minutes=30
         ):
 
-            text = f"<i><b>[segnalazione ritirata]</b></i>"
+            text = "<i><b>[segnalazione ritirata]</b></i>"
             try:
                 await context.bot.edit_message_caption(
                     chat_id=config.REPORT_CHANNEL,

@@ -41,16 +41,6 @@ def get_championship(
     return None
 
 
-"""
-select * from drivers
-inner join driver_assignments da on drivers.driver_id = da.driver_id
-inner join teams t on da.team_id = t.team_id
-inner join team_championships tc on t.team_id = tc.team_id
-inner join championships c on c.championship_id = tc.championship_id
-where c."end" is null and da.is_leader = true
-"""
-
-
 def get_current_team_leaders(session: SQLASession) -> list[Driver]:
 
     statement = (
@@ -258,10 +248,9 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    
     session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-    
+
     session.add(penalty)
     session.commit()
     return
