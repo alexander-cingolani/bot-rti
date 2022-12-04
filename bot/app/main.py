@@ -240,9 +240,15 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     for driver in get_championship(session).driver_list:
 
         if query.lower() in driver.psn_id.lower():
-            wins, podiums, poles, fastest_laps, races_disputed, avg_position, avg_quali_position = stats(
-                driver
-            )
+            (
+                wins,
+                podiums,
+                poles,
+                fastest_laps,
+                races_disputed,
+                avg_position,
+                avg_quali_position,
+            ) = stats(driver)
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team()
@@ -308,27 +314,41 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     the current championship standings for the category the user is in.
     """
     session = _Session()
-    driver = get_driver(session, telegram_id=update.effective_user.id)
-    if not driver:
+    user = get_driver(session, telegram_id=update.effective_user.id)
+    if not user:
+        await update.message.reply_text(
+            "Per usare questa funzione devi essere registrato.\n"
+            "Puoi farlo con /registrami."
+        )
         return
 
-    category = driver.current_category()
-    standings = category.standings(-1)
+    category = user.current_category()
+
+    if not category:
+        text = (
+            "Non fai parte di alcuna categoria al momento, quando ti iscriverai "
+            "ad un nostro campionato potrai utilizzare questo comando per vedere "
+            "la classifica della tua categoria."
+        )
+        await update.message.reply_text(text)
+
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
+    standings = category.standings()
+
     for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
 
-            if diff > 0:
-                diff = f" ↓{abs(diff)}"
-            elif diff < 0:
-                diff = f" ↑{abs(diff)}"
-            else:
-                diff = ""
+        if diff > 0:
+            diff = f" ↓{abs(diff)}"
+        elif diff < 0:
+            diff = f" ↑{abs(diff)}"
+        else:
+            diff = ""
 
-            message += f"{pos} - {driver.psn_id} <i>{points}{diff} {driver.current_team().name if driver.current_team() else ''}</i>\n"
+        message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
 
+    message = message.replace(user.psn_id, f"<b>{user.psn_id}</b>")
 
-    await update.message.reply_text(message)
-    session.close()
+    await update.message.reply_text(text=message)
 
 
 async def complete_championship_standings(
@@ -354,7 +374,7 @@ async def complete_championship_standings(
                 diff = f" ↑{abs(diff)}"
             else:
                 diff = ""
-            team = f"{driver.current_team().name}" if driver.current_team() else ''
+            team = f"{driver.current_team().name}" if driver.current_team() else ""
             message += f"{pos} - {team} {driver.psn_id} <i>{points}{diff}</i>\n"
 
             if team := driver.current_team():  # Check if the driver has left the team
@@ -371,7 +391,7 @@ async def complete_championship_standings(
 
 
 async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-    """When activated via the /risultati_gara command, it sends a message containing
+    """When activated via the /ultima_gara command, it sends a message containing
     the results of the user's last race."""
 
     session = _Session()
