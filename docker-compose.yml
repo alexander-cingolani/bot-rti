@@ -23,25 +23,32 @@ services:
       - backend
     depends_on:
       - db
-    restart: on-failure:3
+    restart: on-failure
 
   api:
     build: ./api
     image: alexcingolani/rti:rti_api
     depends_on:
       - db
-    ports:
-      - 8080:8083
     env_file:
       - .env
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.app.loadbalancer.server.port=80
+      - traefik.http.routers.app-http.entrypoints=http
+      - traefik.http.routers.app-http.rule=Host(`rtiapi.ddns.net`)
+      - traefik.docker.network=traefik-public
     networks:
       - backend
-    restart: on-failure:3
-    
+      - traefik-public
+       
+    restart: on-failure
+
 volumes:
   postgres-data:
   
 networks:
   backend:
     driver: bridge
-    name: backend
+  traefik-public:
+    external: true
