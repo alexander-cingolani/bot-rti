@@ -237,7 +237,8 @@ async def download_quali_results(
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
                 return
-            await file.download("results.jpg")
+            
+            await file.download_to_drive("results.jpg")
 
             driver_names = [
                 driver.driver.psn_id for driver in category.active_drivers()
@@ -338,7 +339,7 @@ async def download_race_1_results(
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
                 return
 
-            screenshot = await file.download("results_1.jpg")
+            screenshot = await file.download_to_drive("results_1.jpg")
             results = recognize_results(sqla_session, screenshot, drivers)[1]
 
     user_data["race_1_results"] = results
@@ -583,7 +584,7 @@ async def download_race_2_results(
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
                 return
 
-            screenshot = await file.download("results_1.jpg")
+            screenshot = await file.download_to_drive("results_1.jpg")
             results = recognize_results(sqla_session, screenshot, drivers)[1]
 
     user_data["race_2_results"] = results
