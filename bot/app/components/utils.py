@@ -1,6 +1,6 @@
+from decimal import Decimal
 import re
 from dataclasses import dataclass
-from datetime import timedelta
 
 from app.components.models import CarClass, Category
 from telegram import Update
@@ -42,7 +42,7 @@ class Result:
         return self
 
 
-def string_to_seconds(string) -> float | None | str:
+def string_to_seconds(string) -> Decimal | None | str:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     None is returned when the driver did not finish the race
@@ -84,12 +84,9 @@ def string_to_seconds(string) -> float | None | str:
         else:
             seconds = other
 
-    return timedelta(
-        hours=int(hours),
-        minutes=int(minutes),
-        seconds=int(seconds),
-        milliseconds=int(milliseconds),
-    ).total_seconds()
+    return Decimal(
+        f"{int(hours) * 3600 + int(minutes) * 60 + int(seconds)}.{int(milliseconds)}"
+    )
 
 
 def separate_car_classes(
