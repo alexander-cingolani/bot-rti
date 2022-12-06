@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from app.components import config
 from app.components.docs import PenaltyDocument
-from app.components.models import Category, Driver, DriverCategory, Penalty, Report
+from app.components.models import Category, Driver, Penalty, Report
 from app.components.queries import (
     get_championship,
     get_last_penalty_number,
@@ -19,7 +19,7 @@ from app.components.queries import (
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -128,14 +128,16 @@ async def ask_session(update: Update, context: ContextTypes) -> int:
 
     user_data = context.user_data
     category: Category = user_data["category"]
+    sqla_session: SQLASession = user_data["sqla_session"]
+    penalty: Penalty = user_data["penalty"]
     if not update.callback_query.data.isnumeric():
-        user_data["penalty"].round = category.rounds[
+        penalty.round = category.rounds[
             int(update.callback_query.data.removeprefix("R"))
         ]
-        user_data["penalty"].number = (
+        penalty.number = (
             get_last_penalty_number(
-                user_data["sqla_session"],
-                round_id=user_data["penalty"].round.round_id,
+                sqla_session,
+                round_id=penalty.round.round_id,
             )
             + 1
         )
@@ -313,6 +315,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Shows the user the first unreviewed report in the selected category."""
 
     user_data = context.user_data
+    sqla_session: SQLASession = user_data["sqla_session"]
     reports: list[Report] = user_data["unreviewed_reports"]
     if not update.callback_query.data.isnumeric():
         user_data["selected_category"] = user_data["championship"].categories[
@@ -332,7 +335,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             penalty = Penalty.from_report(report)
             penalty.number = (
                 get_last_penalty_number(
-                    user_data["sqla_session"],
+                    sqla_session,
                     round_id=penalty.round.round_id,
                 )
                 + 1
@@ -679,15 +682,15 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     """Adds the report to the queue or sends it, then ends the conversation"""
 
     user_data = context.user_data
-
+    sqla_session: SQLASession = user_data["sqla_session"]
     if user_data.get("current_report"):
         report = user_data["current_report"]
         report.is_reviewed = True
-        user_data["sqla_session"].commit()
+        sqla_session.commit()
 
     penalty: Penalty = user_data["penalty"]
 
-    save_and_apply_penalty(user_data["sqla_session"], penalty)
+    save_and_apply_penalty(sqla_session, penalty)
     file = PenaltyDocument(penalty).generate_document()
     await context.bot.send_document(
         chat_id=config.REPORT_CHANNEL,
@@ -696,8 +699,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     text = "Penalità salvata e inviata."
 
     await send_or_edit_message(update, text)
-    user_data["sqla_session"].close()
-    context.user_data.clear()
+    sqla_session.close()
+    user_data.clear()
     return ConversationHandler.END
 
 

@@ -15,13 +15,12 @@ from app.components.queries import (
     get_driver,
     get_last_report_number,
     get_report,
-    save_object,
 )
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -56,15 +55,15 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data = context.user_data
     user_data.clear()
 
-    session = _Session()
-    championship = get_championship(session)
+    sqla_session = _Session()
+    championship = get_championship(sqla_session)
 
-    user_data["sqla_session"] = session
+    user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
     user_data["categories"] = {}
     reply_markup = []
 
-    user_data["leader"] = get_driver(session, telegram_id=update.effective_user.id)
+    user_data["leader"] = get_driver(sqla_session, telegram_id=update.effective_user.id)
     if user_data["leader"].current_team().leader != user_data["leader"]:
 
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
@@ -79,7 +78,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ]
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -94,7 +93,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not reply_markup:
         text = "Il campionato è terminato! Non è più possibile effettuare segnalazioni."
         await update.message.reply_text(text)
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -112,6 +111,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Saves the category and asks what session the accident happened in."""
 
     user_data = context.user_data
+
     if not update.callback_query.data.isdigit():
         user_data["category"] = context.user_data["categories"][
             update.callback_query.data
@@ -158,15 +158,15 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     user_data = context.user_data
     user_data.clear()
-    session = _Session()
-    user_data["leader"] = get_driver(session, telegram_id=user.id)
-    user_data["sqla_session"] = session
+    sqla_session = _Session()
+    user_data["leader"] = get_driver(sqla_session, telegram_id=user.id)
+    user_data["sqla_session"] = sqla_session
 
     if not user_data["leader"]:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"
         )
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -183,16 +183,16 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             ]
         )
         await update.message.reply_text(text=text, reply_markup=reply_markup)
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
-    championship = get_championship(session)
+    championship = get_championship(sqla_session)
 
     if not championship:
         text = "Il campionato è terminato! Non puoi più fare segnalazioni."
         await update.message.reply_text(text)
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -217,7 +217,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             ]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
@@ -231,11 +231,11 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data["sessions"] = {}
     reply_markup = []
-    for i, session in enumerate(championship_round.sessions):
+    for i, sqla_session in enumerate(championship_round.sessions):
         session_alias = f"s{i}"
-        user_data["sessions"][session_alias] = session
+        user_data["sessions"][session_alias] = sqla_session
         reply_markup.append(
-            InlineKeyboardButton(session.name, callback_data=session_alias)
+            InlineKeyboardButton(sqla_session.name, callback_data=session_alias)
         )
     reply_markup = list(chunked(reply_markup, 3))
     reply_markup.append([InlineKeyboardButton("Annulla", callback_data="cancel")])
@@ -511,7 +511,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """Sends the report to the report channel and saves it to the database."""
 
     user_data = context.user_data
-
+    sqla_session: SQLASession = user_data["sqla_session"]
     category: Category = user_data["category"]
 
     if not category.can_report_today() and not context.chat_data.get("late_report"):
@@ -527,7 +527,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         report.reporting_team = report.reporting_driver.current_team()
         report.number = (
             get_last_report_number(
-                user_data["sqla_session"], category.category_id, report.round.round_id
+                sqla_session, category.category_id, report.round.round_id
             )
             + 1
         )
@@ -546,7 +546,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         report.channel_message_id = message.message_id
 
         try:
-            save_object(user_data["sqla_session"], report)
+            sqla_session.add(report)
+            sqla_session.commit()
         except IntegrityError:
             os.remove(report_document_name)
             await message.delete()
@@ -555,7 +556,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
                 "Non farti problemi ad insultarlo in chat."
             )
-            user_data["sqla_session"].close()
+            sqla_session.close()
             user_data.clear()
             return ConversationHandler.END
 
@@ -647,12 +648,15 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
+
+    sqla_session: SQLASession = context.user_data["sqla_session"]
+
     if "late" in update.callback_query.data:
         report_id = update.callback_query.data.removeprefix("withdraw_late_report_")
     else:
         report_id = update.callback_query.data.removeprefix("withdraw_report_")
 
-    report = get_report(context.user_data["sqla_session"], report_id)
+    report = get_report(sqla_session, report_id)
     if report:
         if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
             minutes=30
@@ -674,7 +678,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             text = "Segnalazione ritirata."
 
-            delete_report(context.user_data["sqla_session"], report_id)
+            delete_report(sqla_session, report_id)
         else:
             text = "Troppo tardi per ritirarla!"
         await update.callback_query.edit_message_text(text)
