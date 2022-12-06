@@ -27,10 +27,6 @@ BASE_COMMANDS = [
     ("help", "Info sull'utilizzo del bot."),
 ]
 
-ADMIN_CHAT_COMMANDS = BASE_COMMANDS + [
-    ("lista_presenze", "Invia la lista presenze dell'evento di oggi.")
-]
-
 LEADER_COMMANDS = BASE_COMMANDS + [
     ("segnala", "Crea una nuova segnalazione."),
 ]

@@ -14,7 +14,7 @@ from app.components import config
 from app.components.driver_registration import driver_registration
 from app.components.queries import (
     get_championship,
-    get_current_team_leaders,
+    get_team_leaders,
     get_driver,
 )
 from app.components.report_creation_conv import report_creation
@@ -66,7 +66,7 @@ async def post_init(application: Application) -> None:
     """Sets commands for every user."""
 
     session = _Session()
-    leaders = get_current_team_leaders(session)
+    leaders = get_team_leaders(session)
     session.close()
 
     # Set base user commands
@@ -88,13 +88,6 @@ async def post_init(application: Application) -> None:
         try:
             await application.bot.set_my_commands(
                 config.ADMIN_COMMANDS, BotCommandScopeChat(admin_id)
-            )
-        except BadRequest:
-            pass
-        try:
-            await application.bot.set_my_commands(
-                config.ADMIN_CHAT_COMMANDS,
-                BotCommandScopeChatAdministrators(chat_id=config.GROUP_CHAT),
             )
         except BadRequest:
             pass
@@ -380,11 +373,13 @@ async def complete_championship_standings(
             if team := driver.current_team():  # Check if the driver has left the team
                 teams[team] += points
 
+    for team, points in teams.items():
+        points += team.current_championship().penalty_points
+
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
     for pos, (team, points) in enumerate(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
-        points += team.current_championship().penalty_points
         message += f"{pos}- {team.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
     session.close()
@@ -448,8 +443,8 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message to the report channel announcing that the report window
     has opened for a specific category.
     """
-    session = _Session()
-    championship = get_championship(session)
+    sqla_session = _Session()
+    championship = get_championship(sqla_session)
     if category := championship.reporting_category():
         championship_round = category.first_non_completed_round()
         text = (
@@ -461,7 +456,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_message(
             chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
         )
-    session.close()
+    sqla_session.close()
 
 
 async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -469,8 +464,8 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     reports has closed.
     """
 
-    session = _Session()
-    championship = get_championship(session)
+    sqla_session = _Session()
+    championship = get_championship(sqla_session)
 
     if championship:
 
@@ -485,7 +480,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
                 sticker=open("./app/images/sticker.webp", "rb"),
                 disable_notification=True,
             )
-    session.close()
+    sqla_session.close()
 
 
 async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -494,21 +489,6 @@ async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     if message:
         await message.edit_reply_markup()  # Deletes the buttons.
     context.chat_data.clear()
-
-
-async def send_participation_list_command(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """Allows admins to call the participation list manually."""
-
-    if update.effective_user.id not in config.ADMINS:
-        return
-
-    await update.message.delete()
-
-    context.bot_data["called_manually_by"] = update.effective_chat.id
-    await send_participation_list(context)
-    return
 
 
 async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -655,44 +635,38 @@ def main() -> None:
     )
 
     application.job_queue.run_daily(
-        callback=send_participation_list,
-        time=time(hour=7),
-        chat_id=config.GROUP_CHAT,
-    )
-
-    application.job_queue.run_daily(
         callback=announce_reports,
         time=time(0),
         chat_id=config.REPORT_CHANNEL,
     )
-
+    application.job_queue.run_daily(
+        callback=send_participation_list,
+        time=time(hour=7),
+        chat_id=config.GROUP_CHAT,
+    )
     application.job_queue.run_daily(
         callback=close_report_window,
         time=time(hour=23, minute=59, second=59),
         chat_id=config.REPORT_CHANNEL,
     )
+    application.job_queue.run_daily(
+        callback=freeze_participation_list,
+        time=time(hour=21, minute=45),
+        chat_id=config.REPORT_CHANNEL,
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-
-    application.add_handler(
-        CommandHandler(
-            "lista_presenze",
-            send_participation_list_command,
-            filters=filters.ChatType.GROUPS,
-        )
-    )
+    application.add_handler(driver_registration)
+    application.add_handler(report_processing)
+    application.add_handler(report_creation)
+    application.add_handler(save_results_conv)
 
     application.add_handler(
         CallbackQueryHandler(
             update_participation_list, r"participating|not_participating"
         )
     )
-
-    application.add_handler(driver_registration)
-    application.add_handler(report_processing)
-    application.add_handler(report_creation)
-    application.add_handler(save_results_conv)
 
     application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))
     application.add_handler(InlineQueryHandler(inline_query))
