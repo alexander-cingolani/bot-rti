@@ -1,10 +1,11 @@
 """
-This module contains class-specific queries to the database; as well as
-general purpose functions such as save_object and update_object.
+This module contains the necessary queries in order to retrieve specific objects
+such as Reports, Categories and Drivers.
 """
 
 import sqlalchemy as sa
 from app.components.models import (
+    Category,
     Championship,
     Driver,
     DriverAssignment,
@@ -26,7 +27,18 @@ from sqlalchemy.orm import Session as SQLASession
 def get_championship(
     session: SQLASession, championship_id: int = None
 ) -> Championship | None:
-    """Returns the current championship if not given a specific championship_id."""
+    """If not given a specific championship_id, returns the last one in
+    chronological order.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        championship_id (int, optional): ID of the championship to retrieve.
+            Defaults to None.
+
+    Returns:
+        Championship | None: Only None if no championships are registered in
+            the database.
+    """
 
     if championship_id:
         statement = select(Championship).where(
@@ -35,13 +47,23 @@ def get_championship(
     else:
         statement = select(Championship).order_by(desc(Championship.start))
 
-    result = session.execute(statement).one_or_none()
-    if result:
-        return result[0]
-    return None
+    return session.execute(statement).first()[0]
 
 
-def get_current_team_leaders(session: SQLASession) -> list[Driver]:
+def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[Driver]:
+    """Returns a list of the team leaders in the championship specified by championship_id.
+    If championship_id is not given, the function defaults to the latest championship.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        championship_id (int, optional): _description_. Defaults to None.
+
+    Returns:
+        list[Driver]: List of drivers who were team leaders in the championship.
+    """
+
+    if not championship_id:
+        championship_id = get_championship().championship_id
 
     statement = (
         select(Driver)
@@ -49,10 +71,7 @@ def get_current_team_leaders(session: SQLASession) -> list[Driver]:
         .join(Team, DriverAssignment.team_id == Team.team_id)
         .where(DriverAssignment.is_leader == True)
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
-        .join(
-            Championship,
-            Championship.championship_id == TeamChampionship.championship_id,
-        )
+        .where(TeamChampionship.championship_id == championship_id)
     )
     q = session.execute(statement).all()
 
@@ -88,23 +107,41 @@ def get_reports(
 def get_driver(
     session: SQLASession, psn_id: str = None, telegram_id: str = None
 ) -> Driver | None:
-    """Returns corresponding Driver object to the given psn_id or telegram_id."""
+    """Retrieves a single Driver object from the database given his PSN or Telegram id.
+    Either psn_id or telegram are optional, but at least one must be given.
+    Args:
+        session (SQLASession): Session to execute the query with.
+        psn_id (str, optional): _description_. Defaults to None.
+        telegram_id (str, optional): _description_. Defaults to None.
+
+    Returns:
+        Driver | None: None if no driver/multiple drivers matching the given ID were found.
+    """
     statement = select(Driver)
     if psn_id:
         statement = statement.where(Driver.psn_id == psn_id)
-    if telegram_id:
+    elif telegram_id:
         statement = statement.where(Driver._telegram_id == str(telegram_id))
+    else:
+        raise ValueError("Neither psn_id or telegram_id were given.")
 
     try:
         result = session.execute(statement).one_or_none()
-
     except MultipleResultsFound:
         return None
     return result[0] if result else None
 
 
 def get_report(session: SQLASession, report_id: int) -> Report | None:
+    """Returns the report matching the given report_id.
 
+    Args:
+        session (SQLASession): Session to execute the query with.
+        report_id (int): ID of the report to fetch.
+
+    Returns:
+        Report | None: None if no matching report_id was found in the database.
+    """
     result = session.execute(
         select(Report).where(Report.report_id == report_id)
     ).one_or_none()
@@ -114,7 +151,15 @@ def get_report(session: SQLASession, report_id: int) -> Report | None:
 
 
 def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
-    """Returns the Driver object with the psn_id most similar to the one given."""
+    """Returns the Driver object with a psn_id similar to the one given.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        psn_id (str): ID to search for.
+
+    Returns:
+        Driver | None: None if no driver with a psn_id similar enough was found.
+    """
     result = session.execute(
         select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.4)
     ).first()
@@ -134,7 +179,7 @@ def get_last_report_number(
         round_id (int): ID of the round of which to return the last report.
 
     Returns:
-        int: _description_
+        int: Number of the last report made in the given round.
     """
 
     result = session.execute(
@@ -150,7 +195,15 @@ def get_last_report_number(
 
 def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
     """Returns the last penalty number for any given round.
-    0 is returned if no penalties have been given in that round."""
+    0 is returned if no penalties have been applied in that round.
+
+    Args:
+        session (SQLASession): Session to execute the query from.
+        round_id (int): ID of the round in which you're looking for the
+            last penalty number.
+    Returns:
+        int: 0 if no penalties have been applied yet in that round.
+    """
     result = session.execute(
         select(Penalty.number)
         .where(Penalty.round_id == round_id)
@@ -162,21 +215,17 @@ def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
     return 0
 
 
-def save_object(session: SQLASession, obj) -> None:
-    """Saves the object if it doesn't already exist in the database"""
-
-    session.add(obj)
-    session.commit()
-
-
-def save_multiple_objects(session: SQLASession, objs: list) -> None:
-    "Saves a list of objects to the database."
-    session.add_all(objs)
-    session.commit()
-
-
 def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
-    """Saves and applies a penalty to a driver in qualifying."""
+    """Saves a report and applies the penalties inside it (if any)
+    modifying the results of the session the penalty is referred to.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        penalty (Penalty): Penalty object to persist to the database.
+
+    Raises:
+        ValueError: Raised when the qualifying result record couldn't be found.
+    """
     quali_result = session.execute(
         select(QualifyingResult)
         .where(QualifyingResult.driver_id == penalty.reported_driver_id)
@@ -184,7 +233,7 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     ).one_or_none()
 
     if not quali_result:
-        raise Exception("QualifyingResult not found")
+        raise ValueError("QualifyingResult not in database.")
 
     for driver_category in penalty.reported_driver.categories:
         if driver_category.category_id == penalty.category.category_id:
@@ -196,14 +245,19 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     quali_result.licence_points = penalty.licence_points
     quali_result.penalty_points = penalty.penalty_points
 
-    session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-    save_object(session, penalty)
+    session.add(penalty)
+    session.commit()
 
 
 def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
-    """Saves a report and applies the time penalty, changing the finishing positions
-    of the other drivers as well if needed."""
+    """Saves a report and applies the penalties inside it (if any)
+    modifying the results of the session the penalty is referred to.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        penalty (Penalty): Penalty object to persist to the database.
+    """
 
     for driver_category in penalty.reported_driver.categories:
         if driver_category.category_id == penalty.category.category_id:
@@ -212,8 +266,8 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
 
     if not penalty.time_penalty:
         if not penalty.reporting_driver:
+            session.add(penalty)
             session.commit()
-            save_object(session, penalty)
             return
         return
     if penalty.session.is_quali:
@@ -248,21 +302,39 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    session.commit()
     penalty.reported_driver_id = penalty.reported_driver.driver_id
-
     session.add(penalty)
     session.commit()
     return
 
 
-def update_object(session) -> None:
-    """Calls Session.commit()"""
-    session.commit()
+def get_category(session: SQLASession, category_id: int) -> Category | None:
+    """Returns a Category given an id.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        category_id (int): ID of the category to fetch.
+
+    Returns:
+        Category | None: None if no matching category is found.
+    """
+
+    result = session.execute(
+        select(Category).where(Category.category_id == category_id)
+    ).one_or_none()
+
+    if result:
+        return result[0]
+    return None
 
 
 def delete_report(session: SQLASession, report_id: str) -> None:
-    """Deletes the given report from the database."""
+    """Deletes the report matching the report_id from the database.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        report_id (str): ID of the report to delete.
+    """
     session.execute(delete(Report).where(Report.report_id == report_id))
     session.commit()
     session.expire_all()
