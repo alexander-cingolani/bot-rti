@@ -1,3 +1,7 @@
+"""
+This module contains the PenaltyDocument and ReportDocument classes, which generate a pdf
+file given a Penalty or Report object.
+"""
 from datetime import datetime
 from textwrap import wrap
 
@@ -29,7 +33,7 @@ class PenaltyDocument:
         self.canvas = canvas.Canvas(filename=filename)
         self.canvas.setTitle(filename)
 
-    def _header(self):
+    def __header(self):
         self.canvas.drawImage(
             "./app/images/logo_rti.jpg",
             x=220,
@@ -72,7 +76,7 @@ class PenaltyDocument:
         self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
         self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
 
-    def _body(self):
+    def __body(self):
         self.canvas.setFont("arialB", 11.5)
         self.canvas.drawString(50, 500, "No / Pilota")
         self.canvas.drawString(50, 475, "Scuderia")
@@ -117,8 +121,8 @@ class PenaltyDocument:
     def generate_document(self) -> str:
         """Generates the report document named as the filename attribute"""
 
-        self._header()
-        self._body()
+        self.__header()
+        self.__body()
 
         self.canvas.save()
 

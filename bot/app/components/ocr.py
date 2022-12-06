@@ -1,3 +1,6 @@
+"""
+Contains the function which recognizes results from a screenshot.
+"""
 from difflib import get_close_matches
 
 from app.components.queries import get_driver
@@ -5,6 +8,7 @@ from app.components.utils import Result, string_to_seconds
 from PIL import Image, ImageOps
 from PIL.ImageEnhance import Contrast
 from pytesseract import image_to_string
+from sqlalchemy.orm import Session as SQLASession
 
 LEFT_1, RIGHT_1 = 400, 580
 LEFT_2, RIGHT_2 = 1280, 1500
@@ -14,9 +18,22 @@ INCREMENT = 50
 
 
 def recognize_results(
-    session, image: str, expected_drivers: list[str]
-) -> list[list[Result]]:
+    session: SQLASession, image: str, expected_drivers: list[str]
+) -> tuple[bool, list[Result]]:
+    """Transforms the results of a race or qualifying session from a screenshot
+    of the results taken from the game or the live stream.
 
+    Args:
+        session (SQLASession): SQLAlchemy orm session to use.
+        image (str): Screenshot containing the qualifying or race results.
+        expected_drivers (list[str]): Drivers which are expected to be found in
+            the screenshot. Drivers given in this list will be marked as absent if
+            not found/recognized.
+
+    Returns:
+        tuple[bool, list[Result]]: The boolean value indicates whether all the drivers
+            were recognized or not.
+    """
     image = Image.open(image)
 
     image = image.convert("L")

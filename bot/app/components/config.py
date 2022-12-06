@@ -1,3 +1,7 @@
+"""
+This module contains configuration options for the bot, such as commands available
+to different groups of users.
+"""
 import json
 import os
 

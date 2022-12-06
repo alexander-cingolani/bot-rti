@@ -1,3 +1,6 @@
+"""
+Helper stuff. Hope to get rid of it soon.
+"""
 from decimal import Decimal
 import re
 from dataclasses import dataclass

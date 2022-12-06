@@ -1,3 +1,8 @@
+"""
+This module contains the callbacks that make up the result recognition conversation.
+This conversation allows users (admins) to save race and qualifying results to the database
+by sending screenshots captured from the game or live stream.
+"""
 from decimal import Decimal
 import os
 from difflib import get_close_matches
@@ -164,6 +169,15 @@ async def ask_qualifying_results(
 
 
 def seconds_to_str(seconds: Decimal) -> str:
+    """Converts seconds to a user-friendly string format.
+
+    Args:
+        seconds (Decimal): seconds to covert into string.
+            Must contain at least one decimal number.
+
+    Returns:
+        str: user-friendly string.
+    """
     seconds = str(seconds)
     if "." in seconds:
         seconds, milliseconds = seconds.split(".")
@@ -289,7 +303,10 @@ async def save_quali_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def download_race_1_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-
+    """Downloads the screenshot sent by the user and passes it to the recognize_results
+    function to analyze its contents. If results weren't recognized correctly,
+    forces the user to correct them manually. Otherwise the user is asked to confirm
+    that the recognized results are correct."""
     user_data = context.user_data
     category: Category = user_data["category"]
     sqla_session: SQLASession = user_data
@@ -361,7 +378,7 @@ async def download_race_1_results(
 
 
 async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-
+    """Asks which driver scored the fastest lap in the first class of the first race."""
     user_data = context.user_data
     category: Category = user_data["category"]
     sqla_session: SQLASession = user_data["sqla_session"]
@@ -423,9 +440,9 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def ask_2nd_fastest_lap_1(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-
+    """Asks which driver scored the fastest lap in the second class of the first race."""
     user_data = context.user_data
-    category = cast(Category, user_data["category"])
+    category: Category = user_data["category"]
     sqla_session: SQLASession = user_data["sqla_session"]
 
     # Saves driver who scored the fastest lap if callback data contains a driver.
@@ -477,7 +494,10 @@ async def ask_2nd_fastest_lap_1(
 async def save_race_1_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-
+    """Saves the results (fastest lap, driver order of arrival) into user_data and
+    if no other races are expected for the chosen category, asks the user whether to
+    save the results to the database or not. If more results are expected, prompts the user
+    to send them."""
     user_data = context.user_data
     category: Category = user_data["category"]
 
@@ -530,6 +550,10 @@ async def save_race_1_results(
 async def download_race_2_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+    """Downloads the screenshot sent by the user and passes it to recognize_results
+    function to analyze it's contents. If results weren't recognized correctly,
+    forces the user to correct them manually. Otherwise the user is asked to confirm
+    that the recognized results are correct."""
 
     if update.callback_query:
         await update.callback_query.edit_message_text(
@@ -598,7 +622,7 @@ async def download_race_2_results(
 
 
 async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-
+    """Asks the user which driver scored the fastest lap in the second race."""
     user_data = context.user_data
     category: Category = user_data["category"]
     sqla_session: SQLASession = user_data["sqla_session"]
@@ -639,6 +663,8 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def save_race_2_results(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+    """Saves the results (fastest lap, driver order of arrival) into user_data and
+    asks the user whether to save the results to the database or not."""
 
     user_data = context.user_data
     category: Category = user_data["category"]
@@ -670,7 +696,8 @@ async def save_race_2_results(
 
 
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-
+    """Saves the results to the database. If successful, send the user a confirmation
+    message."""
     user_data = context.user_data
     category = cast(Category, user_data["category"])
     championship_round: Round = user_data["round"]
@@ -774,6 +801,9 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def change_conversation_state(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
+    """This callback is called when a number is returned in the inline keyboard
+    callback data. It allows for the implementation of go-forwards and go-backwards
+    buttons."""
     callbacks = {
         ASK_QUALI_RESULTS: ask_qualifying_results,
         DOWNLOAD_QUALI_RESULTS: download_quali_results,
