@@ -3,7 +3,6 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
-import logging
 import os
 from collections import defaultdict
 
@@ -19,7 +18,7 @@ from app.components.queries import (
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -49,7 +48,7 @@ from telegram.ext import (
 
 
 engine = create_engine(os.environ.get("DB_URL"))
-_Session = sessionmaker(bind=engine, autoflush=False)
+SQLASession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -59,7 +58,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text="Questo comando è riservato agli admin.")
         return ConversationHandler.END
 
-    session = _Session()
+    session = SQLASession()
     context.user_data["sqla_session"] = session
 
     championship = get_championship(session)
@@ -255,7 +254,7 @@ async def report_processing_entry_point(
     """Asks the user which category he wants to view reports from,
     after the /start_reviewing command is issued."""
 
-    session = _Session()
+    session = SQLASession()
     championship = get_championship(session)
     context.user_data["sqla_session"] = session
     context.user_data["championship"] = championship
@@ -286,10 +285,11 @@ async def report_processing_entry_point(
         report_categories[report.round.category.name] += 1
 
     total = sum(report_categories.values())
+
     if total == 1:
         text = f"C'è solo una segnalazione in {reports[0].category.name}"
     elif len(report_categories) == 1:
-        text = f"Ci {total} sono segnalazioni in {report.round.category.name}."
+        text = f"Ci {total} sono segnalazioni in {reports.pop().round.category.name}."
     else:
         text = f"Hai {total} segnalazioni da processare, di cui:\n"
         for category, number in report_categories.items():
@@ -340,7 +340,6 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
                 + 1
             )
-            logging.info(penalty.round.number)
             context.user_data["penalty"] = penalty
             context.user_data["current_report"] = report
             reply_markup = [
@@ -372,7 +371,6 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 callback_data=callback_data,
             )
         )
-
         text += f"\n{i + 1} - {fact}".format(
             a=report.reporting_driver.current_race_number
         )

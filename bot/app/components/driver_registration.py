@@ -4,9 +4,11 @@ This module contains all the callbacks necessary to register drivers to the data
 import os
 
 from app.components import config
+from app.components.models import Driver
 from app.components.queries import get_driver, get_similar_driver
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import (
     CallbackQueryHandler,
@@ -17,14 +19,12 @@ from telegram.ext import (
     filters,
 )
 
-from bot.app.components.models import Driver
-
 CHECK_ID, ID, RACE_NUMBER = range(3)
 OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)
 
 
 engine = create_engine(os.environ.get("DB_URL"))
-_Session = sessionmaker(bind=engine, autoflush=False)
+SQLASession: SQLASession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def driver_registration_entry_point(
@@ -32,7 +32,7 @@ async def driver_registration_entry_point(
 ) -> int:
     """Asks the user for his PSN ID"""
 
-    session = _Session()
+    session = SQLASession()
     context.user_data["sqla_session"] = session
 
     driver = get_driver(session, telegram_id=update.effective_user.id)

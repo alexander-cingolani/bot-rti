@@ -20,15 +20,17 @@ def consistency(driver: Driver) -> int:
         int: Consistency rating. (0-99)
     """
 
-    race_results: list[RaceResult] = list(
+    completed_races: list[RaceResult] = list(
         filter(lambda x: x.participated, driver.race_results)
     )
-    if len(race_results) < 2:
+    if len(completed_races) < 2:
         return 0
-    positions = [race_result.relative_position for race_result in race_results]
-    participation_ratio = len(race_results) / len(driver.race_results)
 
-    return round((99 - (stdev(positions) * 8)) * participation_ratio)
+    positions = [race_result.relative_position for race_result in completed_races]
+    participation_ratio = (len(driver.race_results)) / (len(completed_races) * 1.4)
+    participation_ratio = min(participation_ratio, 1)
+
+    return round((99 - (stdev(positions) * 3)) * participation_ratio)
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -161,6 +163,7 @@ def stats(driver: Driver) -> tuple[int, int, int]:
     poles = 0
     no_participation = 0
     average_position = 0
+    
     if not driver.race_results:
         return 0, 0, 0, 0, 0, 0, 0
 
@@ -189,14 +192,15 @@ def stats(driver: Driver) -> tuple[int, int, int]:
                 quali_positions += quali_result.relative_position
 
     races_completed = len(driver.race_results) - no_participation
-    if positions:
+    if races_completed:
         average_position = round(positions / races_completed, 2)
     else:
         average_position = 0
 
+    qualifying_sessions_completed = len(driver.qualifying_results) - no_quali_participation
     if quali_positions:
         average_quali_position = round(
-            quali_positions / (len(driver.race_results) - no_quali_participation), 2
+            quali_positions / qualifying_sessions_completed, 2
         )
     else:
         average_quali_position = 0

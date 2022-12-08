@@ -3,22 +3,19 @@ This module contains the callbacks that make up the result recognition conversat
 This conversation allows users (admins) to save race and qualifying results to the database
 by sending screenshots captured from the game or live stream.
 """
-from decimal import Decimal
 import os
+from decimal import Decimal
 from difflib import get_close_matches
 from typing import cast
 
 from app.components import config
 from app.components.models import Category, QualifyingResult, RaceResult, Round
 from app.components.ocr import Result, recognize_results, string_to_seconds
-from app.components.queries import (
-    get_championship,
-    get_driver,
-)
+from app.components.queries import get_championship, get_driver
 from app.components.utils import send_or_edit_message, separate_car_classes
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -55,7 +52,7 @@ WRONG_FILE_FORMAT_MESSAGE = (
 )
 
 engine = create_engine(os.environ.get("DB_URL"))
-_Session = sessionmaker(bind=engine, autoflush=False)
+SQLASession = sessionmaker(bind=engine, autoflush=False)
 
 
 def text_to_results(session, text: str, category: Category) -> list[Result]:
@@ -113,7 +110,7 @@ async def results_input_entry_point(
             f" se credi di doverlo essere, contatta {config.OWNER}"
         )
 
-    sqla_session = _Session()
+    sqla_session = SQLASession()
     championship = get_championship(sqla_session)
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
@@ -237,7 +234,7 @@ async def download_quali_results(
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
                 return
-            
+
             await file.download_to_drive("results.jpg")
 
             driver_names = [

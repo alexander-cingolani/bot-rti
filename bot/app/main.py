@@ -12,11 +12,7 @@ from uuid import uuid4
 import pytz
 from app.components import config
 from app.components.driver_registration import driver_registration
-from app.components.queries import (
-    get_championship,
-    get_team_leaders,
-    get_driver,
-)
+from app.components.queries import get_championship, get_driver, get_team_leaders
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
@@ -26,7 +22,6 @@ from sqlalchemy.orm import sessionmaker
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
-    BotCommandScopeChatAdministrators,
     ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -47,7 +42,6 @@ from telegram.ext import (
     InlineQueryHandler,
     PersistenceInput,
     PicklePersistence,
-    filters,
 )
 
 logging.basicConfig(
@@ -59,13 +53,13 @@ TOKEN = os.environ.get("BOT_TOKEN")
 
 
 engine = create_engine(os.environ.get("DB_URL"))
-_Session = sessionmaker(bind=engine, autoflush=False)
+SQLASession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def post_init(application: Application) -> None:
     """Sets commands for every user."""
 
-    session = _Session()
+    session = SQLASession()
     leaders = get_team_leaders(session)
     session.close()
 
@@ -164,7 +158,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
-    session = _Session()
+    session = SQLASession()
     driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
@@ -202,7 +196,7 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-    session = _Session()
+    session = SQLASession()
     driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
@@ -228,7 +222,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """
 
     query = update.inline_query.query
-    session = _Session()
+    session = SQLASession()
     results = []
     for driver in get_championship(session).driver_list:
 
@@ -306,7 +300,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-    session = _Session()
+    session = SQLASession()
     user = get_driver(session, telegram_id=update.effective_user.id)
     if not user:
         await update.message.reply_text(
@@ -350,7 +344,7 @@ async def complete_championship_standings(
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-    session = _Session()
+    session = SQLASession()
     teams = defaultdict(float)
     championship = get_championship(session)
     message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
@@ -389,7 +383,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
     """When activated via the /ultima_gara command, it sends a message containing
     the results of the user's last race."""
 
-    session = _Session()
+    session = SQLASession()
     driver = get_driver(session, telegram_id=update.effective_user.id)
 
     if not driver:
@@ -418,7 +412,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Sends a message containing the race and qualifying results of the last completed
     round in each category of the current championship."""
-    session = _Session()
+    session = SQLASession()
     championship = get_championship(session)
     message = ""
     for category in championship.categories:
@@ -443,7 +437,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message to the report channel announcing that the report window
     has opened for a specific category.
     """
-    sqla_session = _Session()
+    sqla_session = SQLASession()
     championship = get_championship(sqla_session)
     if category := championship.reporting_category():
         championship_round = category.first_non_completed_round()
@@ -464,7 +458,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     reports has closed.
     """
 
-    sqla_session = _Session()
+    sqla_session = SQLASession()
     championship = get_championship(sqla_session)
 
     if championship:
@@ -494,7 +488,7 @@ async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
-    session = _Session()
+    session = SQLASession()
     championship = get_championship(session)
     chat_data = context.chat_data
     chat_data["participation_list_sqlasession"] = session
@@ -623,6 +617,7 @@ def main() -> None:
         filepath="bot_context",
         store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False),
     )
+
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()

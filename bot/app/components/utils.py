@@ -95,7 +95,6 @@ def string_to_seconds(string) -> Decimal | None | str:
 def separate_car_classes(
     category: Category, results: list[Result]
 ) -> dict[CarClass, list[Result]]:
-
     separated_classes = {
         car_class.car_class_id: [] for car_class in category.car_classes
     }

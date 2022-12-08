@@ -61,9 +61,8 @@ def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[
     Returns:
         list[Driver]: List of drivers who were team leaders in the championship.
     """
-
     if not championship_id:
-        championship_id = get_championship().championship_id
+        championship_id = get_championship(session).championship_id
 
     statement = (
         select(Driver)
@@ -73,9 +72,8 @@ def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
         .where(TeamChampionship.championship_id == championship_id)
     )
-    q = session.execute(statement).all()
 
-    return q
+    return session.execute(statement).all()
 
 
 def get_reports(
@@ -129,6 +127,7 @@ def get_driver(
         result = session.execute(statement).one_or_none()
     except MultipleResultsFound:
         return None
+    
     return result[0] if result else None
 
 
@@ -188,6 +187,7 @@ def get_last_report_number(
         .where(Report.round_id == round_id)
         .order_by(desc(Report.number))
     ).first()
+    
     if result:
         return result[0].number
     return 0
