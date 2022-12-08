@@ -5,11 +5,11 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
-from decimal import Decimal
 import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
+from decimal import Decimal
 from typing import DefaultDict
 
 from cachetools import TTLCache
@@ -25,12 +25,12 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Interval,
+    Numeric,
     SmallInteger,
     String,
     Text,
     Time,
     UniqueConstraint,
-    Numeric,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -632,8 +632,7 @@ class QualifyingResult(Base):
         if not self.position:
             return 0
 
-        scoring = self.session.point_system.scoring
-        return scoring[self.relative_position - 1]
+        return self.session.point_system.scoring[self.relative_position - 1]
 
 
 class CarClass(Base):
@@ -852,7 +851,7 @@ class Category(Base):
     )
 
     rounds: list[Round] = relationship(
-        "Round", back_populates="category", order_by="Round.number"
+        "Round", back_populates="category", order_by="Round.date"
     )
     race_results: list[RaceResult] = relationship(
         "RaceResult", back_populates="category"
@@ -926,8 +925,8 @@ class Category(Base):
         Returns:
             DefaultDict[Driver, [int, int]]: DefaultDict containing Drivers as keys
                 and a list containing the total points and the number of positions
-                gained by the driver in the championship standings  since the last n
-                number of races.
+                gained by the driver in the championship standings in the last 
+                completed_rounds - n races.
         """
 
         if n > 0:
@@ -957,13 +956,14 @@ class Category(Base):
 
         results = dict(results)
 
-        # Calculate the points earned in the last n races
+        # Calculates the points earned in the last n races
         results_2: DefaultDict[Driver, int] = defaultdict(lambda: 0)
 
         for round in completed_rounds[n:]:
 
             for race_result in round.race_results:
                 results_2[race_result.driver] += race_result.points_earned
+
             for qualifying_result in round.qualifying_results:
                 results_2[qualifying_result.driver] += qualifying_result.points_earned
 
@@ -1016,6 +1016,32 @@ class Category(Base):
     def can_report_today(self) -> bool:
         """Returns True if today is reporting day for this category."""
         return datetime.datetime.now().weekday() == self.round_weekday + 1
+
+    def points_per_round(self):
+        """Creates a list containing a list for each round which contains the total amount
+        of points each driver had after that round.
+        """
+        array: list[list] = []
+        drivers = [driver.driver.psn_id for driver in self.drivers]
+        driver_map = defaultdict.fromkeys(drivers, 0)
+        array.append(["Tappa"] + drivers)
+        for number, round in enumerate(self.rounds, start=1):
+
+            if not round.completed:
+                continue
+
+            array.append([number])
+
+            for race_result in round.race_results:
+                driver_map[race_result.driver.psn_id] += race_result.points_earned
+            for qualifying_result in round.qualifying_results:
+                driver_map[
+                    qualifying_result.driver.psn_id
+                ] += qualifying_result.points_earned
+
+            array[number].extend(driver_map.values())
+
+        return array
 
 
 class PointSystem(Base):
@@ -1423,11 +1449,10 @@ class RaceResult(Base):
         if not self.participated:
             return 0
 
-        scoring = self.session.point_system.scoring
-
-        points = scoring[self.finishing_position - 1] + self.fastest_lap_points
-
-        return points
+        return (
+            self.session.point_system.scoring[self.finishing_position - 1]
+            + self.fastest_lap_points
+        )
 
 
 class Championship(Base):
