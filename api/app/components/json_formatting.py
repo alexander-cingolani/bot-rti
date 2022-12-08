@@ -1,9 +1,19 @@
-from app.components.models import RaceResult
+import os
+from app.components.models import Category, RaceResult
 from app.components.queries import get_championship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+URL = os.environ["DB_URL"]
+
+engine = create_engine(url=URL)
+Session = sessionmaker(engine)
 
 
 def get_categories(championship_id: int):
-    championship = get_championship(championship_id)
+
+    session = Session()
+    championship = get_championship(session, championship_id)
     if not championship:
         return []
 
@@ -14,26 +24,28 @@ def get_categories(championship_id: int):
                 "id": category.category_id,
                 "categoria": category.name,
                 "campionato": category.championship_id,
-                "ordinamento": str(i),
+                "ordinamento": i,
             }
         )
+    session.close()
     return categories
 
 
 def get_calendar(championship_id: int, category_id: int):
-    championship = get_championship(championship_id)
+    session = Session()
+    championship = get_championship(session, championship_id)
 
-    category = None
     if not championship:
         return []
+
     if not championship.categories:
         return []
+
+    order = 0
     for i, category in enumerate(championship.categories):
         if category.category_id == category_id:
+            order = i
             break
-
-    if not category:
-        return []
 
     calendar = []
 
@@ -43,89 +55,82 @@ def get_calendar(championship_id: int, category_id: int):
             info = [
                 {
                     "id": f"SR{championship_round.round_id}",
-                    "calendario": str(championship_round.round_id),
                     "nome_gp": championship_round.sprint_race.name,
-                    "ordinamento": "1",
-                    "campionato": str(category.championship_id),
+                    "ordinamento": 1,
+                    "campionato": category.championship_id,
                 },
                 {
                     "id": f"LR{championship_round.round_id}",
-                    "calendario": str(championship_round.round_id),
                     "nome_gp": championship_round.long_race.name,
-                    "ordinamento": "2",
-                    "campionato": str(category.championship_id),
+                    "ordinamento": 2,
+                    "campionato": category.championship_id,
                 },
             ]
         else:
             info = [
                 {
                     "id": f"LR{championship_round.round_id}",
-                    "calendario": str(championship_round.round_id),
-                    "nome_gp": championship_round.long_race.name,
-                    "ordinamento": "0",
-                    "campionato": str(category.championship_id),
+                    "ordinamento": 0,
                 }
             ]
 
         calendar.append(
             {
-                "id": str(championship_round.round_id),
-                "categoria": str(championship_round.category_id),
-                "campionato": str(championship_round.championship_id),
-                "ordinamento": str(i),
+                "id": championship_round.round_id,
+                "ordinamento": order,
                 "info": info,
             }
         )
+    session.close()
     return calendar
 
 
 def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
     """Creates a list containing"""
+
     driver = race_results[0].driver
     driv_res = []
 
     for race_result in race_results:
-        double_race = race_results[0].round.has_sprint_race
-
-        # Makes changes to data in order to facilitate the front-end.
-        if not double_race:
-            info_gp = f"LR{race_result.round_id}"
-            punti_extra = race_result.round.get_qualifying_result(
-                driver.driver_id
-            ).points_earned
-        elif (
-            double_race
-            and race_result.session_id == race_result.category.sprint_race.session_id
-        ):
+        if "1" in race_result.session.name:
             info_gp = f"SR{race_result.round_id}"
-            punti_extra = (
-                race_result.round.get_qualifying_result(driver.driver_id).points_earned
-                + race_result.fastest_lap_points
-            )
+            quali_session = race_result.round.get_qualifying_result(driver.driver_id)
+            extra_points = race_result.fastest_lap_points
+            penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
+            if quali_session:
+                extra_points += quali_session.points_earned
         else:
+
             info_gp = f"LR{race_result.round_id}"
-            punti_extra = race_result.fastest_lap_points
+            extra_points = race_result.fastest_lap_points
+            penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
 
         finishing_position = (
-            str(race_result.finishing_position)
+            race_result.finishing_position
             if race_result.finishing_position is not None
-            else "0"
+            else "DNS"
         )
 
         driv_res.append(
             {
-                "pilota": str(driver.driver_id),
-                "calendario": str(race_result.round_id),
                 "info_gp": info_gp,
                 "posizione": finishing_position,
-                "punti_extra": str(punti_extra).replace(".0", ""),
+                "punti_extra": int(extra_points),
+                "penalita": penalties,
             }
         )
+
     return driv_res
 
 
-def get_standings(championship_id: int, category_id: int):
-    championship = get_championship(championship_id)
+def get_standings_with_results(championship_id: int | str, category_id: int):
+    session = Session()
+
+    if championship_id == "latest":
+        championship = get_championship(session)
+    else:
+        championship = get_championship(session, championship_id)
+
     for category in championship.categories:
         if category.category_id == category_id:
             break
@@ -134,23 +139,34 @@ def get_standings(championship_id: int, category_id: int):
 
     standings = []
 
-    # Do I have to add empty lists for races that haven't been completed?
-    for driver_results, points_tally in category.current_standings():
+    for driver_results, points_tally in category.standings_with_results():
         driver = driver_results[0].driver
+        team = driver.current_team()
+        if not team:
+            team = driver.teams[-1].team
+
         driver_summary = {
-            "id": str(driver.driver_id),
+            "id": driver.driver_id,
             "pilota": driver.psn_id,
-            "punti_totali": str(points_tally).replace(".0", ""),
-            "scuderia": driver.current_team().name,
+            "classe_auto": driver.current_class(),
+            "punti_totali": int(points_tally),
+            "scuderia": team.name,
             "info": _create_driver_result_list(
                 driver_results,
             ),
         }
         standings.append(driver_summary)
+    session.close()
+
     return standings
 
 
-if __name__ == "__main__":
-    print(get_calendar(3, 11))
-    print(f"\n{get_standings(3, 11)}")
-    print(f"\n{get_categories(3, 0)}")
+def get_drivers_points(championship_id: int):
+    session = Session()
+
+    result: dict[list[list]] = {}
+    championship = get_championship(session, championship_id=championship_id)
+    for category in championship.categories:
+        result[category.category_id] = category.points_per_round()
+        result[category.category_id].insert()
+    return result
