@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from app.components import config
 from app.components.docs import ReportDocument
-from app.components.models import Category, Driver, Report
+from app.components.models import Category, Driver, Report, Round
 from app.components.queries import (
     delete_report,
     get_championship,
@@ -198,9 +198,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data["championship"] = championship
 
-    category: Category = championship.reporting_category()
-
-    if not category:
+    championship_round: Round = championship.reporting_round()
+    if not championship_round:
         text = (
             "Il periodo per le segnalazioni è terminato. Se necessario, puoi chiedere "
             "il permesso a un admin.\n"
@@ -221,8 +220,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         user_data.clear()
         return ConversationHandler.END
 
+    category: Category = championship_round.category
     user_data["category"] = category
-    championship_round = category.first_non_completed_round()
 
     text = (
         f"{championship_round.number}ª Tappa {category.name}"
@@ -513,8 +512,12 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user_data = context.user_data
     sqla_session: SQLASession = user_data["sqla_session"]
     category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
 
-    if not category.can_report_today() and not context.chat_data.get("late_report"):
+    if (
+        not championship_round == category.championship.reporting_round()
+        and not context.chat_data.get("late_report")
+    ):
         text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
 
