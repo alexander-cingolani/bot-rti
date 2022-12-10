@@ -61,7 +61,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
     user_data["categories"] = {}
-    reply_markup = []
+    buttons = []
 
     user_data["leader"] = get_driver(sqla_session, telegram_id=update.effective_user.id)
     if user_data["leader"].current_team().leader != user_data["leader"]:
@@ -83,21 +83,26 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     for i, category in enumerate(championship.categories):
-        if category.first_non_completed_round():
+        round = category.first_non_completed_round()
+        if category.first_non_completed_round() and round.date < datetime.now().date():
             category_alias = f"c{i}"
-            reply_markup.append(
+            buttons.append(
                 InlineKeyboardButton(category.name, callback_data=category_alias)
             )
             user_data["categories"][category_alias] = category
-    reply_markup = InlineKeyboardMarkup(list(chunked(reply_markup, 3)))
-    if not reply_markup:
-        text = "Il campionato è terminato! Non è più possibile effettuare segnalazioni."
+
+    if not buttons:
+        text = (
+            "Troppo tardi per le segnalazioni ritardatarie..."
+            "\nI risultati di gara sono già stati confermati."
+        )
         await update.message.reply_text(text)
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
     text = "Scegli la categoria dove vuoi creare la segnalazione:"
+    reply_markup = InlineKeyboardMarkup(list(chunked(buttons, 3)))
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
     else:
@@ -512,18 +517,18 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user_data = context.user_data
     sqla_session: SQLASession = user_data["sqla_session"]
     category: Category = user_data["category"]
-    championship_round: Round = user_data["round"]
+    report: Report = user_data["report"]
+    championship_round: Round = report.round
 
     if (
-        not championship_round == category.championship.reporting_round()
+        championship_round == category.championship.reporting_round()
         and not context.chat_data.get("late_report")
     ):
         text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
+        return
 
     if update.callback_query.data == "confirm":
-
-        report: Report = user_data["report"]
         report.category = category
         report.round = category.first_non_completed_round()
         report.reported_team = report.reported_driver.current_team()
@@ -566,7 +571,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         callback_data = (
             f"withdraw_late_report_{report.report_id}"
             if context.chat_data.get("late_report")
-            else f"withdraw_late_report{report.report_id}"
+            else f"withdraw_late_report_{report.report_id}"
         )
         reply_markup = InlineKeyboardMarkup(
             [
@@ -581,7 +586,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         text = (
             "Segnalazione inviata!"
-            "\nSe noti un errore hai 30 minuti di tempo per ritirarla."
+            "\nSe noti un errore hai 45 minuti di tempo per ritirarla."
             "\nRicorda che creando una nuova segnalazione perderai "
             "la possibilità di ritirare quella precedente."
         )
@@ -662,21 +667,19 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     report = get_report(sqla_session, report_id)
     if report:
         if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
-            minutes=30
+            minutes=45
         ):
 
-            text = "<i><b>[segnalazione ritirata]</b></i>"
             try:
-                await context.bot.edit_message_caption(
+                await context.bot.delete_message(
                     chat_id=config.REPORT_CHANNEL,
                     message_id=report.channel_message_id,
-                    caption=text,
                 )
+
             except BadRequest:
-                await context.bot.edit_message_caption(
+                await context.bot.delete_message(
                     chat_id=config.LATE_REPORT_CHAT,
                     message_id=report.channel_message_id,
-                    caption=text,
                 )
 
             text = "Segnalazione ritirata."
