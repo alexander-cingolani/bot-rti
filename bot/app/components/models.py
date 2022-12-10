@@ -35,7 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 
-from bot.app.components.utils import Result
+from app.components.utils import Result
 
 # pylint: disable=too-many-lines, redefined-builtin
 # In this project "round" always refers to an instance of a Round object.
@@ -1138,8 +1138,10 @@ class Round(Base):
         return f"Round(circuit={self.circuit}, date={self.date}, completed={self.completed})"
 
     def __eq__(self, other: Round) -> bool:
-        return self.round_id == other.round_id
-
+        if isinstance(other, Round):
+            return self.round_id == other.round_id
+        return False
+    
     def generate_info_message(self) -> str:
         """Generates a message containing info on the category's races."""
 
