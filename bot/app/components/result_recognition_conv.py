@@ -4,6 +4,7 @@ This conversation allows users (admins) to save race and qualifying results to t
 by sending screenshots captured from the game or live stream.
 """
 from collections import defaultdict
+import logging
 import os
 from decimal import Decimal
 from difflib import get_close_matches
@@ -87,6 +88,7 @@ def text_to_results(session, text: str, category: Category) -> list[Result]:
             result = Result(driver_obj.psn_id, seconds)
             result.car_class = driver_classes[driver_obj.psn_id]
             results[i] = result
+            
     for driver in drivers:
         driver_obj = get_driver(session, psn_id=driver)
         result = Result(driver_obj.psn_id, 0)
@@ -94,6 +96,10 @@ def text_to_results(session, text: str, category: Category) -> list[Result]:
         result.car_class = driver_classes[driver_obj.psn_id]
         results.append(result)
 
+    ##### test
+    for res in results:
+        logging.info(f"{res.driver} {res.car_class}")
+    
     return results
 
 
@@ -308,7 +314,7 @@ async def download_race_1_results(
     user_data = context.user_data
     category: Category = user_data["category"]
     championship_round: Round = user_data["round"]
-    sqla_session: SQLASession = user_data
+    sqla_session: SQLASession = user_data["sqla_session"]
     if update.callback_query:
         if championship_round.has_sprint_race:
             gara = " 1"
@@ -323,7 +329,7 @@ async def download_race_1_results(
     if update.message:
         if update.message.text:
             results = text_to_results(
-                sqla_session, update.message.text, category=category
+                session=sqla_session, text=update.message.text, category=category
             )
         else:
             await update.effective_chat.send_action(ChatAction.TYPING)
@@ -447,11 +453,11 @@ async def ask_2nd_fastest_lap_1(
         ):
             user_data["race_results"][championship_round.long_race][
                 "fastest_lap_drivers"
-            ] = [category.active_drivers()[int(update.callback_query.data[1])].driver]
+            ] = [category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id]
         else:
             user_data["race_results"][championship_round.long_race][
                 "fastest_lap_drivers"
-            ][0] = category.active_drivers()[int(update.callback_query.data[1])].driver
+            ][0] = category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id
 
     buttons = []
     car_class = category.car_classes[1].car_class
@@ -506,10 +512,19 @@ async def save_race_1_results(
 
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
-        user_data["race_results"][championship_round.long_race][
+        if user_data["race_results"][championship_round.long_race].get(
             "fastest_lap_drivers"
-        ].append(category.active_drivers()[int(update.callback_query.data[1])].driver)
-
+        ):
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ].append(
+                category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id
+            )
+        else:
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ] = [category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id]
+            
     if championship_round.has_sprint_race:
         text = "Invia i risultati di gara 2."
         reply_markup = InlineKeyboardMarkup(
@@ -666,12 +681,12 @@ async def save_race_2_results(
 
     user_data = context.user_data
     category: Category = user_data["category"]
-
+    championship_round: Round = user_data["round"]
     # Saves driver who scored the fastest lap.
     if update.callback_query.data != "save_race_2_results":
-        user_data["fastest_lap_2"] = category.active_drivers()[
+        user_data["race_results"][championship_round.sprint_race]["fastest_lap_driver"] = [category.active_drivers()[
             int(update.callback_query.data[1])
-        ].driver
+        ].driver.psn_id]
 
     # Ask if to persist results or edit fastest driver
     text = "Dopo aver controllato che i risultati siano corretti, premi conferma per salvarli."
@@ -716,15 +731,16 @@ def create_quali_result_objs(sqla_session, quali_results, category, championship
                     relative_position=pos,
                 )
             )
+    return result_objs
 
 
 def create_race_result_objs(
-    sqla_session, category, championship_round: Round, race_results: dict
+    sqla_session: SQLASession, category, championship_round: Round, race_results: dict
 ):
+    logging.info(race_results)
     result_objs = []
     for session, stuff in race_results.items():
-
-        results, fastest_laps = stuff.items.values()
+        results, fastest_laps = stuff.values()
         separated_results = separate_car_classes(category, results)
 
         for class_results in separated_results.values():
@@ -742,7 +758,7 @@ def create_race_result_objs(
                 result = RaceResult(
                     finishing_position=result.position,
                     fastest_lap_points=bonus_points,
-                    driver=get_driver(sqla_session, driver=result.driver),
+                    driver=get_driver(sqla_session, psn_id=result.driver),
                     session=session,
                     round=championship_round,
                     gap_to_first=gap_to_first,
@@ -751,6 +767,7 @@ def create_race_result_objs(
                 )
                 result.participated = bool(pos)
                 result_objs.append(result)
+    return result_objs
 
 
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -776,7 +793,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     result_objs.extend(
         create_race_result_objs(
-            sqla_session=DBSession,
+            sqla_session=sqla_session,
             category=category,
             championship_round=championship_round,
             race_results=race_results,
