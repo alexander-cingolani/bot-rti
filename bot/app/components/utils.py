@@ -4,8 +4,8 @@ Helper stuff. Hope to get rid of it soon.
 from decimal import Decimal
 import re
 from dataclasses import dataclass
+from typing import Any
 
-from app.components.models import CarClass, Category
 from telegram import Update
 
 
@@ -17,7 +17,7 @@ class Result:
 
     driver: str
     seconds: float
-    car_class: CarClass
+    car_class: Any
     position: int
 
     def __init__(self, driver, seconds):
@@ -93,8 +93,8 @@ def string_to_seconds(string) -> Decimal | None | str:
 
 
 def separate_car_classes(
-    category: Category, results: list[Result]
-) -> dict[CarClass, list[Result]]:
+    category: Any, results: list[Result]
+) -> dict[Any, list[Result]]:
     separated_classes = {
         car_class.car_class_id: [] for car_class in category.car_classes
     }
