@@ -3,10 +3,11 @@ This module contains the callbacks that make up the result recognition conversat
 This conversation allows users (admins) to save race and qualifying results to the database
 by sending screenshots captured from the game or live stream.
 """
+from collections import defaultdict
+import logging
 import os
 from decimal import Decimal
 from difflib import get_close_matches
-from typing import cast
 
 from app.components import config
 from app.components.models import Category, QualifyingResult, RaceResult, Round
@@ -15,7 +16,7 @@ from app.components.queries import get_championship, get_driver
 from app.components.utils import send_or_edit_message, separate_car_classes
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -37,10 +38,9 @@ from telegram.ext import (
     SAVE_RACE_1_RESULTS,
     DOWNLOAD_RACE_2_RESULTS,
     ASK_FASTEST_LAP_2,
-    ASK_2ND_FASTEST_LAP_2,
     SAVE_RACE_2_RESULTS,
     PERSIST_RESULTS,
-) = range(27, 39)
+) = range(27, 38)
 
 
 WRONG_FILE_FORMAT_MESSAGE = (
@@ -52,7 +52,7 @@ WRONG_FILE_FORMAT_MESSAGE = (
 )
 
 engine = create_engine(os.environ.get("DB_URL"))
-SQLASession = sessionmaker(bind=engine, autoflush=False)
+DBSession: SQLASession = sessionmaker(bind=engine, autoflush=False)
 
 
 def text_to_results(session, text: str, category: Category) -> list[Result]:
@@ -88,6 +88,7 @@ def text_to_results(session, text: str, category: Category) -> list[Result]:
             result = Result(driver_obj.psn_id, seconds)
             result.car_class = driver_classes[driver_obj.psn_id]
             results[i] = result
+            
     for driver in drivers:
         driver_obj = get_driver(session, psn_id=driver)
         result = Result(driver_obj.psn_id, 0)
@@ -95,6 +96,10 @@ def text_to_results(session, text: str, category: Category) -> list[Result]:
         result.car_class = driver_classes[driver_obj.psn_id]
         results.append(result)
 
+    ##### test
+    for res in results:
+        logging.info(f"{res.driver} {res.car_class}")
+    
     return results
 
 
@@ -110,10 +115,11 @@ async def results_input_entry_point(
             f" se credi di doverlo essere, contatta {config.OWNER}"
         )
 
-    sqla_session = SQLASession()
+    sqla_session: SQLASession = DBSession()
     championship = get_championship(sqla_session)
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
+    user_data["race_results"] = defaultdict(dict)
 
     reply_markup = InlineKeyboardMarkup(
         [
@@ -150,7 +156,7 @@ async def ask_qualifying_results(
             int(update.callback_query.data[1])
         ]
 
-    category = cast(Category, user_data["category"])
+    category: Category = user_data["category"]
 
     current_round = category.first_non_completed_round()
     user_data["round"] = current_round
@@ -307,9 +313,10 @@ async def download_race_1_results(
     that the recognized results are correct."""
     user_data = context.user_data
     category: Category = user_data["category"]
-    sqla_session: SQLASession = user_data
+    championship_round: Round = user_data["round"]
+    sqla_session: SQLASession = user_data["sqla_session"]
     if update.callback_query:
-        if user_data["round"].has_sprint_race:
+        if championship_round.has_sprint_race:
             gara = " 1"
         else:
             gara = ""
@@ -319,27 +326,23 @@ async def download_race_1_results(
         return SAVE_RACE_1_RESULTS
 
     drivers = [driver.driver.psn_id for driver in category.active_drivers()]
-
     if update.message:
-
         if update.message.text:
             results = text_to_results(
-                sqla_session, update.message.text, category=category
+                session=sqla_session, text=update.message.text, category=category
             )
         else:
-
             await update.effective_chat.send_action(ChatAction.TYPING)
-
             try:
                 file = await update.message.document.get_file()
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
                 return
-
             screenshot = await file.download_to_drive("results_1.jpg")
-            results = recognize_results(sqla_session, screenshot, drivers)[1]
 
-    user_data["race_1_results"] = results
+            _, results = recognize_results(sqla_session, screenshot, drivers)
+
+    user_data["race_results"][championship_round.long_race]["results"] = results
     text = ""
     # Sends recognized results to the user
     for result in results:
@@ -379,6 +382,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """Asks which driver scored the fastest lap in the first class of the first race."""
     user_data = context.user_data
     category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
     sqla_session: SQLASession = user_data["sqla_session"]
 
     buttons = []
@@ -392,7 +396,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if not category.multi_class:
         text = "Chi ha segnato il giro più veloce?"
-        if user_data["round"].has_sprint_race:
+        if championship_round.has_sprint_race:
             button_text = "Salva risultati »"
             callback_data = "save_race_1_results"
         else:
@@ -400,7 +404,7 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             callback_data = "save_race_1_results"
     else:
         text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
-        if user_data["round"].has_sprint_race:
+        if championship_round.has_sprint_race:
             button_text = f"G.V. classe {category.car_classes[1].car_class.name} »"
             callback_data = "ask_2nd_fastest_lap_1"
         else:
@@ -421,11 +425,10 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     # Saves corrected results if a message was sent.
     if update.message:
-        user_data["race_1_results"] = text_to_results(
-            sqla_session, update.message.text, user_data["category"]
-        )
+        user_data["race_results"][championship_round.long_race]["results"] = [
+            text_to_results(sqla_session, update.message.text, user_data["category"])
+        ]
         await update.message.reply_text(text, reply_markup=reply_markup)
-
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
 
@@ -442,12 +445,19 @@ async def ask_2nd_fastest_lap_1(
     user_data = context.user_data
     category: Category = user_data["category"]
     sqla_session: SQLASession = user_data["sqla_session"]
-
+    championship_round: Round = user_data["round"]
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
-        user_data["fastest_lap_1"] = category.active_drivers()[
-            int(update.callback_query.data[1])
-        ].driver
+        if not user_data["race_results"][championship_round.long_race].get(
+            "fastest_lap_drivers"
+        ):
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ] = [category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id]
+        else:
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ][0] = category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id
 
     buttons = []
     car_class = category.car_classes[1].car_class
@@ -458,7 +468,7 @@ async def ask_2nd_fastest_lap_1(
             )
     buttons = list(chunked(buttons, 2))
 
-    if user_data["round"].has_sprint_race:
+    if championship_round.has_sprint_race:
         button_text = "Salva risultati »"
         callback_data = "save_race_1_results"
     else:
@@ -479,9 +489,9 @@ async def ask_2nd_fastest_lap_1(
     text = f"Chi ha segnato il giro più veloce in {car_class.name}?"
 
     if update.message:
-        user_data["race_1_results"] = text_to_results(
-            sqla_session, update.message.text, user_data["category"]
-        )
+        user_data["race_results"][championship_round.long_race][
+            "results"
+        ] = text_to_results(sqla_session, update.message.text, user_data["category"])
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
@@ -498,19 +508,24 @@ async def save_race_1_results(
     to send them."""
     user_data = context.user_data
     category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
 
     # Saves driver who scored the fastest lap if callback data contains a driver.
     if update.callback_query.data != "save_race_1_results":
-        if not category.multi_class:
-            user_data["fastest_lap_1"] = category.active_drivers()[
-                int(update.callback_query.data[1])
-            ].driver
+        if user_data["race_results"][championship_round.long_race].get(
+            "fastest_lap_drivers"
+        ):
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ].append(
+                category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id
+            )
         else:
-            user_data["2nd_fastest_lap_1"] = category.active_drivers()[
-                int(update.callback_query.data[1])
-            ].driver
-
-    if user_data["round"].has_sprint_race:
+            user_data["race_results"][championship_round.long_race][
+                "fastest_lap_drivers"
+            ] = [category.active_drivers()[int(update.callback_query.data[1])].driver.psn_id]
+            
+    if championship_round.has_sprint_race:
         text = "Invia i risultati di gara 2."
         reply_markup = InlineKeyboardMarkup(
             [
@@ -561,11 +576,10 @@ async def download_race_2_results(
 
     user_data = context.user_data
     category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
     sqla_session: SQLASession = user_data["sqla_session"]
     drivers = [driver.driver.psn_id for driver in category.active_drivers()]
 
-    # gt7 needs 2 screenshots, therefore after the first screenshot is received
-    # DOWNLOAD_RACE_RESULTS is returned again, to receive the second screenshot.
     if update.message:
         if update.message.text:
             results = text_to_results(
@@ -582,11 +596,11 @@ async def download_race_2_results(
                 return
 
             screenshot = await file.download_to_drive("results_1.jpg")
-            results = recognize_results(sqla_session, screenshot, drivers)[1]
+            _, results = recognize_results(sqla_session, screenshot, drivers)
 
-    user_data["race_2_results"] = results
+    user_data["race_results"][championship_round.sprint_race]["results"] = results
     text = ""
-    # Sends recognized results to the user
+
     for result in results:
         if result.seconds is None:
             racetime = "ASSENTE"
@@ -623,6 +637,7 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """Asks the user which driver scored the fastest lap in the second race."""
     user_data = context.user_data
     category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
     sqla_session: SQLASession = user_data["sqla_session"]
     buttons = []
     for i, driver in enumerate(category.active_drivers()):
@@ -648,7 +663,7 @@ async def ask_fastest_lap_2(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     # Saves corrected results if a message was sent.
     if update.message:
-        user_data["race_2_results"] = text_to_results(
+        user_data["race_results"][championship_round.sprint_race][0] = text_to_results(
             sqla_session, update.message.text, user_data["category"]
         )
         await update.message.reply_text(text, reply_markup=reply_markup)
@@ -666,12 +681,12 @@ async def save_race_2_results(
 
     user_data = context.user_data
     category: Category = user_data["category"]
-
+    championship_round: Round = user_data["round"]
     # Saves driver who scored the fastest lap.
     if update.callback_query.data != "save_race_2_results":
-        user_data["fastest_lap_2"] = category.active_drivers()[
+        user_data["race_results"][championship_round.sprint_race]["fastest_lap_driver"] = [category.active_drivers()[
             int(update.callback_query.data[1])
-        ].driver
+        ].driver.psn_id]
 
     # Ask if to persist results or edit fastest driver
     text = "Dopo aver controllato che i risultati siano corretti, premi conferma per salvarli."
@@ -693,59 +708,39 @@ async def save_race_2_results(
     return PERSIST_RESULTS
 
 
-async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Saves the results to the database. If successful, send the user a confirmation
-    message."""
-    user_data = context.user_data
-    category = cast(Category, user_data["category"])
-    championship_round: Round = user_data["round"]
-    quali_results: list[Result] = user_data.get("quali_results")
-    sqla_session: SQLASession = user_data["sqla_session"]
-    result_objs = []  # All QualifyingResults and RaceResults will be added to this.
+def create_quali_result_objs(sqla_session, quali_results, category, championship_round):
+    result_objs = []
+    individual_class_results = separate_car_classes(category, quali_results)
 
-    if quali_results:
-
-        individual_class_results = separate_car_classes(category, quali_results)
-
-        for class_results in individual_class_results.values():
-            class_pole_time = class_results[0].seconds
-            for pos, quali_res in enumerate(class_results, start=1):
-                if quali_res.seconds:
-                    gap_to_first = quali_res.seconds - class_pole_time
-                participated = bool(quali_res.position)
-                if not participated:
-                    pos = None
-                result_objs.append(
-                    QualifyingResult(
-                        position=quali_res.position,
-                        gap_to_first=gap_to_first,
-                        laptime=quali_res.seconds,
-                        driver=get_driver(sqla_session, psn_id=quali_res.driver),
-                        round=championship_round,
-                        participated=bool(quali_res.position),
-                        relative_position=pos,
-                    )
+    for class_results in individual_class_results.values():
+        class_pole_time = class_results[0].seconds
+        for pos, quali_res in enumerate(class_results, start=1):
+            if quali_res.seconds:
+                gap_to_first = quali_res.seconds - class_pole_time
+            participated = bool(quali_res.position)
+            if not participated:
+                pos = None
+            result_objs.append(
+                QualifyingResult(
+                    position=quali_res.position,
+                    gap_to_first=gap_to_first,
+                    laptime=quali_res.seconds,
+                    driver=get_driver(sqla_session, psn_id=quali_res.driver),
+                    round=championship_round,
+                    participated=bool(quali_res.position),
+                    relative_position=pos,
                 )
+            )
+    return result_objs
 
-    if user_data["round"].has_sprint_race:
-        race_1_results: list[Result] = user_data["race_1_results"]
-        race_2_results: list[Result] = user_data["race_2_results"]
-        sessions = [
-            (championship_round.sprint_race, race_1_results),
-            (championship_round.long_race, race_2_results),
-        ]
-    else:
-        # If the category has no sprint race then it can only have a long race.
-        race_results: list[Result] = user_data["race_1_results"]
-        sessions = [(championship_round.long_race, race_results)]
 
-    # Saves race results for every race session.
-    for i, (session, results) in enumerate(sessions):
-        fastest_lap_drivers = [user_data[f"fastest_lap_{i + 1}"].psn_id]
-
-        if user_data.get(f"2nd_fastest_lap_{i + 1}"):
-            fastest_lap_drivers.append(user_data[f"2nd_fastest_lap_{i + 1}"].psn_id)
-
+def create_race_result_objs(
+    sqla_session: SQLASession, category, championship_round: Round, race_results: dict
+):
+    logging.info(race_results)
+    result_objs = []
+    for session, stuff in race_results.items():
+        results, fastest_laps = stuff.values()
         separated_results = separate_car_classes(category, results)
 
         for class_results in separated_results.values():
@@ -753,7 +748,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             for pos, result in enumerate(class_results, start=1):
 
                 bonus_points = 0
-                if result.driver in fastest_lap_drivers:
+                if result.driver in fastest_laps:
                     bonus_points += 1
                 if result.seconds:
                     gap_to_first = result.seconds - winners_racetime
@@ -763,7 +758,7 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 result = RaceResult(
                     finishing_position=result.position,
                     fastest_lap_points=bonus_points,
-                    driver=get_driver(sqla_session, driver=result.driver),
+                    driver=get_driver(sqla_session, psn_id=result.driver),
                     session=session,
                     round=championship_round,
                     gap_to_first=gap_to_first,
@@ -772,6 +767,38 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
                 result.participated = bool(pos)
                 result_objs.append(result)
+    return result_objs
+
+
+async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Saves the results to the database. If successful, send the user a confirmation
+    message."""
+    user_data = context.user_data
+    category: Category = user_data["category"]
+    championship_round: Round = user_data["round"]
+    quali_results: list[Result] = user_data.get("quali_results")
+    race_results: list[Result] = user_data["race_results"]
+    sqla_session: SQLASession = user_data["sqla_session"]
+    result_objs = []  # All QualifyingResults and RaceResults will be added to this.
+
+    if quali_results:
+        result_objs.extend(
+            create_quali_result_objs(
+                sqla_session=sqla_session,
+                quali_results=quali_results,
+                category=category,
+                championship_round=championship_round,
+            )
+        )
+
+    result_objs.extend(
+        create_race_result_objs(
+            sqla_session=sqla_session,
+            category=category,
+            championship_round=championship_round,
+            race_results=race_results,
+        )
+    )
 
     buttons = []
     for i, category in enumerate(user_data["championship"].categories):

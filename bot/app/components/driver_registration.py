@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-CHECK_ID, ID, RACE_NUMBER = range(3)
+CHECK_ID, ID = range(2)
 OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)
 
 

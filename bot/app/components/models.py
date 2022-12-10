@@ -12,7 +12,6 @@ from datetime import time, timedelta
 from decimal import Decimal
 from typing import DefaultDict
 
-from cachetools import TTLCache
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -36,11 +35,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 
+from app.components.utils import Result
+
 # pylint: disable=too-many-lines, redefined-builtin
 # In this project "round" always refers to an instance of a Round object.
 
 Base = declarative_base()
-cache = TTLCache(maxsize=3, ttl=timedelta(seconds=30))
 
 
 class Penalty(Base):
@@ -827,7 +827,6 @@ class Category(Base):
     Attributes:
         category_id (int): A Unique ID.
         name (str): Name of the category.
-        round_weekday (int): Day of the week (Mon = 0, Sun = 6) when the races happen.
 
         championship_id (int): ID of the championship the category belongs to.
         game_id (int): ID of the game the category is based on.
@@ -844,7 +843,6 @@ class Category(Base):
 
     category_id: int = Column(SmallInteger, primary_key=True)
     name: str = Column(String(20), nullable=False)
-    round_weekday: int = Column(SmallInteger, nullable=False)
     game_id: int = Column(ForeignKey("games.game_id"), nullable=False)
     championship_id: int = Column(
         ForeignKey("championships.championship_id"), nullable=False
@@ -925,7 +923,7 @@ class Category(Base):
         Returns:
             DefaultDict[Driver, [int, int]]: DefaultDict containing Drivers as keys
                 and a list containing the total points and the number of positions
-                gained by the driver in the championship standings in the last 
+                gained by the driver in the championship standings in the last
                 completed_rounds - n races.
         """
 
@@ -1012,10 +1010,6 @@ class Category(Base):
             results[qualifying_result.driver][1] += qualifying_result.points_earned
 
         return sorted(list(results.values()), key=lambda x: x[1], reverse=True)
-
-    def can_report_today(self) -> bool:
-        """Returns True if today is reporting day for this category."""
-        return datetime.datetime.now().weekday() == self.round_weekday + 1
 
     def points_per_round(self):
         """Creates a list containing a list for each round which contains the total amount
@@ -1143,6 +1137,11 @@ class Round(Base):
     def __repr__(self) -> str:
         return f"Round(circuit={self.circuit}, date={self.date}, completed={self.completed})"
 
+    def __eq__(self, other: Round) -> bool:
+        if isinstance(other, Round):
+            return self.round_id == other.round_id
+        return False
+    
     def generate_info_message(self) -> str:
         """Generates a message containing info on the category's races."""
 
@@ -1185,6 +1184,14 @@ class Round(Base):
         for session in self.sessions:
             if session.is_quali:
                 return session
+
+    @property
+    def race_sessions(self) -> list[Session]:
+        sessions = []
+        for session in self.sessions:
+            if not session.is_quali:
+                sessions.append(sessions)
+        return sessions
 
     @property
     def sprint_race(self) -> Session:
@@ -1291,7 +1298,7 @@ class Session(Base):
                 seconds += penalty.time_penalty
         return seconds
 
-    def results(self) -> str:
+    def results_message(self) -> str:
         """Generates a message containing the results of this session."""
         message = f"<i>{self.name}</i>\n"
 
@@ -1441,6 +1448,11 @@ class RaceResult(Base):
             f"total_racetime={self.total_racetime}) "
         )
 
+    @classmethod
+    def from_result(cls, result: Result):
+        result.position
+        c = cls(result.driver)
+
     @property
     def points_earned(self) -> float:
         """Total amount of points earned by the driver in this race.
@@ -1466,7 +1478,7 @@ class Championship(Base):
         end (datetime.date): Date the championship ends on.
 
         categories (list[Category]): Categories belonging to the championship.
-            [Ordered by round_weekday]
+            [Ordered by category_id]
         drivers (list[DriverChampionship]): Drivers participating in the championship.
         rounds (list[Round]): Rounds present in the championship.
     """
@@ -1479,7 +1491,7 @@ class Championship(Base):
     end: datetime.date = Column(Date)
 
     categories: list[Category] = relationship(
-        "Category", back_populates="championship", order_by="Category.round_weekday"
+        "Category", back_populates="championship", order_by="Category.category_id"
     )
     teams: list[TeamChampionship] = relationship(
         "TeamChampionship", back_populates="championship"
@@ -1506,21 +1518,19 @@ class Championship(Base):
         )
         self.end = kwargs.get("end")
 
-    def reporting_category(self) -> Category | None:
-        """Returns the category which can create reports today."""
-        for category in self.categories:
-            if (
-                category.round_weekday
-                == (datetime.datetime.now() - timedelta(days=1)).weekday()
-            ):
-                return category
+    def reporting_round(self) -> Round | None:
+        """Returns the round in which reports can currently be created."""
+        now = datetime.datetime.now().date()
+        for round in self.rounds:
+            if (round.date + timedelta(hours=24)) == now:
+                return round
         return None
 
     def current_racing_category(self) -> Category | None:
         """Returns the category which races today."""
-        for category in self.categories:
-            if category.round_weekday == datetime.datetime.now().weekday():
-                return category
+        for round in self.rounds:
+            if round.date == datetime.datetime.now().date():
+                return round.category
         return None
 
     def is_active(self) -> bool:

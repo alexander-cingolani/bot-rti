@@ -1,16 +1,21 @@
+"""
+Helper stuff. Hope to get rid of it soon.
+"""
+from decimal import Decimal
 import re
 from dataclasses import dataclass
-from datetime import timedelta
-
-from app.components.models import CarClass, Category
+from typing import Any
 
 
 @dataclass
 class Result:
+    """Helper class to store data necessary to create a RaceResult
+    or a QualifyingResult
+    """
 
     driver: str
     seconds: float
-    car_class: CarClass
+    car_class: Any
     position: int
 
     def __init__(self, driver, seconds):
@@ -22,8 +27,23 @@ class Result:
     def __hash__(self) -> int:
         return hash(str(self))
 
+    def prepare_result(self, best_time: float, position: int) -> None:
+        """Modifies Result to contain valid data for a RaceResult."""
+        if self.seconds is None:
+            self.position = None
+        elif self.seconds == 0:
+            self.seconds = None
+            self.position = position
+        elif position == 1:
+            self.position = position
+            self.seconds = best_time
+        else:
+            self.seconds = self.seconds + best_time
+            self.position = position
+        return self
 
-def string_to_seconds(string) -> float | None | str:
+
+def string_to_seconds(string) -> Decimal | None | str:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     None is returned when the driver did not finish the race
@@ -31,7 +51,9 @@ def string_to_seconds(string) -> float | None | str:
     Returns:
         float: Number of seconds.
     """
-    match = re.search(r"((([0-9]){1,2}:)){0,2}[0-9]{1,2}((\.|,)[0-9]{1,3})?", string)
+    match = re.search(
+        r"([0-9]{1,2}:)?([0-9]{1,2}:){0,2}[0-9]{1,2}(\.|,)[0-9]{1,3}", string
+    )
     if not match:
         if (
             "gir" in string
@@ -58,35 +80,19 @@ def string_to_seconds(string) -> float | None | str:
     elif other.count(":") == 1:
         minutes, seconds = other.split(":")
     else:
-        seconds = other
+        if len(other) > 2:
+            seconds = other[-2:]
+        else:
+            seconds = other
 
-    return timedelta(
-        hours=int(hours),
-        minutes=int(minutes),
-        seconds=int(seconds),
-        milliseconds=int(milliseconds),
-    ).total_seconds()
-
-
-def _prepare_result(raceres: Result, best_time: float, position: int) -> Result:
-    if raceres.seconds is None:
-        raceres.position = None
-    elif raceres.seconds == 0:
-        raceres.seconds = None
-        raceres.position = position
-    elif position == 1:
-        raceres.position = position
-        raceres.seconds = best_time
-    else:
-        raceres.seconds = raceres.seconds + best_time
-        raceres.position = position
-    return raceres
+    return Decimal(
+        f"{int(hours) * 3600 + int(minutes) * 60 + int(seconds)}.{int(milliseconds)}"
+    )
 
 
 def separate_car_classes(
-    category: Category, results: list[Result]
-) -> dict[CarClass, list[Result]]:
-
+    category: Any, results: list[Result]
+) -> dict[Any, list[Result]]:
     separated_classes = {
         car_class.car_class_id: [] for car_class in category.car_classes
     }
@@ -96,7 +102,7 @@ def separate_car_classes(
         for pos, result in enumerate(results, start=1):
             if result.car_class.car_class_id in separated_classes:
                 separated_classes[result.car_class.car_class_id].append(
-                    _prepare_result(result, best_laptime, pos)
+                    result.prepare_result(best_laptime, pos)
                 )
         return separated_classes
 
@@ -106,4 +112,4 @@ def separate_car_classes(
         car_class = result.driver.current_class().car_class_id
         if car_class in separated_classes:
             separated_classes[car_class].append(result)
-        return separated_classes
+    return separated_classes

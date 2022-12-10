@@ -48,7 +48,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
 TOKEN = os.environ.get("BOT_TOKEN")
 
 
@@ -398,11 +397,11 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 
     message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
 
-    message += championship_round.qualifying_session.results()
+    message += championship_round.qualifying_session.results_message()
 
     if championship_round.has_sprint_race:
-        message += championship_round.sprint_race.results()
-    message += championship_round.long_race.results()
+        message += championship_round.sprint_race.results_message()
+    message += championship_round.long_race.results_message()
 
     await update.message.reply_text(text=message)
     session.close()
@@ -423,11 +422,11 @@ async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYP
             f"TAPPA #{championship.abbreviated_name}</b></i>\n\n"
         )
 
-        message += championship_round.qualifying_session.results()
+        message += championship_round.qualifying_session.results_message()
 
         if championship_round.has_sprint_race:
-            message += championship_round.sprint_race.results()
-        message += championship_round.long_race.results()
+            message += championship_round.sprint_race.results_message()
+        message += championship_round.long_race.results_message()
 
     await update.message.reply_text(text=message)
     session.close()
@@ -439,7 +438,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     sqla_session = SQLASession()
     championship = get_championship(sqla_session)
-    if category := championship.reporting_category():
+    if category := championship.reporting_round():
         championship_round = category.first_non_completed_round()
         text = (
             f"<b>Segnalazioni Categoria {category.name}</b>\n"
@@ -463,7 +462,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if championship:
 
-        if category := championship.reporting_category():
+        if category := championship.reporting_round():
             if not category.first_non_completed_round().reports:
                 await context.bot.send_message(
                     chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
