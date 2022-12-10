@@ -65,37 +65,6 @@ def speed(driver: Driver) -> int:
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=240))
-def experience(driver: Driver, max_races: int) -> int:
-    """This statistic is calculated based on the maximum number of races
-    completed by any driver in the database. The closer the amount of races
-    completed by the given driver the closer the resulting score is to 99.
-
-    Args:
-        driver (Driver): The driver to calculate the experience of.
-        max_races (int): Maximum number of races completed by any driver.
-
-    Returns:
-        int: Experience rating. (0-99)
-    """
-
-    if not max_races:
-        return 0
-
-    disputed_rounds = []
-    for race_result in driver.race_results:
-        if (
-            race_result.gap_to_first != 0
-            and race_result.round.round_id not in disputed_rounds
-        ):
-            disputed_rounds.append(race_result.round.round_id)
-
-    if not disputed_rounds:
-        return 0
-
-    return round(99 - ((max_races - len(disputed_rounds)) / max_races * 99) * 0.6)
-
-
-@cached(cache=TTLCache(maxsize=50, ttl=240))
 def sportsmanship(driver: Driver) -> int:
     """This statistic is calculated based on the amount and gravity of reports received.
 
@@ -163,7 +132,7 @@ def stats(driver: Driver) -> tuple[int, int, int]:
     poles = 0
     no_participation = 0
     average_position = 0
-    
+
     if not driver.race_results:
         return 0, 0, 0, 0, 0, 0, 0
 
@@ -197,7 +166,9 @@ def stats(driver: Driver) -> tuple[int, int, int]:
     else:
         average_position = 0
 
-    qualifying_sessions_completed = len(driver.qualifying_results) - no_quali_participation
+    qualifying_sessions_completed = (
+        len(driver.qualifying_results) - no_quali_participation
+    )
     if quali_positions:
         average_quali_position = round(
             quali_positions / qualifying_sessions_completed, 2

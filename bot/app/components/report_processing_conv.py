@@ -30,7 +30,6 @@ from telegram.ext import (
 )
 
 (
-    NEW_REPORT,
     ASK_ROUND,
     ASK_SESSION,
     ASK_DRIVER,
@@ -44,7 +43,7 @@ from telegram.ext import (
     ASK_PENALTY_REASON,
     ASK_QUEUE_OR_SEND,
     ASK_IF_NEXT,
-) = range(12, 26)
+) = range(13, 26)
 
 
 engine = create_engine(os.environ.get("DB_URL"))
@@ -699,17 +698,6 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     await send_or_edit_message(update, text)
     sqla_session.close()
     user_data.clear()
-    return ConversationHandler.END
-
-
-async def cancel_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Deletes the current penalty."""
-    del context.user_data["penalty"]
-    await update.message.reply_text(
-        "Ok! I dati raccolti per quest'ultima segnalazione sono stati cancellati."
-    )
-    context.user_data["sqla_session"].close()
-    context.user_data.clear()
     return ConversationHandler.END
 
 
