@@ -16,6 +16,7 @@ RUN apk add jpeg-dev zlib-dev freetype-dev lcms2-dev openjpeg-dev tiff-dev tk-de
 COPY ./requirements.txt /bot/requirements.txt
 
 RUN pip install pip --upgrade
+RUN pip install python-telegram-bot[all] --pre
 RUN pip3 install -r requirements.txt --use-pep517
 
 COPY ./app /bot/app
