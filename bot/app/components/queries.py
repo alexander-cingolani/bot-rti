@@ -3,6 +3,7 @@ This module contains the necessary queries in order to retrieve specific objects
 such as Reports, Categories and Drivers.
 """
 
+import uuid
 import sqlalchemy as sa
 from app.components.models import (
     Category,
@@ -143,7 +144,7 @@ def get_driver(
     return result[0] if result else None
 
 
-def get_report(session: SQLASession, report_id: int) -> Report | None:
+def get_report(session: SQLASession, report_id: uuid.UUID) -> Report | None:
     """Returns the report matching the given report_id.
 
     Args:

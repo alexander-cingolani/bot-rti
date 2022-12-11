@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from app.components import config
 from app.components.docs import ReportDocument
-from app.components.models import Category, Driver, Report, Round
+from app.components.models import Category, Report, Round
 from app.components.queries import (
     delete_report,
     get_championship,
@@ -549,7 +549,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         user_data.clear()
         return ConversationHandler.END
 
-    if update.callback_query.data == "confirm":
+    if update.callback_query.data == "cancel":
         await update.callback_query.edit_message_text("Segnalazione annullata!")
         sqla_session.close()
         user_data.clear()
@@ -675,7 +675,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         report_id = update.callback_query.data.removeprefix("withdraw_report_")
 
-    report = get_report(sqla_session, int(report_id))
+    report = get_report(sqla_session, report_id)
     if report:
         if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
             minutes=45

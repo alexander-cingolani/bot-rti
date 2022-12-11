@@ -212,7 +212,7 @@ class Report(Base):
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
 
     __allow_unmapped__ = True
-    video_link: str
+    video_link: str | None = None
 
     report_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
