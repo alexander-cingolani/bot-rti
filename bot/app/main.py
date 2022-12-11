@@ -7,6 +7,7 @@ import os
 import traceback
 from collections import defaultdict
 from datetime import time
+from typing import DefaultDict, cast
 from uuid import uuid4
 
 import pytz
@@ -16,7 +17,7 @@ from app.components.queries import get_championship, get_driver, get_team_leader
 from app.components.report_creation_conv import report_creation
 from app.components.report_processing_conv import report_processing
 from app.components.result_recognition_conv import save_results_conv
-from app.components.stats import consistency, race_pace, speed, sportsmanship, stats
+from app.components.models import Team
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from telegram import (
@@ -29,6 +30,7 @@ from telegram import (
     InputTextMessageContent,
     Message,
     Update,
+    User,
 )
 from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest
@@ -48,17 +50,21 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-TOKEN = os.environ.get("BOT_TOKEN")
+TOKEN = os.environ["BOT_TOKEN"]
 
 
-engine = create_engine(os.environ.get("DB_URL"))
-SQLASession = sessionmaker(bind=engine, autoflush=False)
+if os.environ.get("DB_URL"):
+    engine = create_engine(os.environ["DB_URL"])
+else:
+    raise RuntimeError("No DB_URL in environment variables, can't connect to database.")
+
+DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def post_init(application: Application) -> None:
     """Sets commands for every user."""
 
-    session = SQLASession()
+    session = DBSession()
     leaders = get_team_leaders(session)
     session.close()
 
@@ -68,13 +74,16 @@ async def post_init(application: Application) -> None:
     )
 
     # Set leader commands
-    for driver in leaders:
-        try:
-            await application.bot.set_my_commands(
-                config.LEADER_COMMANDS, BotCommandScopeChat(driver[0].telegram_id)
-            )
-        except BadRequest:
-            pass
+    if leaders:
+        for driver in leaders:
+            try:
+                if not driver.telegram_id:
+                    continue
+                await application.bot.set_my_commands(
+                    config.LEADER_COMMANDS, BotCommandScopeChat(driver.telegram_id)
+                )
+            except BadRequest:
+                pass
 
     # Set admin commands in group and private chats
     for admin_id in config.ADMINS:
@@ -98,7 +107,7 @@ async def post_shutdown(_: Application) -> None:
         os.remove("./app/results_2.jpg")
 
 
-async def error_handler(update: Update, context: ContextTypes) -> None:
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Writes full error traceback to a file and sends it to the dev channel.
     If the error was caused by a user a message will be displayed informing him
     to not repeat the action which caused the error.
@@ -107,21 +116,22 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
 
     try:
         if update.message.chat.type == ChatType.PRIVATE:
-            user_message = (
-                "⚠️ Si è verificato un errore inaspettato!\n\n"
-                "Lo sviluppatore è stato informato del problema e cercherà"
-                " di risolverlo al più presto.\n"
-                "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
-                "avrebbe scarsa probabilità di successo."
+            await cast(User, update.effective_user).send_message(
+                text=(
+                    "⚠️ Si è verificato un errore inaspettato!\n\n"
+                    "Lo sviluppatore è stato informato del problema e cercherà"
+                    " di risolverlo al più presto.\n"
+                    "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
+                    "avrebbe scarsa probabilità di successo."
+                )
             )
-            await update.effective_user.send_message(user_message)
     except AttributeError:
         pass
 
-    tb_list = traceback.format_exception(
-        None, context.error, context.error.__traceback__
+    traceback_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__  # type: ignore
     )
-    tb_string = "".join(tb_list)
+    traceback_string = "".join(traceback_list)
     update_str = update.to_dict() if isinstance(update, Update) else str(update)
 
     message = (
@@ -130,7 +140,7 @@ async def error_handler(update: Update, context: ContextTypes) -> None:
         "\n\n"
         f"context.chat_data = {str(context.chat_data)}\n\n"
         f"context.user_data = {str(context.user_data)}\n\n"
-        f"{tb_string}"
+        f"{traceback_string}"
     )
 
     with open("traceback.txt", "w") as file:
@@ -148,28 +158,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
     owner_mention = config.OWNER.mention_html(config.OWNER.full_name)
-
+    user = cast(User, update.effective_user)
     await update.message.reply_text(
-        f"Ciao {update.effective_user.first_name}!\n"
+        f"Ciao {user.first_name}!\n"
         "Sono il bot di Racing Team Italia, mi occupo delle segnalazioni, comunicazioni"
         "penalità e statistiche dei nostri campionati.\n"
         f"Per qualsiasi problema o idea per migliorarmi puoi contattare {owner_mention}.",
         reply_markup=ForceReply(selective=True),
     )
 
-    session = SQLASession()
-    driver = get_driver(session, telegram_id=update.effective_user.id)
+    session = DBSession()
+    driver = get_driver(session, telegram_id=user.id)
 
     if not driver:
         await update.message.reply_text(
             "Pare che non ti sia ancora registrato, puoi farlo con /registrami.\n\n"
-            "Questa operazione va fatta solo una volta, a meno che tu non decida"
-            " di usare un account Telegram diverso in futuro."
+            "Questa operazione va fatta solo una volta, a meno che tu non decida "
+            "di cambiare account Telegram in futuro."
         )
-    elif driver.current_team().leader.telegram_id == update.effective_user.id:
-        await context.bot.set_my_commands(
-            config.LEADER_COMMANDS, BotCommandScopeChat(update.effective_user.id)
-        )
+    elif team := driver.current_team():
+        if getattr(team.leader, "telegram_id") == user.id:
+            await context.bot.set_my_commands(
+                commands=config.LEADER_COMMANDS, scope=BotCommandScopeChat(user.id)
+            )
     session.close()
 
 
@@ -184,7 +195,7 @@ async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clears user_data and ends the conversation"""
-    context.user_data.clear()
+    cast(dict, context.user_data).clear()
     text = "Segnalazione annullata."
     if update.message:
         await update.message.reply_text(text)
@@ -195,16 +206,18 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-    session = SQLASession()
-    driver = get_driver(session, telegram_id=update.effective_user.id)
+    session = DBSession()
+    user = cast(User, update.effective_user)
+    driver = get_driver(session, telegram_id=user.id)
 
     if not driver:
         message = "Per usare questa funzione devi essere registrato. Puoi farlo con /registrami."
         await update.message.reply_text(message)
         return
 
-    championship_round = driver.current_category().next_round()
-    if not championship_round:
+    if not (current_category := driver.current_category()):
+        msg = "Al momento non fai parte di alcuna categoria."
+    elif not (championship_round := current_category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
         msg = championship_round.generate_info_message()
@@ -221,10 +234,9 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """
 
     query = update.inline_query.query
-    session = SQLASession()
+    session = DBSession()
     results = []
     for driver in get_championship(session).driver_list:
-
         if query.lower() in driver.psn_id.lower():
             (
                 wins,
@@ -234,7 +246,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 races_disputed,
                 avg_position,
                 avg_quali_position,
-            ) = stats(driver)
+            ) = driver.stats()
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team()
@@ -250,23 +262,23 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
-            const = consistency(driver)
-            sprt = sportsmanship(driver)
-            pace = race_pace(driver)
-            quali_pace = speed(driver)
+            consistency = driver.consistency()
+            sportsmanship = driver.sportsmanship()
+            race_pace = driver.race_pace()
+            quali_pace = driver.speed()
 
-            overall = sum((const, sprt, quali_pace, pace)) // 4
-
-            if const <= 0:
-                const = "dati insufficienti"
-            if sprt <= 0:
-                sprt = "dati insufficienti"
-            if pace <= 0:
-                pace = "dati insufficienti"
-            if quali_pace <= 0:
-                quali_pace = "dati insufficienti"
-            if overall <= 0:
-                overall = "dati insufficienti"
+            overall = (
+                sum(
+                    map(
+                        int,
+                        filter(
+                            lambda x: x != "dati insufficienti",
+                            (consistency, sportsmanship, race_pace, quali_pace),
+                        ),
+                    )
+                )
+                // 4
+            )
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
@@ -275,10 +287,10 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Overall:</b> <i>{overall}</i>\n"
-                        f"<b>Affidabilità:</b> <i>{const}</i>\n"
-                        f"<b>Sportività:</b> <i>{sprt}</i>\n"
+                        f"<b>Affidabilità:</b> <i>{consistency}</i>\n"
+                        f"<b>Sportività:</b> <i>{sportsmanship}</i>\n"
                         f"<b>Qualifica:</b> <i>{quali_pace}</i>\n"
-                        f"<b>Passo gara:</b> <i>{pace}</i>\n\n"
+                        f"<b>Passo gara:</b> <i>{race_pace}</i>\n\n"
                         f"<b>Vittorie:</b> <i>{wins}</i>\n"
                         f"<b>Podi:</b> <i>{podiums}</i>\n"
                         f"<b>Pole:</b> <i>{poles}</i>\n"
@@ -299,16 +311,17 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-    session = SQLASession()
-    user = get_driver(session, telegram_id=update.effective_user.id)
-    if not user:
+    session = DBSession()
+    user = cast(User, update.effective_user)
+    driver = get_driver(session, telegram_id=user.id)
+    if not driver:
         await update.message.reply_text(
             "Per usare questa funzione devi essere registrato.\n"
             "Puoi farlo con /registrami."
         )
         return
 
-    category = user.current_category()
+    category = driver.current_category()
 
     if not category:
         text = (
@@ -317,6 +330,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             "la classifica della tua categoria."
         )
         await update.message.reply_text(text)
+        return
 
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
     standings = category.standings()
@@ -332,7 +346,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
 
         message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
 
-    message = message.replace(user.psn_id, f"<b>{user.psn_id}</b>")
+    message = message.replace(driver.psn_id, f"<b>{driver.psn_id}</b>")
 
     await update.message.reply_text(text=message)
 
@@ -343,10 +357,19 @@ async def complete_championship_standings(
     """When activated via the /classifica command, it sends a message containing
     the current championship standings for the category the user is in.
     """
-    session = SQLASession()
-    teams = defaultdict(float)
-    championship = get_championship(session)
+    sqla_session = DBSession()
+    teams: DefaultDict[Team, float] = defaultdict(float)
+    championship = get_championship(sqla_session)
+
+    if not championship:
+        return
+
     message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
+    if not championship:
+        await update.message.reply_text("Il campionato è finito.")
+        sqla_session.close()
+        return
+
     for category in championship.categories:
 
         standings = category.standings(-1)
@@ -360,30 +383,38 @@ async def complete_championship_standings(
                 diff = f" ↑{abs(diff)}"
             else:
                 diff = ""
-            team = f"{driver.current_team().name}" if driver.current_team() else ""
-            message += f"{pos} - {team} {driver.psn_id} <i>{points}{diff}</i>\n"
 
-            if team := driver.current_team():  # Check if the driver has left the team
-                teams[team] += points
+            team = driver.current_team()
+            if team:
+                team_name = team.name
+            else:
+                team_name = ""
+            message += f"{pos} - {team_name} {driver.psn_id} <i>{points}{diff}</i>\n"
 
-    for team, points in teams.items():
-        points += team.current_championship().penalty_points
+            if (
+                team_obj := driver.current_team()
+            ):  # Check if the driver has left the team
+                teams[team_obj] += points
+
+    for team_obj, points in teams.items():
+        points += team_obj.current_championship().penalty_points  # type: ignore
 
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
-    for pos, (team, points) in enumerate(
+    for pos, (team_obj, points) in enumerate(
         sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
     ):
-        message += f"{pos}- {team.name} <i>{points}</i>\n"
+        message += f"{pos}- {team_obj.name} <i>{points}</i>\n"
     await update.message.reply_text(message)
-    session.close()
+    sqla_session.close()
 
 
 async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """When activated via the /ultima_gara command, it sends a message containing
     the results of the user's last race."""
 
-    session = SQLASession()
-    driver = get_driver(session, telegram_id=update.effective_user.id)
+    sqla_session = DBSession()
+    user = cast(User, update.effective_user)
+    driver = get_driver(sqla_session, telegram_id=user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -393,57 +424,76 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     category = driver.current_category()
+    if not category:
+        await update.message.reply_text(
+            "Pare che tu non faccia parte di alcuna categoria al momento."
+        )
+        return
+
     championship_round = category.last_completed_round()
+
+    if not championship_round:
+        await update.message.reply_text(
+            "I risultati non sono ancora stati caricati, solitamente "
+            "diventano disponibili dopo che ogni categoria ha completato la sua gara."
+        )
+        return
 
     message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
 
-    message += championship_round.qualifying_session.results_message()
-
-    if championship_round.has_sprint_race:
-        message += championship_round.sprint_race.results_message()
-    message += championship_round.long_race.results_message()
+    for session in championship_round.sessions:
+        message += session.results_message()
 
     await update.message.reply_text(text=message)
-    session.close()
+    sqla_session.close()
     return
 
 
-async def complete_last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE):
+async def complete_last_race_results(
+    update: Update, _: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Sends a message containing the race and qualifying results of the last completed
     round in each category of the current championship."""
-    session = SQLASession()
-    championship = get_championship(session)
+    sqla_session = DBSession()
+    championship = get_championship(sqla_session)
     message = ""
+    if not championship:
+        return
+
     for category in championship.categories:
         championship_round = category.last_completed_round()
+
+        if not championship_round:
+            continue
 
         message += (
             f"<i><b>RISULTATI {championship_round.number}ª "
             f"TAPPA #{championship.abbreviated_name}</b></i>\n\n"
         )
 
-        message += championship_round.qualifying_session.results_message()
-
-        if championship_round.has_sprint_race:
-            message += championship_round.sprint_race.results_message()
-        message += championship_round.long_race.results_message()
+        for session in championship_round.sessions:
+            message += session.results_message()
 
     await update.message.reply_text(text=message)
-    session.close()
+    sqla_session.close()
 
 
 async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message to the report channel announcing that the report window
     has opened for a specific category.
     """
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     championship = get_championship(sqla_session)
-    if category := championship.reporting_round():
-        championship_round = category.first_non_completed_round()
+
+    if not championship:
+        sqla_session.close()
+        return
+
+    if championship_round := championship.reporting_round():
         text = (
-            f"<b>Segnalazioni Categoria {category.name}</b>\n"
+            f"<b>Segnalazioni Categoria {championship_round.category.name}</b>\n"
             f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
-            f"#{championship.abbreviated_name}Tappa{championship_round.number} #{category.name}"
+            f"#{championship.abbreviated_name}Tappa{championship_round.number} #{championship_round.category.name}"
         )
 
         await context.bot.send_message(
@@ -457,13 +507,12 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     reports has closed.
     """
 
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     championship = get_championship(sqla_session)
 
     if championship:
-
-        if category := championship.reporting_round():
-            if not category.first_non_completed_round().reports:
+        if round := championship.reporting_round():
+            if not round.reports:
                 await context.bot.send_message(
                     chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
                 )
@@ -478,24 +527,32 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Freezes the participation list sent earlier during the day."""
-    message: Message = context.chat_data.get("participation_list_message")
+    chat_data = cast(dict, context.chat_data)
+    message: Message | None = chat_data.get("participation_list_message")
     if message:
         await message.edit_reply_markup()  # Deletes the buttons.
-    context.chat_data.clear()
+    chat_data.clear()
 
 
 async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
-    session = SQLASession()
-    championship = get_championship(session)
-    chat_data = context.chat_data
-    chat_data["participation_list_sqlasession"] = session
+    sqla_session = DBSession()
+    championship = get_championship(sqla_session)
+    chat_data = cast(dict, context.chat_data)
+    chat_data["participation_list_sqlasession"] = sqla_session
+
+    if not championship:
+        sqla_session.close()
+        return
+
     if not (category := championship.current_racing_category()):
-        return ConversationHandler.END
+        sqla_session.close()
+        return
 
     if not (championship_round := category.first_non_completed_round()):
-        return ConversationHandler.END
+        sqla_session.close()
+        return
 
     drivers = category.active_drivers()
     text = (
@@ -507,13 +564,13 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     text += f"\n0/{len(drivers)}\n"
     chat_data["participants"] = {}  # dict[telegram_id, status]
     for driver in drivers:
-        driver = driver.driver
+        driver_obj = driver.driver
 
-        chat_data["participants"][driver.psn_id] = [
-            driver.telegram_id,
+        chat_data["participants"][driver_obj.psn_id] = [
+            driver_obj.telegram_id,
             None,
         ]
-        text += f"\n{driver.psn_id}"
+        text += f"\n{driver_obj.psn_id}"
 
     reply_markup = InlineKeyboardMarkup(
         [
@@ -547,29 +604,31 @@ async def update_participation_list(
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
 
-    if not context.chat_data.get("participants"):
+    chat_data = cast(dict, context.chat_data)
+
+    if not chat_data.get("participants"):
         return
 
-    session = context.chat_data.get("participation_list_sqlasession")
+    session = chat_data.get("participation_list_sqlasession")
     if not session:
         return
 
-    user_id = update.effective_user.id
+    user = cast(User, update.effective_user)
     user_psn_id = None
 
-    chat_data = context.chat_data
     # Checks for non-registered users and queries the database to verify if
     # the user has registered since the participation list was last sent
-    for psn_id, (tg_id, status) in context.chat_data["participants"].items():
+    for psn_id, (tg_id, status) in chat_data["participants"].items():
         if not tg_id:
             driver = get_driver(session, psn_id=psn_id)
-            chat_data["participants"][psn_id] = [
-                driver.telegram_id,
-                status,
-            ]
+            if driver:
+                chat_data["participants"][psn_id] = [
+                    driver.telegram_id,
+                    status,
+                ]
             tg_id = chat_data["participants"][psn_id][0]
 
-        if tg_id == user_id:
+        if tg_id == user.id:
             user_psn_id = psn_id
 
     received_status = update.callback_query.data == "participating"
@@ -662,7 +721,7 @@ def main() -> None:
         )
     )
 
-    application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))
+    application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))  # type: ignore
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica", championship_standings))

@@ -7,17 +7,16 @@ import os
 
 from telegram import User
 
-REPORT_CHANNEL = int(os.environ.get("REPORT_CHANNEL"))
-TEST_CHANNEL = int(os.environ.get("TEST_CHANNEL"))
-LATE_REPORT_CHAT = int(os.environ.get("LATE_REPORT_CHAT"))
-GROUP_CHAT = int(os.environ.get("GROUP_CHAT"))
-DEVELOPER_CHAT = int(os.environ.get("DEVELOPER_CHAT"))
-TEAM_LEADER_CHAT = int(os.environ.get("TEAM_LEADER_CHAT"))
-ADMINS = json.loads(os.environ.get("ADMINS"))
 
-OWNER_ID = int(os.environ.get("OWNER_ID"))
+REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
+TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
+LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])
+GROUP_CHAT = int(os.environ["GROUP_CHAT"])
+DEVELOPER_CHAT = int(os.environ["DEVELOPER_CHAT"])
+TEAM_LEADER_CHAT = int(os.environ["TEAM_LEADER_CHAT"])
+ADMINS = json.loads(os.environ["ADMINS"])
+OWNER_ID = int(os.environ["OWNER_ID"])
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
-
 
 BASE_COMMANDS = [
     ("classifica", "Classifica della tua categoria."),

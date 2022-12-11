@@ -4,6 +4,7 @@ This module contains all the callbacks necessary to allow users to create report
 
 import os
 from datetime import datetime, timedelta
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from app.components import config
@@ -20,8 +21,8 @@ from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
@@ -45,17 +46,18 @@ from telegram.ext import (
 ) = range(3, 12)
 
 
-engine = create_engine(os.environ.get("DB_URL"))
-SQLASession = sessionmaker(bind=engine, autoflush=False)
+engine = create_engine(os.environ["DB_URL"])
+
+DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user which category he wants to create a report in."""
 
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     user_data.clear()
 
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     championship = get_championship(sqla_session)
 
     user_data["sqla_session"] = sqla_session
@@ -63,33 +65,47 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data["categories"] = {}
     buttons = []
 
-    user_data["leader"] = get_driver(sqla_session, telegram_id=update.effective_user.id)
-    if user_data["leader"].current_team().leader != user_data["leader"]:
+    driver = get_driver(sqla_session, telegram_id=cast(User, update.effective_user).id)
+    if not driver:
+        await update.message.reply_text("Questa funzione è riservata ai capi scuderia.")
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
 
-        text = "Solamente i capi scuderia possono effettuare segnalazioni."
-        reply_markup = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        text="Chiedi il permesso",
-                        url=f"tg://user?id={config.OWNER}",
-                    )
-                ]
-            ]
+    driver_team = driver.current_team()
+    if not driver_team:
+        await update.message.reply_text("Questa funzione è riservata ai capi scuderia.")
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
+
+    if driver_team.leader != driver:
+        await update.message.reply_text(
+            text="Questa funzione è riservata ai capi scuderia."
         )
-        await update.message.reply_text(text=text, reply_markup=reply_markup)
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
+
+    user_data["leader"] = driver
+
+    if not championship:
+        await update.message.reply_text(
+            "Il campionato è terminato, non è più possibile effettuare segnalazioni."
+        )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
     for i, category in enumerate(championship.categories):
         round = category.first_non_completed_round()
-        if category.first_non_completed_round() and round.date < datetime.now().date():
-            category_alias = f"c{i}"
-            buttons.append(
-                InlineKeyboardButton(category.name, callback_data=category_alias)
-            )
-            user_data["categories"][category_alias] = category
+        if round:
+            if round.date < datetime.now().date():
+                category_alias = f"c{i}"
+                buttons.append(
+                    InlineKeyboardButton(category.name, callback_data=category_alias)
+                )
+                user_data["categories"][category_alias] = category
 
     if not buttons:
         text = (
@@ -108,33 +124,31 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
-    context.chat_data["late_report"] = True
+    cast(dict, context.chat_data)["late_report"] = True
     return CATEGORY
 
 
 async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the category and asks what session the accident happened in."""
 
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
 
     if not update.callback_query.data.isdigit():
-        user_data["category"] = context.user_data["categories"][
-            update.callback_query.data
-        ]
+        user_data["category"] = user_data["categories"][update.callback_query.data]
 
     user_data["sessions"] = {}
     user_data["sessions"] = {}
     category: Category = user_data["category"]
-    reply_markup = []
 
-    for i, session in enumerate(category.first_non_completed_round().sessions):
+    round = category.first_non_completed_round()
+    user_data["round"] = round
+    buttons = []
+    for i, session in enumerate(round.sessions):  # type: ignore
         session_alias = f"s{i}"
         user_data["sessions"][session_alias] = session
-        reply_markup.append(
-            InlineKeyboardButton(session.name, callback_data=session_alias)
-        )
-    reply_markup = list(chunked(reply_markup, 3))
-    reply_markup.append(
+        buttons.append(InlineKeyboardButton(session.name, callback_data=session_alias))
+    chunked_buttons = list(chunked(buttons, 3))
+    chunked_buttons.append(
         [
             InlineKeyboardButton(
                 "« Modifica Categoria", callback_data="create_late_report"
@@ -142,28 +156,28 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
     )
 
-    round_number = category.first_non_completed_round().number
+    round_number = round.number  # type: ignore
     text = f"""
 <b>{user_data["category"].name}</b> - Tappa {round_number} 
 Scegli la sessione dove è avvenuto l'incidente:"""
 
     if update.callback_query:
         await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
+            text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
     else:
         await update.message.reply_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
+            text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
     return SESSION
 
 
 async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user the session in which the accident happened."""
-    user = update.effective_user
-    user_data = context.user_data
+    user = cast(User, update.effective_user)
+    user_data = cast(dict, context.user_data)
     user_data.clear()
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     user_data["leader"] = get_driver(sqla_session, telegram_id=user.id)
     user_data["sqla_session"] = sqla_session
 
@@ -203,7 +217,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data["championship"] = championship
 
-    championship_round: Round = championship.reporting_round()
+    championship_round = championship.reporting_round()
     if not championship_round:
         text = (
             "Il periodo per le segnalazioni è terminato. Se necessario, puoi chiedere "
@@ -227,30 +241,28 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     category: Category = championship_round.category
     user_data["category"] = category
-
+    user_data["round"] = championship_round
     text = (
         f"{championship_round.number}ª Tappa {category.name}"
         "\nIn che sessione è avvenuto l'incidente?"
     )
 
     user_data["sessions"] = {}
-    reply_markup = []
-    for i, sqla_session in enumerate(championship_round.sessions):
+    buttons = []
+    for i, session in enumerate(championship_round.sessions):
         session_alias = f"s{i}"
-        user_data["sessions"][session_alias] = sqla_session
-        reply_markup.append(
-            InlineKeyboardButton(sqla_session.name, callback_data=session_alias)
-        )
-    reply_markup = list(chunked(reply_markup, 3))
-    reply_markup.append([InlineKeyboardButton("Annulla", callback_data="cancel")])
+        user_data["sessions"][session_alias] = session
+        buttons.append(InlineKeyboardButton(session.name, callback_data=session_alias))
+    chunked_buttons = list(chunked(buttons, 3))
+    chunked_buttons.append([InlineKeyboardButton("Annulla", callback_data="cancel")])
 
     if not update.callback_query:
-        context.user_data["message"] = await update.message.reply_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
+        user_data["message"] = await update.message.reply_text(
+            text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
     else:
         await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup(reply_markup)
+            text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
     return SESSION
 
@@ -258,7 +270,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the session and asks for the reporting driver."""
 
-    user_data = context.user_data
+    chat_data = cast(dict, context.chat_data)
+    user_data = cast(dict, context.user_data)
     if not update.callback_query.data.isdigit():
         user_data["report"] = Report()
         user_data["report"].session = user_data["sessions"][update.callback_query.data]
@@ -266,20 +279,21 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     if not user_data["report"].session.is_quali:
         text = "Chi è la vittima?"
-        reply_markup = []
+        buttons = []
         for i, driver in enumerate(user_data["leader"].current_team().drivers):
-            driver: Driver = driver.driver
+            driver = driver.driver
             driver_alias = f"d{i}"
             if driver.current_category() == user_data["category"]:
                 user_data["drivers"][driver_alias] = driver
-                reply_markup.append(
+                buttons.append(
                     InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
                 )
-        reply_markup = list(chunked(reply_markup, 2))
+        chunked_buttons = list(chunked(buttons, 2))
+
         callback_function = (
-            str(SESSION) if context.chat_data.get("late_report") else "create_report"
+            str(SESSION) if chat_data.get("late_report") else "create_report"
         )
-        reply_markup.append(
+        chunked_buttons.append(
             [
                 InlineKeyboardButton(
                     "« Modifica sessione", callback_data=callback_function
@@ -287,11 +301,11 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             ]
         )
         if user_data["report"].reporting_driver:
-            reply_markup[-1].append(
+            chunked_buttons[-1].append(
                 InlineKeyboardButton("Link video »", callback_data=LINK)
             )
         await update.callback_query.edit_message_text(
-            text=text, reply_markup=InlineKeyboardMarkup(reply_markup)
+            text=text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
         return REPORTING_DRIVER
 
@@ -300,24 +314,27 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "fornire un video dell'episodio. Incolla il link al video YouTube qui sotto."
     )
     callback_function = (
-        str(SESSION) if context.chat_data.get("late_report") else "create_report"
+        str(SESSION) if chat_data.get("late_report") else "create_report"
     )
-    reply_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("« Modifica sessione", callback_data=callback_function)]]
-    )
+    chunked_buttons = [
+        [InlineKeyboardButton("« Modifica sessione", callback_data=callback_function)]
+    ]
 
     if user_data["report"].video_link:
-        reply_markup[-1].append(
+        chunked_buttons[-1].append(
             InlineKeyboardButton("Pilota vittima »", callback_data=str(LINK))
         )
 
-    await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+    await update.callback_query.edit_message_text(
+        text=text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
+    )
     return LINK
 
 
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the link provided by the user and asks who is considered to be the victim."""
-    user_data = context.user_data
+    chat_data = cast(dict, context.chat_data)
+    user_data = cast(dict, context.user_data)
 
     if (
         not getattr(update.callback_query, "data", "").isdigit()
@@ -326,37 +343,37 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         user_data["report"].video_link = update.message.text
 
     text = "Chi è la vittima?"
-    reply_markup = []
+    buttons = []
     for i, driver in enumerate(user_data["category"].active_drivers()):
-        driver: Driver = driver.driver
+        driver = driver.driver
         driver_alias = f"d{i}"
         if driver.current_team().leader.driver_id == user_data["leader"].driver_id:
             user_data["drivers"][driver_alias] = driver
-            reply_markup.append(
+            buttons.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
             )
 
-    reply_markup = list(chunked(reply_markup, 2))
-    reply_markup.append(
+    chunked_buttons = list(chunked(buttons, 2))
+    chunked_buttons.append(
         [
             InlineKeyboardButton(
                 "« Sessione",
                 callback_data=str(SESSION)
-                if context.chat_data.get("late_report")
+                if chat_data.get("late_report")
                 else "create_report",
             )
         ]
     )
 
     if user_data["report"].reporting_driver:
-        reply_markup[-1].append(
+        chunked_buttons[-1].append(
             InlineKeyboardButton(
                 "Pilota colpevole »", callback_data=str(REPORTING_DRIVER)
             )
         )
 
     await send_or_edit_message(
-        update=update, message=text, reply_markup=InlineKeyboardMarkup(reply_markup)
+        update=update, message=text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
     )
 
     return REPORTING_DRIVER
@@ -364,35 +381,35 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the victim and asks for the reported driver."""
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     if not update.callback_query.data.isdigit():
-        context.user_data["report"].reporting_driver = user_data["drivers"][
+        user_data["report"].reporting_driver = user_data["drivers"][
             update.callback_query.data
         ]
     text = "Chi ritieni essere il colpevole?"
-    reply_markup = []
+    buttons = []
     user_data["drivers"] = {}
     for i, driver in enumerate(user_data["category"].active_drivers()):
-        driver: Driver = driver.driver
+        driver = driver.driver
         driver_alias = f"d{i}"
         if driver.current_team().leader.driver_id != user_data["leader"].driver_id:
             user_data["drivers"][driver_alias] = driver
-            reply_markup.append(
+            buttons.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
             )
-    reply_markup = list(chunked(reply_markup, 2))
-    reply_markup.append(
+    chunked_buttons = list(chunked(buttons, 2))
+    chunked_buttons.append(
         [InlineKeyboardButton("« Pilota Vittima", callback_data=str(LINK))]
     )
     if user_data["report"].reported_driver:
-        reply_markup[-1].append(
+        chunked_buttons[-1].append(
             InlineKeyboardButton(
                 "Minuto incidente »", callback_data=str(REPORTED_DRIVER)
             )
         )
 
     await update.callback_query.edit_message_text(
-        text, reply_markup=InlineKeyboardMarkup(reply_markup)
+        text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
     )
     return REPORTED_DRIVER
 
@@ -400,7 +417,7 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the reported driver and asks for the minute."""
 
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     if not update.callback_query.data.isdigit():
         user_data["report"].reported_driver = user_data["drivers"][
             update.callback_query.data
@@ -429,17 +446,17 @@ async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the minute and asks for the reason."""
 
+    user_data = cast(dict, context.user_data)
     if not update.callback_query:
-        context.user_data["report"].incident_time = update.message.text
+        user_data["report"].incident_time = update.message.text
 
     text = (
         "<b>Seleziona una motivazione per la segnalazione:</b>\n"
         "(alternativamente scrivine una qui sotto)"
     )
 
-    user_data = context.user_data
-    reply_markup = [[]]
-
+    user_data = cast(dict, user_data)
+    buttons: list[list[InlineKeyboardButton]] = [[]]
     for i, reason in enumerate(config.REASONS):
         i += 1
         reason = reason.format(
@@ -447,8 +464,8 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             b=user_data["report"].reported_driver.psn_id,
         )
         text += f"\n{i} - <i>{reason}</i>"
-        reply_markup[0].append(InlineKeyboardButton(text=str(i), callback_data=f"r{i}"))
-    reply_markup.append(
+        buttons[0].append(InlineKeyboardButton(text=str(i), callback_data=f"r{i}"))
+    buttons.append(
         [
             InlineKeyboardButton(
                 "« Minuto Incidente ", callback_data=str(REPORTED_DRIVER)
@@ -456,20 +473,20 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         ]
     )
     if user_data["report"].report_reason:
-        reply_markup[-1].append(
+        buttons[-1].append(
             InlineKeyboardButton("Avanti »", callback_data=str(REPORT_REASON))
         )
 
     await send_or_edit_message(
-        update=update, message=text, reply_markup=InlineKeyboardMarkup(reply_markup)
+        update=update, message=text, reply_markup=InlineKeyboardMarkup(buttons)
     )
 
     return REPORT_REASON
 
 
-async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the reason and asks if to send the report or not."""
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     if update.callback_query:
         if not update.callback_query.data.isdigit():
             user_data["report"].report_reason = config.REASONS[
@@ -511,96 +528,90 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     return SEND
 
 
-async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Sends the report to the report channel and saves it to the database."""
 
-    user_data = context.user_data
+    chat_data = cast(dict, context.chat_data)
+    user_data = cast(dict, context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
-    category: Category = user_data["category"]
-    report: Report = user_data["report"]
+    category = cast(Category, user_data["category"])
+    round = cast(Round, user_data["round"])
+    report = cast(Report, user_data["report"])
     championship_round: Round = report.round
 
     if (
         championship_round == category.championship.reporting_round()
-        and not context.chat_data.get("late_report")
+        and not chat_data.get("late_report")
     ):
         text = "Troppo tardi! La mezzanotte è già scoccata."
         await update.callback_query.edit_message_text(text=text)
-        return
-
-    if update.callback_query.data == "confirm":
-        report.category = category
-        report.round = category.first_non_completed_round()
-        report.reported_team = report.reported_driver.current_team()
-        report.reporting_team = report.reporting_driver.current_team()
-        report.number = (
-            get_last_report_number(
-                sqla_session, category.category_id, report.round.round_id
-            )
-            + 1
-        )
-
-        channel = (
-            config.LATE_REPORT_CHAT
-            if context.chat_data.get("late_report")
-            else config.REPORT_CHANNEL
-        )
-
-        report_document_name = ReportDocument(report).generate_document()
-
-        message = await context.bot.send_document(
-            chat_id=channel, document=open(report_document_name, "rb")
-        )
-        report.channel_message_id = message.message_id
-
-        try:
-            sqla_session.add(report)
-            sqla_session.commit()
-        except IntegrityError:
-            os.remove(report_document_name)
-            await message.delete()
-            await update.callback_query.edit_message_text(
-                "Problemi, problemi, problemi! 😓\n"
-                f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
-                "Non farti problemi ad insultarlo in chat."
-            )
-            sqla_session.close()
-            user_data.clear()
-            return ConversationHandler.END
-
-        callback_data = (
-            f"withdraw_late_report_{report.report_id}"
-            if context.chat_data.get("late_report")
-            else f"withdraw_late_report_{report.report_id}"
-        )
-        reply_markup = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "Ritira segnalazione ↩",
-                        callback_data=callback_data,
-                    )
-                ]
-            ]
-        )
-
-        text = (
-            "Segnalazione inviata!"
-            "\nSe noti un errore hai 45 minuti di tempo per ritirarla."
-            "\nRicorda che creando una nuova segnalazione perderai "
-            "la possibilità di ritirare quella precedente."
-        )
-        await update.callback_query.edit_message_text(
-            text=text, reply_markup=reply_markup
-        )
-
-        return UNSEND
-
-    if update.callback_query.data == "cancel":
-        await update.callback_query.edit_message_text("Segnalazione annullata!")
-        user_data["sqla_session"].close()
+        sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
+
+    if update.callback_query.data == "confirm":
+        await update.callback_query.edit_message_text("Segnalazione annullata!")
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
+
+    report.category = category
+    report.round = round
+    report.reported_team = report.reported_driver.current_team()
+    report.reporting_team = report.reporting_driver.current_team()
+    report.number = (
+        get_last_report_number(
+            sqla_session, category.category_id, report.round.round_id
+        )
+        + 1
+    )
+    channel = (
+        config.LATE_REPORT_CHAT
+        if chat_data.get("late_report")
+        else config.REPORT_CHANNEL
+    )
+    report_document_name = ReportDocument(report).generate_document()
+    message = await context.bot.send_document(
+        chat_id=channel, document=open(report_document_name, "rb")
+    )
+    report.channel_message_id = message.message_id
+    try:
+        sqla_session.add(report)
+        sqla_session.commit()
+    except IntegrityError:
+        os.remove(report_document_name)
+        await message.delete()
+        await update.callback_query.edit_message_text(
+            "Problemi, problemi, problemi! 😓\n"
+            f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
+            "Non farti problemi ad insultarlo in chat."
+        )
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
+    callback_data = (
+        f"withdraw_late_report_{report.report_id}"
+        if chat_data.get("late_report")
+        else f"withdraw_late_report_{report.report_id}"
+    )
+    reply_markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Ritira segnalazione ↩",
+                    callback_data=callback_data,
+                )
+            ]
+        ]
+    )
+    text = (
+        "Segnalazione inviata!"
+        "\nSe noti un errore hai 45 minuti di tempo per ritirarla."
+        "\nRicorda che creando una nuova segnalazione perderai "
+        "la possibilità di ritirare quella precedente."
+    )
+    await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+    return UNSEND
 
 
 async def change_state_rep_creation(
@@ -617,12 +628,11 @@ async def change_state_rep_creation(
     executing it returns the step in callbackquery.data + 1 in order to allow the
     conversation to continue.
     """
+    chat_data = cast(dict, context.chat_data)
     category_handler = (
-        create_late_report if context.chat_data.get("late_report") else create_report
+        create_late_report if chat_data.get("late_report") else create_report
     )
-    session_handler = (
-        save_category if context.chat_data.get("late_report") else create_report
-    )
+    session_handler = save_category if chat_data.get("late_report") else create_report
     callbacks = {
         CATEGORY: category_handler,
         SESSION: session_handler,
@@ -635,11 +645,11 @@ async def change_state_rep_creation(
     }
     state = int(update.callback_query.data)
 
-    await callbacks.get(state)(update, context)
+    await callbacks[state](update, context)
 
     return (
         state
-        if context.chat_data.get("late_report") and (state == 7 or state is None)
+        if chat_data.get("late_report") and (state == 7 or state is None)
         else state + 1
     )
 
@@ -649,22 +659,23 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = "Segnalazione annullata."
     await send_or_edit_message(update, text)
-    context.user_data["sqla_session"].close()
-    context.user_data.clear()
+    user_data = cast(dict, context.user_data)
+    user_data["sqla_session"].close()
+    user_data.clear()
     return ConversationHandler.END
 
 
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
 
-    sqla_session: SQLASession = context.user_data["sqla_session"]
+    sqla_session: SQLASession = cast(dict, context.user_data)["sqla_session"]
 
     if "late" in update.callback_query.data:
         report_id = update.callback_query.data.removeprefix("withdraw_late_report_")
     else:
         report_id = update.callback_query.data.removeprefix("withdraw_report_")
 
-    report = get_report(sqla_session, report_id)
+    report = get_report(sqla_session, int(report_id))
     if report:
         if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
             minutes=45
@@ -688,7 +699,8 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             text = "Troppo tardi per ritirarla!"
         await update.callback_query.edit_message_text(text)
-    context.chat_data.clear()
+    cast(dict, context.chat_data).clear()
+    return ConversationHandler.END
 
 
 report_creation = ConversationHandler(

@@ -2,6 +2,7 @@
 This module contains all the callbacks necessary to register drivers to the database.
 """
 import os
+from typing import cast
 
 from app.components import config
 from app.components.models import Driver
@@ -20,11 +21,12 @@ from telegram.ext import (
 )
 
 CHECK_ID, ID = range(2)
-OWNER = User(id=config.OWNER, first_name="Alexander Cingolani", is_bot=False)
+OWNER = User(id=config.OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 
-engine = create_engine(os.environ.get("DB_URL"))
-SQLASession: SQLASession = sessionmaker(bind=engine, autoflush=False)
+engine = create_engine(os.environ["DB_URL"])
+
+DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def driver_registration_entry_point(
@@ -32,10 +34,12 @@ async def driver_registration_entry_point(
 ) -> int:
     """Asks the user for his PSN ID"""
 
-    session = SQLASession()
-    context.user_data["sqla_session"] = session
+    session = DBSession()
+    effective_user = cast(User, update.effective_user)
+    user_data = cast(dict, context.user_data)
+    user_data["sqla_session"] = session
 
-    driver = get_driver(session, telegram_id=update.effective_user.id)
+    driver = get_driver(session, telegram_id=effective_user.id)
     if not driver:
         text = "Per registrarti scrivimi il tuo <i>PlayStation ID</i>:"
         await update.message.reply_text(text)
@@ -49,7 +53,7 @@ async def driver_registration_entry_point(
                 ],
             ]
         )
-        context.user_data["driver_obj"] = driver
+        user_data["driver_obj"] = driver
         await update.message.reply_text(text=text, reply_markup=reply_markup)
     return CHECK_ID
 
@@ -59,7 +63,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     match is found. If no exact match is found the bot provides the user with a similar
     ID and asks if that is the right one.
     """
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
     if getattr(update.callback_query, "data", ""):
         if update.callback_query.data == "change_id":
@@ -76,16 +80,17 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             user_data.clear()
             return ConversationHandler.END
 
-    if driver := get_driver(sqla_session, psn_id=update.message.text):
+    driver_obj = get_driver(sqla_session, psn_id=update.message.text)
+    if driver_obj:
         # Checks that no other user is registered to the requested psn_id
-        if driver.telegram_id:
+        if driver_obj.telegram_id:
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato a questo ID.\n"
                 "Se sei sicuro che questo si tratti del tuo ID PSN contatta "
                 f"{OWNER.mention_html(OWNER.full_name)} per risolvere il problema."
             )
         else:
-            driver.telegram_id = update.effective_user.id
+            driver_obj.telegram_id = cast(User, update.effective_user).id
             sqla_session.commit()
             text = (
                 "Ok!\n"
@@ -113,7 +118,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             await update.message.reply_text(text=text, reply_markup=reply_markup)
             return ID
 
-        if suggested_driver.telegram_id == update.effective_user.id:
+        if suggested_driver.telegram_id == cast(User, update.effective_user).id:
             text = f"Sei già registrato con <code>{suggested_driver.psn_id}</code>.\n"
             await update.message.reply_text(text)
             sqla_session.close()
@@ -131,11 +136,13 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     a similar ID. This callback therefore handles the user's choice (if to accept the option
     or not)."""
 
-    user_data = context.user_data
+    user_data = cast(dict, context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
 
     if update.callback_query.data == "y":
-        driver = get_driver(sqla_session, psn_id=user_data["suggested_driver"])
+        driver = cast(
+            Driver, get_driver(sqla_session, psn_id=user_data["suggested_driver"])
+        )
         if driver.telegram_id:
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato a questo ID."
@@ -145,7 +152,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             user_data.clear()
             return ConversationHandler.END
 
-        driver.telegram_id = update.effective_user.id
+        driver.telegram_id = cast(User, update.effective_user).id
         sqla_session.commit()
         text = (
             "Bene!\n"
@@ -167,8 +174,9 @@ async def cancel_registration(
     """This callback is activated when the user decides to cancel the registration."""
 
     await update.message.reply_text("👌")
-    context.user_data["sqla_session"].close()
-    context.user_data.clear()
+    user_data = cast(dict, context.user_data)
+    cast(SQLASession, user_data["sqla_session"]).close()
+    user_data.clear()
     return ConversationHandler.END
 
 
