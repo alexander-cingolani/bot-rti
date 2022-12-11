@@ -113,7 +113,9 @@ def get_reports(
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))
 def get_driver(
-    session: SQLASession, psn_id: str | None = None, telegram_id: int | str | None = None
+    session: SQLASession,
+    psn_id: str | None = None,
+    telegram_id: int | str | None = None,
 ) -> Driver | None:
     """Retrieves a single Driver object from the database given his PSN or Telegram id.
     Either psn_id or telegram are optional, but at least one must be given.

@@ -5,12 +5,14 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
+from statistics import stdev
 import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
 from decimal import Decimal
 from typing import Any, DefaultDict, Optional
+from cachetools import TTLCache, cached
 
 from sqlalchemy import (
     BigInteger,
@@ -219,7 +221,7 @@ class Report(Base):
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
     report_reason: Mapped[str] = mapped_column(String(2000), nullable=False)
     is_reviewed: Mapped[str] = mapped_column(Boolean, nullable=False, default=False)
-    report_time: Mapped[str] = mapped_column(
+    report_time: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default="current_timestamp"
     )
     channel_message_id: Mapped[int] = mapped_column(BigInteger)
@@ -489,6 +491,173 @@ class Driver(Base):
             if not driver_category.left_on:
                 return driver_category.warnings
         return 0
+
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    def consistency(self) -> str:
+        """Number 40-100 calculated based on the
+        standard deviation of the set of relative finishing positions and the number
+        of absences.
+        """
+
+        completed_races: list[RaceResult] = list(
+            filter(lambda x: x.participated, self.race_results)
+        )
+        if len(completed_races) < 2:
+            return "dati insufficienti"
+
+        positions = [race_result.relative_position for race_result in completed_races]
+        participation_ratio = len(completed_races) / len(self.race_results)
+        participation_ratio = min(participation_ratio, 1)
+        result = round((100 * participation_ratio) - (stdev(positions) * 3))
+        return str(max(result, 40))
+
+    # @cached(cache=TTLCache(maxsize=50, ttl=240))
+    def speed(self) -> str:
+        """Statistic calculated on the average gap between
+        the driver's qualifying times and the pole man's.
+
+        Args:
+            driver (Driver): The Driver to calculate the speed rating of.
+
+        Returns:
+            str: Speed rating. (40-100)
+        """
+
+        completed_quali_sessions = list(
+            filter(lambda x: x.participated, self.qualifying_results)
+        )
+
+        if not completed_quali_sessions:
+            return "dati insufficienti"
+
+        total_gap_percentages = 0.0
+        for quali_result in completed_quali_sessions:
+            total_gap_percentages += (
+                float(
+                    quali_result.gap_to_first
+                    / (quali_result.laptime - quali_result.gap_to_first)
+                )
+                * 1000
+            )
+
+        average_gap_percentage = pow(
+            total_gap_percentages / len(completed_quali_sessions), 1.18
+        )
+        average_gap_percentage = min(average_gap_percentage, 60)
+        return str(round(100 - average_gap_percentage))
+
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    def sportsmanship(self) -> str:
+        """This statistic is calculated based on the amount and gravity of reports received.
+
+        Returns:
+            str: Sportsmanship rating. (0-100)
+        """
+
+        if len(self.race_results) < 2:
+            return "dati insufficienti"
+
+        if not self.received_penalties:
+            return "100"
+
+        penalties = (
+            (rr.time_penalty / 1.5)
+            + rr.warnings
+            + (rr.licence_points * 2)
+            + rr.penalty_points
+            for rr in self.received_penalties
+        )
+
+        return str(round(100 - sum(penalties) * 3 / len(self.race_results)))
+
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    def race_pace(self) -> str:
+        """This statistic is calculated based on the average gap from the race winner
+        in all of the races completed by the driver.
+
+        Return:
+            str: Race pace score. (40-100)
+        """
+        completed_races = list(filter(lambda x: x.participated, self.race_results))
+        if not completed_races:
+            return "dati insufficienti"
+
+        total_gap_percentages = 0.0
+        for race_res in completed_races:
+            total_gap_percentages += (
+                float(
+                    race_res.gap_to_first
+                    / (race_res.total_racetime - race_res.gap_to_first)
+                )
+                * 1000
+            )
+
+        average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
+        average_gap_percentage = min(average_gap_percentage, 60)
+
+        return str(round(100 - average_gap_percentage))
+
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    def stats(self) -> tuple[str, str, str, str, str, str, str]:
+        """Calculates the number of wins, podiums and poles achieved by the driver."""
+        wins = 0
+        podiums = 0
+        fastest_laps = 0
+        poles = 0
+        no_participation = 0
+
+        if not self.race_results:
+            return "0", "0", "0", "0", "0", "0", "0"
+
+        positions = 0
+        for race_result in self.race_results:
+            if not race_result.participated:
+                no_participation += 1
+                continue
+
+            if race_result.relative_position:
+                positions += race_result.relative_position
+            if race_result.relative_position == 1:
+                wins += 1
+            if race_result.relative_position <= 3:
+                podiums += 1
+
+            fastest_laps += race_result.fastest_lap_points
+
+        quali_positions = 0
+        no_quali_participation = 0
+        for quali_result in self.qualifying_results:
+            if quali_result:
+                if quali_result.relative_position == 1:
+                    poles += 1
+                if quali_result.participated:
+                    quali_positions += quali_result.relative_position
+
+        races_completed = len(self.race_results) - no_participation
+        if races_completed:
+            average_position = round(positions / races_completed, 2)
+        else:
+            average_position = 0
+
+        qualifying_sessions_completed = (
+            len(self.qualifying_results) - no_quali_participation
+        )
+        if quali_positions:
+            average_quali_position = round(
+                quali_positions / qualifying_sessions_completed, 2
+            )
+        else:
+            average_quali_position = 0
+
+        return (
+            wins,
+            podiums,
+            poles,
+            fastest_laps,
+            races_completed,
+            average_position,
+            average_quali_position,
+        )
 
 
 class QualifyingResult(Base):
@@ -854,9 +1023,9 @@ class Category(Base):
                 results_up_to_n[race_result.driver][0] += race_result.points_earned
 
             for qualifying_result in round.qualifying_results:
-                results_up_to_n[
-                    qualifying_result.driver
-                ][0] += qualifying_result.points_earned
+                results_up_to_n[qualifying_result.driver][
+                    0
+                ] += qualifying_result.points_earned
 
         sorted_results_up_to_n = dict(
             sorted(results_up_to_n.items(), key=lambda x: x[1], reverse=True)
@@ -885,9 +1054,9 @@ class Category(Base):
             if driver not in complete_results:
                 complete_results[driver] = [points, 0]
 
-        complete_sorted_results = dict(sorted(
-            complete_results.items(), key=lambda x: x[1], reverse=True
-        ))
+        complete_sorted_results = dict(
+            sorted(complete_results.items(), key=lambda x: x[1], reverse=True)
+        )
         for i, driver in enumerate(complete_sorted_results):
             for i2, driver2 in enumerate(sorted_results_up_to_n):
                 if driver2 == driver:
@@ -1195,7 +1364,7 @@ class Session(Base):
                 key=lambda x: x.laptime if x.laptime is not None else float("inf"),
             )
         else:
-            results: list[RaceResult] = sorted( # type: ignore
+            results: list[RaceResult] = sorted(  # type: ignore
                 self.race_results,
                 key=lambda x: x.total_racetime
                 if x.total_racetime is not None

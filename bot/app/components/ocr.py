@@ -18,7 +18,8 @@ BOTTOM_START = 250
 INCREMENT = 50
 
 
-def recognize_results(image: str | bytes | Path, expected_drivers: list[Driver]
+def recognize_results(
+    image: str | bytes | Path, expected_drivers: list[Driver]
 ) -> tuple[bool, list[Result]]:
     """Transforms the results of a race or qualifying session from a screenshot
     of the results taken from the game or the live stream.
@@ -46,7 +47,7 @@ def recognize_results(image: str | bytes | Path, expected_drivers: list[Driver]
     success = True
     results = []
     remaining_drivers = {driver.psn_id: driver for driver in expected_drivers}
-    
+
     for _ in range(len(expected_drivers)):
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))

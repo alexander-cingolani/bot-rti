@@ -28,6 +28,7 @@ engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
+
 async def driver_registration_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
@@ -78,7 +79,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             sqla_session.close()
             user_data.clear()
             return ConversationHandler.END
-        
+
     driver_obj = get_driver(sqla_session, psn_id=update.message.text)
     if driver_obj:
         # Checks that no other user is registered to the requested psn_id
@@ -139,7 +140,9 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     sqla_session: SQLASession = user_data["sqla_session"]
 
     if update.callback_query.data == "y":
-        driver = cast(Driver, get_driver(sqla_session, psn_id=user_data["suggested_driver"]))
+        driver = cast(
+            Driver, get_driver(sqla_session, psn_id=user_data["suggested_driver"])
+        )
         if driver.telegram_id:
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato a questo ID."

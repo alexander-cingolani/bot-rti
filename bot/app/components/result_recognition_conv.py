@@ -123,6 +123,7 @@ async def results_input_entry_point(
     championship = get_championship(sqla_session)
 
     if not championship:
+        sqla_session.close()
         return ConversationHandler.END
 
     user_data["sqla_session"] = sqla_session
@@ -168,6 +169,8 @@ async def ask_qualifying_results(
 
     current_round = category.first_non_completed_round()
     if not current_round:
+        user_data.clear()
+        user_data["sqla_session"].close()
         return ConversationHandler.END
     user_data["round"] = current_round
     text = (
@@ -191,7 +194,7 @@ def seconds_to_str(seconds: Decimal) -> str:
     Returns:
         str: User-friendly string.
     """
-    
+
     minutes, seconds = divmod(seconds, 60)
     seconds, milliseconds = divmod(seconds, 1)
     return f"{str(minutes) + ':' if minutes else ''}{seconds:02d}.{milliseconds:0<3}"
@@ -243,6 +246,8 @@ async def download_quali_results(
                 file = await update.message.document.get_file()
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                sqla_session.close()
+                user_data.clear()
                 return ConversationHandler.END
 
             await file.download_to_drive("results.jpg")
@@ -336,6 +341,8 @@ async def download_race_1_results(
                 file = await update.message.document.get_file()
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                sqla_session.close()
+                user_data.clear()
                 return ConversationHandler.END
 
             screenshot = await file.download_to_drive("results_1.jpg")
@@ -602,6 +609,8 @@ async def download_race_2_results(
                 file = await update.message.document.get_file()
             except AttributeError:
                 await update.message.reply_text(WRONG_FILE_FORMAT_MESSAGE)
+                user_data["sqla_session"].close()
+                user_data.clear()
                 return ConversationHandler.END
 
             screenshot = await file.download_to_drive("results_1.jpg")
@@ -734,7 +743,7 @@ def create_quali_result_objs(
         for pos, quali_res in enumerate(class_results, start=1):
             if quali_res.seconds:
                 gap_to_first = quali_res.seconds - class_pole_time
-            
+
             participated = bool(quali_res.position)
             result_objs.append(
                 QualifyingResult(

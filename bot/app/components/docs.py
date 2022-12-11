@@ -6,9 +6,9 @@ from datetime import datetime
 from textwrap import wrap
 
 from app.components.models import Driver, Penalty, Report
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics  # type: ignore
+from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
+from reportlab.pdfgen import canvas  # type: ignore
 
 pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
 pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
@@ -69,9 +69,14 @@ class PenaltyDocument:
         self.canvas.drawString(75, 599, "Capo Scuderia,")
 
         self.canvas.setFont("arial", 11)
-        self.canvas.drawString(
-            75, 585, f"Scuderia {self.reported_driver.current_team().name}"
-        )
+
+        reported_team = self.reported_driver.current_team()
+        if not reported_team:
+            reported_team_name = "-"
+        else:
+            reported_team_name = reported_team.name
+
+        self.canvas.drawString(75, 585, f"Scuderia {reported_team_name}")
         self.canvas.drawString(480, 619, str(self.penalty.number))
         self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
         self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
@@ -100,7 +105,14 @@ class PenaltyDocument:
             499,
             f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
         )
-        self.canvas.drawString(135, 475, self.reported_driver.current_team().name)
+
+        reported_team = self.reported_driver.current_team()
+        if not reported_team:
+            reported_team_name = "-"
+        else:
+            reported_team_name = reported_team.name
+
+        self.canvas.drawString(135, 475, reported_team_name)
         self.canvas.drawString(135, 450, self.penalty.incident_time)
         self.canvas.drawString(135, 425, self.penalty.session.name)
         self.canvas.drawString(135, 400, self.penalty.fact)
@@ -108,9 +120,9 @@ class PenaltyDocument:
         self.canvas.drawString(135, 350, self.penalty.decision)
 
         text = self.penalty.penalty_reason
-        text = "\n".join(wrap(text, 80)).split("\n")
+        lines = "\n".join(wrap(text, 80)).split("\n")
         y_coord = 325
-        for line in text:
+        for line in lines:
             self.canvas.drawString(135, y_coord, line)
             y_coord -= 15
 
@@ -173,17 +185,23 @@ class ReportDocument:
         pdf.drawString(50, 375, "Fatto")
         pdf.setFont("arial", 10)
 
-        pdf.drawString(75, 619, f"Scuderia {self.reporting_driver.current_team().name}")
+        current_team = self.reporting_driver.current_team()
+        if not current_team:
+            team_name = "-"
+        else:
+            team_name = current_team.name
+
+        pdf.drawString(75, 619, f"Scuderia {team_name}")
         pdf.drawString(75, 599, "Safety Commission")
         pdf.drawString(480, 619, str(self.report.number))
         pdf.drawString(480, 599, self.date)
         pdf.drawString(480, 579, self.time)
         pdf.setFont("arial", 11)
+
         pdf.drawString(
             50,
             540,
-            f"La scuderia {self.reporting_driver.current_team().name} "
-            "chiede la revisione del seguente incidente:",
+            f"La scuderia {team_name} " "chiede la revisione del seguente incidente:",
         )
         pdf.drawString(
             155,
@@ -195,7 +213,14 @@ class ReportDocument:
             474,
             f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
         )
-        pdf.drawString(155, 449, self.reported_driver.current_team().name)
+
+        reported_team = self.reported_driver.current_team()
+        if not reported_team:
+            reported_team_name = "-"
+        else:
+            reported_team_name = reported_team.name
+
+        pdf.drawString(155, 449, reported_team_name)
         pdf.drawString(155, 424, self.report.incident_time)
         pdf.drawString(155, 399, self.report.session.name)
         text = "\n".join(wrap(self.report.report_reason, 80)).split("\n")
