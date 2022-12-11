@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session as SQLASession
 
 
 def get_championship(
-    session: SQLASession, championship_id: int = None
+    session: SQLASession, championship_id: int | None = None
 ) -> Championship | None:
     """If not given a specific championship_id, returns the last one in
     chronological order.
@@ -47,10 +47,15 @@ def get_championship(
     else:
         statement = select(Championship).order_by(desc(Championship.start))
 
-    return session.execute(statement).first()[0]
+    result = session.execute(statement).first()
+    if result:
+        return result[0]
+    return None
 
 
-def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[Driver]:
+def get_team_leaders(
+    session: SQLASession, championship_id: int | None = None
+) -> list[Driver] | None:
     """Returns a list of the team leaders in the championship specified by championship_id.
     If championship_id is not given, the function defaults to the latest championship.
 
@@ -62,7 +67,11 @@ def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[
         list[Driver]: List of drivers who were team leaders in the championship.
     """
     if not championship_id:
-        championship_id = get_championship(session).championship_id
+        championship = get_championship(session)
+        if championship:
+            championship_id = championship.championship_id
+        else:
+            return None
 
     statement = (
         select(Driver)
@@ -73,14 +82,17 @@ def get_team_leaders(session: SQLASession, championship_id: int = None) -> list[
         .where(TeamChampionship.championship_id == championship_id)
     )
 
-    return session.execute(statement).all()
+    result = session.execute(statement).all()
+    if result:
+        return [row[0] for row in result]
+    return None
 
 
 def get_reports(
     session: SQLASession,
-    round_id: int = None,
-    is_reviewed: bool = None,
-    is_queued: bool = None,
+    round_id: int | None = None,
+    is_reviewed: bool | None = None,
+    is_queued: bool | None = None,
 ) -> list[Report]:
     """Returns a list of reports matching the given arguments.
 
@@ -94,8 +106,6 @@ def get_reports(
         statement = statement.where(Report.round_id == round_id)
     if is_reviewed is not None:
         statement = statement.where(Report.is_reviewed == is_reviewed)
-    if is_queued is not None:
-        statement = statement.where(Report.is_queued == is_queued)
 
     result = session.execute(statement.order_by(Report.number)).all()
     return [res[0] for res in result]
@@ -103,7 +113,7 @@ def get_reports(
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))
 def get_driver(
-    session: SQLASession, psn_id: str = None, telegram_id: str = None
+    session: SQLASession, psn_id: str | None = None, telegram_id: str | None = None
 ) -> Driver | None:
     """Retrieves a single Driver object from the database given his PSN or Telegram id.
     Either psn_id or telegram are optional, but at least one must be given.
@@ -127,7 +137,7 @@ def get_driver(
         result = session.execute(statement).one_or_none()
     except MultipleResultsFound:
         return None
-    
+
     return result[0] if result else None
 
 
@@ -187,7 +197,7 @@ def get_last_report_number(
         .where(Report.round_id == round_id)
         .order_by(desc(Report.number))
     ).first()
-    
+
     if result:
         return result[0].number
     return 0
@@ -226,13 +236,13 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     Raises:
         ValueError: Raised when the qualifying result record couldn't be found.
     """
-    quali_result = session.execute(
+    result = session.execute(
         select(QualifyingResult)
         .where(QualifyingResult.driver_id == penalty.reported_driver_id)
         .where(QualifyingResult.session_id == penalty.session_id)
     ).one_or_none()
 
-    if not quali_result:
+    if not result:
         raise ValueError("QualifyingResult not in database.")
 
     for driver_category in penalty.reported_driver.categories:
@@ -240,12 +250,7 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
 
-    quali_result: QualifyingResult = quali_result[0]
-    quali_result.warnings = penalty.warnings
-    quali_result.licence_points = penalty.licence_points
-    quali_result.penalty_points = penalty.penalty_points
-
-    penalty.reported_driver_id = penalty.reported_driver.driver_id
+    # penalty.reported_driver_id = penalty.reported_driver.driver_id
     session.add(penalty)
     session.commit()
 
@@ -302,7 +307,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    penalty.reported_driver_id = penalty.reported_driver.driver_id
+    # penalty.reported_driver_id = penalty.reported_driver.driver_id
     session.add(penalty)
     session.commit()
     return

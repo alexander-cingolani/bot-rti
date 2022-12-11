@@ -71,7 +71,7 @@ async def post_init(application: Application) -> None:
     for driver in leaders:
         try:
             await application.bot.set_my_commands(
-                config.LEADER_COMMANDS, BotCommandScopeChat(driver[0].telegram_id)
+                config.LEADER_COMMANDS, BotCommandScopeChat(driver.telegram_id)
             )
         except BadRequest:
             pass
