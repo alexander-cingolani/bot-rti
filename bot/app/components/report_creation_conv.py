@@ -20,7 +20,7 @@ from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -45,8 +45,9 @@ from telegram.ext import (
 ) = range(3, 12)
 
 
-engine = create_engine(os.environ.get("DB_URL"))
-SQLASession = sessionmaker(bind=engine, autoflush=False)
+engine = create_engine(os.environ["DB_URL"])
+
+DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -55,7 +56,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data = context.user_data
     user_data.clear()
 
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     championship = get_championship(sqla_session)
 
     user_data["sqla_session"] = sqla_session
@@ -163,7 +164,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     user_data = context.user_data
     user_data.clear()
-    sqla_session = SQLASession()
+    sqla_session = DBSession()
     user_data["leader"] = get_driver(sqla_session, telegram_id=user.id)
     user_data["sqla_session"] = sqla_session
 

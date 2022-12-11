@@ -18,7 +18,7 @@ from app.components.queries import (
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -46,8 +46,10 @@ from telegram.ext import (
 ) = range(13, 26)
 
 
-engine = create_engine(os.environ.get("DB_URL"))
-SQLASession = sessionmaker(bind=engine, autoflush=False)
+
+engine = create_engine(os.environ["DB_URL"])
+
+DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -57,7 +59,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text="Questo comando è riservato agli admin.")
         return ConversationHandler.END
 
-    session = SQLASession()
+    session = DBSession()
     context.user_data["sqla_session"] = session
 
     championship = get_championship(session)
@@ -253,7 +255,7 @@ async def report_processing_entry_point(
     """Asks the user which category he wants to view reports from,
     after the /start_reviewing command is issued."""
 
-    session = SQLASession()
+    session = DBSession()
     championship = get_championship(session)
     context.user_data["sqla_session"] = session
     context.user_data["championship"] = championship

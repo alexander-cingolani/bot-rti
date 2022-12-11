@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
 from decimal import Decimal
-from typing import Any, DefaultDict, Optional, Union
+from typing import Any, DefaultDict, Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -33,8 +33,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm.relationships import _ORMColCollectionArgument
 
-# pylint: disable=too-many-lines, redefined-builtin
 # In this project "round" always refers to an instance of a Round object.
 
 
@@ -76,6 +76,7 @@ class Penalty(Base):
     fact: str
     decision: str
     penalty_reason: str
+    reporting_driver: Driver
 
     penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -103,10 +104,10 @@ class Penalty(Base):
     )
 
     reported_driver: Mapped[Driver] = relationship(
-        back_populates="received_penalties", foreign_keys=[reported_driver_id]
+        back_populates="received_penalties", foreign_keys=[reported_driver_id]  # type: ignore
     )
     reported_team: Mapped[Team] = relationship(
-        back_populates="received_penalties", foreign_keys=[reported_team_id]
+        back_populates="received_penalties", foreign_keys=[reported_team_id]  # type: ignore
     )
 
     @classmethod
@@ -247,13 +248,13 @@ class Report(Base):
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="reports")
     session: Mapped[Session] = relationship()
-    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])
+    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])  # type: ignore
     reporting_driver: Mapped[Driver] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_driver_id]
+        back_populates="reports_made", foreign_keys=[reporting_driver_id]  # type: ignore
     )
-    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])
+    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])  # type: ignore
     reporting_team: Mapped[Team] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_team_id]
+        back_populates="reports_made", foreign_keys=[reporting_team_id]  # type: ignore
     )
 
     def __str__(self) -> str:
@@ -822,7 +823,7 @@ class Category(Base):
         """True if this Category has multiple car classes competing together."""
         return len(self.car_classes) > 1
 
-    def standings(self, n=0) -> DefaultDict[Driver, int]:
+    def standings(self, n=0) -> dict[Driver, list[float]]:
         """Calculates the current standings in this category.
 
         Args:
@@ -846,16 +847,16 @@ class Category(Base):
         if n == 0:
             n = len(completed_rounds)
 
-        results_up_to_n: DefaultDict[Driver, float] = defaultdict(lambda: 0)
+        results_up_to_n: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
 
         for round in completed_rounds[:n]:
             for race_result in round.race_results:
-                results_up_to_n[race_result.driver] += race_result.points_earned
+                results_up_to_n[race_result.driver][0] += race_result.points_earned
 
             for qualifying_result in round.qualifying_results:
                 results_up_to_n[
                     qualifying_result.driver
-                ] += qualifying_result.points_earned
+                ][0] += qualifying_result.points_earned
 
         sorted_results_up_to_n = dict(
             sorted(results_up_to_n.items(), key=lambda x: x[1], reverse=True)
@@ -875,7 +876,7 @@ class Category(Base):
                 ] += qualifying_result.points_earned
 
         complete_results: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
-        for driver, points in sorted_results_up_to_n.items():
+        for driver, (points, _) in sorted_results_up_to_n.items():
             complete_results[driver][0] += points + results_after_n[driver]
 
         # Adds the drivers who may have joined the championship within those n races
@@ -884,21 +885,16 @@ class Category(Base):
             if driver not in complete_results:
                 complete_results[driver] = [points, 0]
 
-        complete_sorted_results_list = sorted(
+        complete_sorted_results = dict(sorted(
             complete_results.items(), key=lambda x: x[1], reverse=True
-        )
-        complete_sorted_results_dict = {
-            driver: [points, pos]
-            for driver, (points, pos) in complete_sorted_results_list
-        }
-
-        for i, driver in enumerate(complete_sorted_results_dict):
+        ))
+        for i, driver in enumerate(complete_sorted_results):
             for i2, driver2 in enumerate(sorted_results_up_to_n):
                 if driver2 == driver:
-                    complete_results[driver][1] = i - i2
+                    complete_sorted_results[driver][1] = i - i2
                     break
 
-        return complete_results
+        return complete_sorted_results
 
     def standings_with_results(self):
         """Calculates the current standings in this category.
@@ -1194,12 +1190,12 @@ class Session(Base):
 
         # Sorts results, drivers who didn't participate are put to the back of the list.
         if self.is_quali:
-            results = sorted(
+            results: list[QualifyingResult] = sorted(
                 self.qualifying_results,
                 key=lambda x: x.laptime if x.laptime is not None else float("inf"),
             )
         else:
-            results = sorted(
+            results: list[RaceResult] = sorted( # type: ignore
                 self.race_results,
                 key=lambda x: x.total_racetime
                 if x.total_racetime is not None
@@ -1222,7 +1218,6 @@ class Session(Base):
                 position = "/"
 
             penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
-
             message += f"{position} - {result.driver.psn_id} {gap}"
 
             if penalty_seconds:
@@ -1230,7 +1225,6 @@ class Session(Base):
 
             if getattr(result, "fastest_lap_points", 0):
                 message += " GV"
-
             message += "\n"
 
         return message + "\n"

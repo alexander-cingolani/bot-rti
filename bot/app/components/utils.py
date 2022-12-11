@@ -16,20 +16,20 @@ class Result:
     """
 
     driver: str
-    seconds: float
+    seconds: Decimal | None
     car_class: Any
-    position: int
+    position: int | None
 
     def __init__(self, driver, seconds):
         self.seconds = seconds
         self.driver = driver
         self.car_class = None
-        self.position: int = None
+        self.position = None
 
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def prepare_result(self, best_time: float, position: int) -> None:
+    def prepare_result(self, best_time: Decimal, position: int):
         """Modifies Result to contain valid data for a RaceResult."""
         if self.seconds is None:
             self.position = None
@@ -64,38 +64,38 @@ def string_to_seconds(string) -> Decimal | None | str:
             or "1" in string
             or "2" in string
         ):
-            return 0
+            return Decimal(0)
         # if string is equals to "ASSENTE" None is retured.
         return None
 
     matched_string = match.group(0)
     matched_string = matched_string.replace(",", ".")
-    milliseconds = 0
-    other = matched_string
-    if "." in other:
-        other, milliseconds = matched_string.split(".")
 
-    hours = 0
-    minutes = 0
+    other = matched_string
+    milliseconds_str = ""
+    if "." in other:
+        other, milliseconds_str = matched_string.split(".")
+
+    hours_str, minutes_str = "", ""
     if other.count(":") == 2:
-        hours, minutes, seconds = other.split(":")
+        hours_str, minutes_str, seconds_str = other.split(":")
     elif other.count(":") == 1:
-        minutes, seconds = other.split(":")
+        minutes_str, seconds_str = other.split(":")
     else:
         if len(other) > 2:
-            seconds = other[-2:]
+            seconds_str = other[-2:]
         else:
-            seconds = other
+            seconds_str = other
 
     return Decimal(
-        f"{int(hours) * 3600 + int(minutes) * 60 + int(seconds)}.{int(milliseconds)}"
+        f"{int(hours_str) * 3600 + int(minutes_str) * 60 + int(seconds_str)}.{int(milliseconds_str)}"
     )
 
 
 def separate_car_classes(
-    category: Any, results: list[Result]
-) -> dict[Any, list[Result]]:
-    separated_classes = {
+    category: Any, results: list[Result] | list[Any]
+) -> dict[Any, list[Result]] | dict[Any, list[Any]]:
+    separated_classes: dict[int, list[Result]] = {
         car_class.car_class_id: [] for car_class in category.car_classes
     }
     if isinstance(results[0], Result):
