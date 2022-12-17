@@ -93,7 +93,6 @@ def get_reports(
     session: SQLASession,
     round_id: int | None = None,
     is_reviewed: bool | None = None,
-    is_queued: bool | None = None,
 ) -> list[Report]:
     """Returns a list of reports matching the given arguments.
 

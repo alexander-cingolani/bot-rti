@@ -754,7 +754,7 @@ def create_quali_result_objs(
                     laptime=quali_res.seconds,
                     driver=get_driver(sqla_session, psn_id=quali_res.driver),
                     round=championship_round,
-                    participated=bool(quali_res.position),
+                    participated=bool(quali_res.seconds),
                     relative_position=pos if participated else None,
                     session=championship_round.qualifying_session,
                     category=category,
@@ -792,7 +792,7 @@ def create_race_result_objs(
                     gap_to_first=gap_to_first,
                     total_racetime=result.seconds,
                     relative_position=pos if pos else None,
-                    participated=bool(pos),
+                    participated=bool(result.seconds),
                     category=category,
                 )
                 result_objs.append(result)
