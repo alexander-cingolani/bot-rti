@@ -72,11 +72,11 @@ def string_to_seconds(string) -> Decimal | None | str:
     matched_string = matched_string.replace(",", ".")
 
     other = matched_string
-    milliseconds_str = ""
+    milliseconds_str = "0"
     if "." in other:
         other, milliseconds_str = matched_string.split(".")
 
-    hours_str, minutes_str = "", ""
+    hours_str, minutes_str = "0", "0"
     if other.count(":") == 2:
         hours_str, minutes_str, seconds_str = other.split(":")
     elif other.count(":") == 1:
@@ -107,7 +107,6 @@ def separate_car_classes(
                     result.prepare_result(best_laptime, pos)
                 )
         return separated_classes
-
     best_laptime = results[0].total_racetime
 
     for pos, result in enumerate(results, start=1):

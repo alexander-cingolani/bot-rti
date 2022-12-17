@@ -56,7 +56,7 @@ def recognize_results(
         s = image_to_string(laptime_box)
         seconds = string_to_seconds(s)
 
-        matches = get_close_matches(driver, remaining_drivers.values(), cutoff=0.1)
+        matches = get_close_matches(driver, remaining_drivers.keys(), cutoff=0.1)
         if matches and len(driver) >= 3:
             race_res = Result(matches[0], seconds)
             race_res.car_class = remaining_drivers[matches[0]].current_class()
@@ -69,7 +69,7 @@ def recognize_results(
         bottom += INCREMENT
 
     for driver_obj in remaining_drivers.values():
-        race_res = Result(driver, None)
+        race_res = Result(driver_obj.psn_id, None)
         race_res.car_class = driver_obj.current_class()
         results.append(race_res)
 

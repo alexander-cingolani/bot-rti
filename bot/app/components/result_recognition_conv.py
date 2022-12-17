@@ -4,7 +4,6 @@ This conversation allows users (admins) to save race and qualifying results to t
 by sending screenshots captured from the game or live stream.
 """
 from collections import defaultdict
-import logging
 import os
 from decimal import Decimal
 from difflib import get_close_matches
@@ -78,7 +77,6 @@ def text_to_results(text: str, category: Category) -> list[Result]:
         driver.driver.psn_id: (driver.car_class, driver.driver)
         for driver in category.active_drivers()
     }
-
     results = []
     for given_driver_name, gap in recognized_text:
 
@@ -90,10 +88,10 @@ def text_to_results(text: str, category: Category) -> list[Result]:
             )[0]
 
         if driver_name:
-            driver_obj = driver_map.pop(given_driver_name)[1]
+            driver_obj = driver_map[given_driver_name][1]
             seconds = string_to_seconds(gap)
             result = Result(driver_obj.psn_id, seconds)
-            result.car_class = driver_map[driver_obj.psn_id][0]
+            result.car_class = driver_map.pop(driver_obj.psn_id)[0]
             results.append(result)
 
     # Add unrecognized drivers to the results list
@@ -197,7 +195,10 @@ def seconds_to_str(seconds: Decimal) -> str:
 
     minutes, seconds = divmod(seconds, 60)
     seconds, milliseconds = divmod(seconds, 1)
-    return f"{str(minutes) + ':' if minutes else ''}{seconds:02d}.{milliseconds:0<3}"
+    milliseconds = int(milliseconds * 1000)
+    return (
+        f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0<3}"
+    )
 
 
 async def download_quali_results(
@@ -431,9 +432,10 @@ async def ask_fastest_lap_1(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     # Saves corrected results if a message was sent.
     if update.message:
-        user_data["race_results"][championship_round.long_race]["results"] = [
-            text_to_results(update.message.text, user_data["category"])
-        ]
+        user_data["race_results"][championship_round.long_race][
+            "results"
+        ] = text_to_results(update.message.text, user_data["category"])
+
         await update.message.reply_text(text, reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
@@ -764,7 +766,6 @@ def create_quali_result_objs(
 def create_race_result_objs(
     sqla_session: SQLASession, category, championship_round: Round, race_results: dict
 ):
-    logging.info(race_results)
     result_objs = []
     for session, stuff in race_results.items():
         results, fastest_laps = stuff.values()

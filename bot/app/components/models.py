@@ -511,7 +511,7 @@ class Driver(Base):
         result = round((100 * participation_ratio) - (stdev(positions) * 3))
         return str(max(result, 40))
 
-    # @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
     def speed(self) -> str:
         """Statistic calculated on the average gap between
         the driver's qualifying times and the pole man's.
