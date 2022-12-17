@@ -641,7 +641,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         user_data["penalty"].penalty_reason = update.message.text
 
     penalty: Penalty = user_data["penalty"]
-
+    penalty.reported_team = penalty.reported_driver.current_team()
     penalty.decision = ", ".join(
         filter(
             None,
@@ -680,7 +680,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
     else:
         text += (
-            "\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
+            "\n\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
         )
 
     await send_or_edit_message(update, text, InlineKeyboardMarkup(reply_markup))
@@ -759,7 +759,7 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-report_processing = ConversationHandler(
+penalty_creation = ConversationHandler(
     allow_reentry=True,
     entry_points=[
         CommandHandler(

@@ -15,8 +15,8 @@ from app.components import config
 from app.components.driver_registration import driver_registration
 from app.components.queries import get_championship, get_driver, get_team_leaders
 from app.components.report_creation_conv import report_creation
-from app.components.report_processing_conv import report_processing
-from app.components.result_recognition_conv import save_results_conv
+from app.components.penalty_creation import penalty_creation
+from app.components.result_recognition import save_results_conv
 from app.components.models import Team
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -338,13 +338,13 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
 
         if diff > 0:
-            diff = f" ↓{abs(diff)}"
+            diff_text = f" ↓{abs(diff)}"
         elif diff < 0:
-            diff = f" ↑{abs(diff)}"
+            diff_text = f" ↑{abs(diff)}"
         else:
-            diff = ""
+            diff_text = ""
 
-        message += f"{pos} - {driver.psn_id} <i>{points}{diff} </i>\n"
+        message += f"{pos} - {driver.psn_id} <i>{points}{diff_text} </i>\n"
 
     message = message.replace(driver.psn_id, f"<b>{driver.psn_id}</b>")
 
@@ -694,7 +694,7 @@ def main() -> None:
     )
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=7),
+        time=time(hour=0, minute=15, second=35),
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
@@ -711,7 +711,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(driver_registration)
-    application.add_handler(report_processing)
+    application.add_handler(penalty_creation)
     application.add_handler(report_creation)
     application.add_handler(save_results_conv)
 
