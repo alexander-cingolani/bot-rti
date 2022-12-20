@@ -256,12 +256,12 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team()
             if not current_team:
-                current_team = "/"
+                team_text = "/"
             else:
-                current_team = current_team.name
+                team_text = current_team.name
 
             unique_teams = unique_teams.replace(
-                current_team, f"{current_team} [Attuale]"
+                current_team, f"{team_text} [Attuale]"
             )
 
             if not unique_teams:
@@ -406,7 +406,7 @@ async def complete_championship_standings(
                 teams[team_obj] += points
 
     for team_obj, points in teams.items():
-        points += team_obj.current_championship().penalty_points  # type: ignore
+        points += float(team_obj.current_championship().penalty_points)
 
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
     for pos, (team_obj, points) in enumerate(
