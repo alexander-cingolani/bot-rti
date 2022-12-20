@@ -6,7 +6,7 @@ from difflib import get_close_matches
 from app.components.utils import Result, string_to_seconds
 from PIL import Image, ImageOps
 from PIL.ImageEnhance import Contrast
-from pytesseract import image_to_string # type: ignore
+from pytesseract import image_to_string  # type: ignore
 
 from app.components.models import Driver
 from pathlib import Path

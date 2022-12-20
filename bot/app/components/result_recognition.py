@@ -11,14 +11,13 @@ from typing import Any, Optional, cast
 
 from app.components import config
 from app.components.models import (
-    CarClass,
     Category,
     QualifyingResult,
     RaceResult,
     Round,
 )
 from app.components.ocr import Result, recognize_results, string_to_seconds
-from app.components.queries import get_championship, get_driver
+from app.components.queries import get_championship
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
@@ -635,7 +634,7 @@ async def download_race_2_results(
             racetime = "/"
         else:
             racetime = seconds_to_str(result.seconds)
-            driver = result.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
+        driver = result.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
         text += f"\n{driver} {racetime}"
     await update.message.reply_text(text)
 
@@ -762,6 +761,7 @@ def separate_car_classes(
             separated_classes[result.car_class.car_class_id].append(
                 result.prepare_result(best_laptime, pos)
             )
+
     return separated_classes
 
 
@@ -798,6 +798,7 @@ def create_quali_result_objs(
 
 def create_race_result_objs(category, championship_round: Round, race_results: dict):
     result_objs = []
+
     for session, stuff in race_results.items():
         results, fastest_laps = stuff.values()
         separated_results = separate_car_classes(category, results)

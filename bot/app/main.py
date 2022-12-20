@@ -217,7 +217,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif not (championship_round := current_category.next_round()):
+    elif (championship_round := current_category.next_round()) is False:
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
         msg = championship_round.generate_info_message()
@@ -260,9 +260,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 team_text = current_team.name
 
-            unique_teams = unique_teams.replace(
-                current_team, f"{team_text} [Attuale]"
-            )
+            unique_teams = unique_teams.replace(current_team, f"{team_text} [Attuale]")
 
             if not unique_teams:
                 unique_teams = "/"
@@ -320,15 +318,15 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """
     session = DBSession()
     user = cast(User, update.effective_user)
-    driver = get_driver(session, telegram_id=user.id)
-    if not driver:
+    user_driver = get_driver(session, telegram_id=user.id)
+    if not user_driver:
         await update.message.reply_text(
             "Per usare questa funzione devi essere registrato.\n"
             "Puoi farlo con /registrami."
         )
         return
 
-    category = driver.current_category()
+    category = user_driver.current_category()
 
     if not category:
         text = (
@@ -351,9 +349,11 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         else:
             diff_text = ""
 
-        message += f"{pos} - {driver.psn_id} <i>{points}{diff_text} </i>\n"
-
-    message = message.replace(driver.psn_id, f"<b>{driver.psn_id}</b>")
+        if driver == user_driver:
+            driver_name = f"<b>{driver.psn_id}</b>"
+        else:
+            driver_name = driver.psn_id
+        message += f"{pos} - {driver_name} <i>{points}{diff_text} </i>\n"
 
     await update.message.reply_text(text=message)
 
@@ -367,7 +367,7 @@ async def complete_championship_standings(
     sqla_session = DBSession()
     teams: DefaultDict[Team, float] = defaultdict(float)
     championship = get_championship(sqla_session)
-
+    user_driver = get_driver(session=sqla_session, telegram_id=update.effective_user.id)
     if not championship:
         return
 
@@ -396,9 +396,13 @@ async def complete_championship_standings(
                 team_name = team.name
             else:
                 team_name = ""
-            message += (
-                f"{pos} - {team_name} {driver.psn_id} <i>{points}{diff_text}</i>\n"
-            )
+
+            if driver == user_driver:
+                driver_name = f"<b>{driver.psn_id}</b>"
+            else:
+                driver_name = driver.psn_id
+
+            message += f"{pos} - {team_name} {driver_name} <i>{points}{diff_text}</i>\n"
 
             if (
                 team_obj := driver.current_team()
