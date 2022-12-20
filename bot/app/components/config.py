@@ -7,7 +7,6 @@ import os
 
 from telegram import User
 
-
 REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
 TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
 LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])

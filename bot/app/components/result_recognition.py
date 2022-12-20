@@ -3,20 +3,26 @@ This module contains the callbacks that make up the result recognition conversat
 This conversation allows users (admins) to save race and qualifying results to the database
 by sending screenshots captured from the game or live stream.
 """
-from collections import defaultdict
 import os
+from collections import defaultdict
 from decimal import Decimal
 from difflib import get_close_matches
 from typing import Any, Optional, cast
 
 from app.components import config
-from app.components.models import Category, QualifyingResult, RaceResult, Round
+from app.components.models import (
+    Category,
+    QualifyingResult,
+    RaceResult,
+    Round,
+)
 from app.components.ocr import Result, recognize_results, string_to_seconds
-from app.components.queries import get_championship, get_driver
-from app.components.utils import send_or_edit_message, separate_car_classes
+from app.components.queries import get_championship
+from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import Chat, InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -90,14 +96,14 @@ def text_to_results(text: str, category: Category) -> list[Result]:
         if driver_name:
             driver_obj = driver_map[given_driver_name][1]
             seconds = string_to_seconds(gap)
-            result = Result(driver_obj.psn_id, seconds)
+            result = Result(driver_obj, seconds)
             result.car_class = driver_map.pop(driver_obj.psn_id)[0]
             results.append(result)
 
     # Add unrecognized drivers to the results list
     for given_driver_name in driver_map:
         driver_obj = driver_map[given_driver_name][1]
-        result = Result(driver_obj.psn_id, 0)
+        result = Result(driver_obj, 0)
 
         result.car_class = driver_map[driver_obj.psn_id][0]
         results.append(result)
@@ -195,10 +201,8 @@ def seconds_to_str(seconds: Decimal) -> str:
 
     minutes, seconds = divmod(seconds, 60)
     seconds, milliseconds = divmod(seconds, 1)
-    milliseconds = int(milliseconds * 1000)
-    return (
-        f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0<3}"
-    )
+    milliseconds_int = round(milliseconds * 1000)
+    return f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds_int:0>3}"
 
 
 async def download_quali_results(
@@ -267,7 +271,8 @@ async def download_quali_results(
             gap = seconds_to_str(result.seconds)
         else:
             gap = "ASSENTE"
-        results_message_text += f"\n{result.driver} {gap}"
+        driver = result.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
+        results_message_text += f"\n{driver} {gap}"
     await update.message.reply_text(results_message_text)
 
     if success:
@@ -360,8 +365,8 @@ async def download_race_1_results(
             racetime = "/"
         else:
             racetime = seconds_to_str(result.seconds)
-
-        text += f"\n{result.driver} {racetime}"
+        driver = result.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
+        text += f"\n{driver} {racetime}"
 
     await update.message.reply_text(text)
 
@@ -629,7 +634,8 @@ async def download_race_2_results(
             racetime = "/"
         else:
             racetime = seconds_to_str(result.seconds)
-        text += f"\n{result.driver} {racetime}"
+        driver = result.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
+        text += f"\n{driver} {racetime}"
     await update.message.reply_text(text)
 
     reply_markup = InlineKeyboardMarkup(
@@ -731,8 +737,35 @@ async def save_race_2_results(
     return PERSIST_RESULTS
 
 
+def separate_car_classes(
+    category: Category, results: list[Result]
+) -> dict[int, list[Result]]:
+    """Separates a list of mixed Results or RaceResults into as many lists as there are
+    categories in the original list.
+
+    Args:
+        category (Category): Category the Results belong to.
+        results (list[Result]): Results to separate.
+
+    Returns:
+        dict[CarClass, list[Result]]: Dictionary which uses CarClass objects
+            as keys.
+    """
+    separated_classes: dict[int, list[Result]] = {
+        car_class.car_class_id: [] for car_class in category.car_classes
+    }
+
+    best_laptime = results[0].seconds
+    for pos, result in enumerate(results, start=1):
+        if result.car_class.car_class_id in separated_classes:
+            separated_classes[result.car_class.car_class_id].append(
+                result.prepare_result(best_laptime, pos)
+            )
+
+    return separated_classes
+
+
 def create_quali_result_objs(
-    sqla_session: SQLASession,
     quali_results: list[QualifyingResult],
     category: Category,
     championship_round: Round,
@@ -752,7 +785,7 @@ def create_quali_result_objs(
                     position=quali_res.position,
                     gap_to_first=gap_to_first,
                     laptime=quali_res.seconds,
-                    driver=get_driver(sqla_session, psn_id=quali_res.driver),
+                    driver=quali_res.driver,
                     round=championship_round,
                     participated=bool(quali_res.seconds),
                     relative_position=pos if participated else None,
@@ -763,10 +796,9 @@ def create_quali_result_objs(
     return result_objs
 
 
-def create_race_result_objs(
-    sqla_session: SQLASession, category, championship_round: Round, race_results: dict
-):
+def create_race_result_objs(category, championship_round: Round, race_results: dict):
     result_objs = []
+
     for session, stuff in race_results.items():
         results, fastest_laps = stuff.values()
         separated_results = separate_car_classes(category, results)
@@ -786,7 +818,7 @@ def create_race_result_objs(
                 result = RaceResult(
                     finishing_position=result.position,
                     fastest_lap_points=bonus_points,
-                    driver=get_driver(sqla_session, psn_id=result.driver),
+                    driver=result.driver,
                     session=session,
                     round=championship_round,
                     gap_to_first=gap_to_first,
@@ -813,7 +845,6 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if quali_results:
         result_objs.extend(
             create_quali_result_objs(
-                sqla_session=sqla_session,
                 quali_results=quali_results,
                 category=category,
                 championship_round=championship_round,
@@ -822,7 +853,6 @@ async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     result_objs.extend(
         create_race_result_objs(
-            sqla_session=sqla_session,
             category=category,
             championship_round=championship_round,
             race_results=race_results,

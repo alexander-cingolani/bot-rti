@@ -6,7 +6,7 @@ from difflib import get_close_matches
 from app.components.utils import Result, string_to_seconds
 from PIL import Image, ImageOps
 from PIL.ImageEnhance import Contrast
-from pytesseract import image_to_string
+from pytesseract import image_to_string  # type: ignore
 
 from app.components.models import Driver
 from pathlib import Path
@@ -51,25 +51,25 @@ def recognize_results(
     for _ in range(len(expected_drivers)):
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
-        name_box.show()
-        driver = image_to_string(name_box).strip()
-        s = image_to_string(laptime_box)
-        seconds = string_to_seconds(s)
 
+        driver = image_to_string(name_box).strip()
+        seconds = string_to_seconds(image_to_string(laptime_box))
         matches = get_close_matches(driver, remaining_drivers.keys(), cutoff=0.1)
+
         if matches and len(driver) >= 3:
-            race_res = Result(matches[0], seconds)
-            race_res.car_class = remaining_drivers[matches[0]].current_class()
+            driver = remaining_drivers.pop(matches[0])
+            race_res = Result(driver, seconds)
+            race_res.car_class = driver.current_class()
             results.append(race_res)
-            remaining_drivers.pop(matches[0])
+
         elif seconds:
             success = False
-            results.append(Result("[NON_RICONOSCIUTO]", seconds))
+            results.append(Result(None, seconds))
         top += INCREMENT
         bottom += INCREMENT
 
     for driver_obj in remaining_drivers.values():
-        race_res = Result(driver_obj.psn_id, None)
+        race_res = Result(driver_obj, None)
         race_res.car_class = driver_obj.current_class()
         results.append(race_res)
 

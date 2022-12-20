@@ -4,6 +4,7 @@ such as Reports, Categories and Drivers.
 """
 
 import uuid
+
 import sqlalchemy as sa
 from app.components.models import (
     Category,
@@ -17,7 +18,6 @@ from app.components.models import (
     Team,
     TeamChampionship,
 )
-from app.components.utils import separate_car_classes
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc
 from sqlalchemy.exc import MultipleResultsFound
@@ -78,7 +78,9 @@ def get_team_leaders(
         select(Driver)
         .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
         .join(Team, DriverAssignment.team_id == Team.team_id)
-        .where(DriverAssignment.is_leader == True)
+        .where(
+            DriverAssignment.is_leader == True  # pylint: disable=singleton-comparison
+        )
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
         .where(TeamChampionship.championship_id == championship_id)
     )
@@ -143,7 +145,7 @@ def get_driver(
     return result[0] if result else None
 
 
-def get_report(session: SQLASession, report_id: uuid.UUID) -> Report | None:
+def get_report(session: SQLASession, report_id: str) -> Report | None:
     """Returns the report matching the given report_id.
 
     Args:
@@ -240,21 +242,34 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     """
     result = session.execute(
         select(QualifyingResult)
-        .where(QualifyingResult.driver_id == penalty.reported_driver_id)
+        .where(QualifyingResult.driver_id == penalty.driver_id)
         .where(QualifyingResult.session_id == penalty.session_id)
     ).one_or_none()
 
     if not result:
         raise ValueError("QualifyingResult not in database.")
 
-    for driver_category in penalty.reported_driver.categories:
+    for driver_category in penalty.driver.categories:
         if driver_category.category_id == penalty.category.category_id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
 
-    # penalty.reported_driver_id = penalty.reported_driver.driver_id
+    # penalty.reported_driver_id = penalty.driver.driver_id
     session.add(penalty)
     session.commit()
+
+
+def _separate_race_results(results: list[RaceResult]):
+
+    separated_classes: dict[int, list[RaceResult]] = {
+        car_class.car_class_id: [] for car_class in results[0].category.car_classes
+    }
+
+    for result in results:
+        car_class = result.driver.current_class().car_class_id
+        if car_class in separated_classes:
+            separated_classes[car_class].append(result)
+    return separated_classes
 
 
 def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
@@ -266,7 +281,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         penalty (Penalty): Penalty object to persist to the database.
     """
 
-    for driver_category in penalty.reported_driver.categories:
+    for driver_category in penalty.driver.categories:
         if driver_category.category_id == penalty.category.category_id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
@@ -291,7 +306,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     for row in rows:
         race_result: RaceResult = row[0]
         if race_result.total_racetime:
-            if race_result.driver_id == penalty.reported_driver.driver_id:
+            if race_result.driver_id == penalty.driver.driver_id:
                 race_result.total_racetime += penalty.time_penalty
 
             race_results.append(race_result)
@@ -301,15 +316,13 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     for position, result in enumerate(race_results, start=1):
         result.finishing_position = position
 
-    for _, class_results in separate_car_classes(
-        penalty.category, race_results
-    ).items():
+    for _, class_results in _separate_race_results(race_results).items():
         winners_racetime = class_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    # penalty.reported_driver_id = penalty.reported_driver.driver_id
+    # penalty.reported_driver_id = penalty.driver.driver_id
     session.add(penalty)
     session.commit()
     return

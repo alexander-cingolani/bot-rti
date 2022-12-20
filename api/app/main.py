@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, Form, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -12,13 +12,6 @@ from app.components.json_formatting import (
     get_standings_with_results,
 )
 
-
-class Item(BaseModel):
-    action: str
-    championship: int
-    category: int | None
-
-
 app = FastAPI()
 
 logging.basicConfig(
@@ -29,8 +22,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # app.mount(
-#     "/standings-page",
-#     StaticFiles(directory="./app/static/standings-page/"),
+#     "/static",
+#     StaticFiles(directory="api/app/static/standings-page/"),
 #     name="standings-page",
 # )
 # app.mount(
@@ -40,28 +33,47 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return HTMLResponse("<h1>Ciao</h1>")
+    return HTMLResponse(open("api/app/static/standings-page/index.html", "r").read())
+
+
+class Item(BaseModel):
+    action: str | None = None
+    championship_id: str | int = "latest"
+    category_id: str | int | None = None
 
 
 @app.post("/api")
-async def rti(
-    action: str = Form(),
-    championship_id: int = Form(default=None),
-    category_id: int = Form(),
-):
-
-    match action:
+async def rti(item: Item):
+    match item.action:
         case "get_category_list":
-            result = get_categories(championship_id)
+            result = get_categories(item.championship_id)
         case "get_calendar":
-            result = get_calendar(championship_id, category_id)
+            if item.category_id is None:
+                raise HTTPException(
+                    422,
+                    "Argument 'category_id' must be provided for 'get_calendar' action",
+                )
+            result = get_calendar(int(item.category_id))
         case "get_standings":
-            result = get_standings_with_results(championship_id, category_id)
+
+            if item.category_id is None:
+                raise HTTPException(
+                    422,
+                    "Argument 'category_id' must be provided for 'get_standings' action",
+                )
+
+            result = get_standings_with_results(int(item.category_id))
         case "get_driver_points":
-            result = get_drivers_points(championship_id)
+            if item.category_id is None:
+                raise HTTPException(
+                    422,
+                    "Argument 'category_id' must be provided for 'get_driver_points' action",
+                )
+            result = get_standings_with_results(int(item.category_id))
+
+            result = get_drivers_points(int(item.championship_id))
         case other:
             raise HTTPException(400, f"'{other}' action is invalid.")
-
     return result
 
 

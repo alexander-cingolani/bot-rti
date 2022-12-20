@@ -20,16 +20,11 @@ class PenaltyDocument:
         penalty: Penalty,
     ) -> None:
         if not penalty.time_penalty and not penalty.penalty_points:
-            filename = (
-                f"{penalty.number} - Decisione {penalty.reported_driver.psn_id}.pdf"
-            )
+            filename = f"{penalty.number} - Decisione {penalty.driver.psn_id}.pdf"
         else:
-            filename = (
-                f"{penalty.number} - Penalità {penalty.reported_driver.psn_id}.pdf"
-            )
+            filename = f"{penalty.number} - Penalità {penalty.driver.psn_id}.pdf"
 
         self.penalty: Penalty = penalty
-        self.reported_driver: Driver = penalty.reported_driver
         self.canvas = canvas.Canvas(filename=filename)
         self.canvas.setTitle(filename)
 
@@ -70,7 +65,7 @@ class PenaltyDocument:
 
         self.canvas.setFont("arial", 11)
 
-        reported_team = self.reported_driver.current_team()
+        reported_team = self.penalty.driver.current_team()
         if not reported_team:
             reported_team_name = "-"
         else:
@@ -100,13 +95,14 @@ class PenaltyDocument:
             " l'episodio e determina che:",
         )
 
+        driver = self.penalty.driver
         self.canvas.drawString(
             135,
             499,
-            f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
+            f"{driver.current_race_number} / {driver.psn_id}",
         )
 
-        reported_team = self.reported_driver.current_team()
+        reported_team = driver.current_team()
         if not reported_team:
             reported_team_name = "-"
         else:
@@ -131,7 +127,7 @@ class PenaltyDocument:
         self.canvas.drawString(295, y_coord - 55, "Safety Commission")
 
     def generate_document(self) -> str:
-        """Generates the report document named as the filename attribute"""
+        """Generates and saves the document returning its name"""
 
         self.__header()
         self.__body()
@@ -144,46 +140,37 @@ class PenaltyDocument:
 class ReportDocument:
     def __init__(self, report: Report) -> None:
         self.report: Report = report
-        self.reported_driver: Driver = report.reported_driver
         self.reporting_driver: Driver = report.reporting_driver
-        self.filename: str = (
-            f"{self.report.number} - Segnalazione {self.reported_driver.psn_id}.pdf"
-        )
+        self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.psn_id}.pdf"
         self.subtitle: str = f"{report.round.number}ª Tappa | {report.round.circuit}"
-
-        self.date: str = datetime.now().date().strftime("%d %b %Y")
-        self.time: str = datetime.now().time().strftime("%H:%M")
+        self.canvas = canvas.Canvas(self.filename)
 
     filename: str
 
-    def generate_document(self) -> str:
-        pdf = canvas.Canvas(self.filename)
+    def __header(self) -> None:
 
-        pdf.setTitle(self.filename)
         logo_rti = "./app/images/logo_rti.jpg"
-        pdf.drawImage(
+        self.canvas.drawImage(
             logo_rti, x=220, y=715, height=90, width=180, preserveAspectRatio=True
         )
 
-        pdf.setFont("arialB", 28)
-        pdf.drawCentredString(297, 690, f"CATEGORIA {self.report.category.name}")
+        self.canvas.setLineWidth(0.1)
+        self.canvas.line(x1=50, x2=550, y1=640, y2=640)
+        self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
-        pdf.setFont("arialB", 14)
-        pdf.drawCentredString(297, 663, self.subtitle)
-        pdf.setFont("arialB", 10)
-        pdf.drawString(50, 620, "Da")
-        pdf.drawString(50, 600, "Per")
-        pdf.drawString(410, 620, "Documento")
-        pdf.drawString(410, 600, "Data")
-        pdf.drawString(410, 580, "Orario")
-        pdf.setFont("arialB", 11.5)
-        pdf.drawString(50, 500, "No / Vittima")
-        pdf.drawString(50, 475, "No / Colpevole")
-        pdf.drawString(50, 450, "Scuderia")
-        pdf.drawString(50, 425, "Minuto")
-        pdf.drawString(50, 400, "Sessione")
-        pdf.drawString(50, 375, "Fatto")
-        pdf.setFont("arial", 10)
+        self.canvas.setFont("arialB", 28)
+        self.canvas.drawCentredString(
+            297, 690, f"CATEGORIA {self.report.category.name}"
+        )
+        self.canvas.setFont("arialB", 14)
+        self.canvas.drawCentredString(297, 663, self.subtitle)
+        self.canvas.setFont("arialB", 10)
+        self.canvas.drawString(50, 620, "Da")
+        self.canvas.drawString(50, 600, "Per")
+        self.canvas.drawString(410, 620, "Documento")
+        self.canvas.drawString(410, 600, "Data")
+        self.canvas.drawString(410, 580, "Orario")
+        self.canvas.setFont("arial", 10)
 
         current_team = self.reporting_driver.current_team()
         if not current_team:
@@ -191,53 +178,67 @@ class ReportDocument:
         else:
             team_name = current_team.name
 
-        pdf.drawString(75, 619, f"Scuderia {team_name}")
-        pdf.drawString(75, 599, "Safety Commission")
-        pdf.drawString(480, 619, str(self.report.number))
-        pdf.drawString(480, 599, self.date)
-        pdf.drawString(480, 579, self.time)
-        pdf.setFont("arial", 11)
+        self.canvas.drawString(75, 619, f"Scuderia {team_name}")
+        self.canvas.drawString(75, 599, "Safety Commission")
+        self.canvas.drawString(480, 619, str(self.report.number))
+        self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
+        self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
+        self.canvas.setFont("arial", 11)
 
-        pdf.drawString(
+        self.canvas.drawString(
             50,
             540,
             f"La scuderia {team_name} " "chiede la revisione del seguente incidente:",
         )
-        pdf.drawString(
+
+    def __body(self):
+        self.canvas.setFont("arialB", 11.5)
+        self.canvas.drawString(50, 500, "No / Vittima")
+        self.canvas.drawString(50, 475, "No / Colpevole")
+        self.canvas.drawString(50, 450, "Scuderia")
+        self.canvas.drawString(50, 425, "Minuto")
+        self.canvas.drawString(50, 400, "Sessione")
+        self.canvas.drawString(50, 375, "Fatto")
+
+        reported_driver = self.report.reported_driver
+        reporting_driver = self.report.reporting_driver
+        self.canvas.drawString(
             155,
             499,
-            f"{self.reporting_driver.current_race_number} / {self.reporting_driver.psn_id}",
+            f"{reporting_driver.current_race_number} / {reporting_driver.psn_id}",
         )
-        pdf.drawString(
+        self.canvas.drawString(
             155,
             474,
-            f"{self.reported_driver.current_race_number} / {self.reported_driver.psn_id}",
+            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.psn_id}",
         )
 
-        reported_team = self.reported_driver.current_team()
+        reported_team = reported_driver.current_team()
         if not reported_team:
             reported_team_name = "-"
         else:
             reported_team_name = reported_team.name
 
-        pdf.drawString(155, 449, reported_team_name)
-        pdf.drawString(155, 424, self.report.incident_time)
-        pdf.drawString(155, 399, self.report.session.name)
+        self.canvas.drawString(155, 449, reported_team_name)
+        self.canvas.drawString(155, 424, self.report.incident_time)
+        self.canvas.drawString(155, 399, self.report.session.name)
         text = "\n".join(wrap(self.report.report_reason, 80)).split("\n")
         y0 = 374
         for line in text:
-            pdf.drawString(155, y0, line)
+            self.canvas.drawString(155, y0, line)
             y0 -= 15
 
         if self.report.video_link:
-            pdf.setFont("arialB", 11.5)
-            pdf.drawString(50, y0 - 15, "Video")
-            pdf.setFont("arial", 10)
-            pdf.drawString(155, y0 - 15, self.report.video_link)
+            self.canvas.setFont("arialB", 11.5)
+            self.canvas.drawString(50, y0 - 15, "Video")
+            self.canvas.setFont("arial", 10)
+            self.canvas.drawString(155, y0 - 15, self.report.video_link)
 
-        pdf.setLineWidth(0.1)
-        pdf.line(x1=50, x2=550, y1=640, y2=640)
-        pdf.line(x1=50, x2=550, y1=560, y2=560)
+    def generate_document(self) -> str:
+        """Generates and saves the document returning its name"""
 
-        pdf.save()
+        self.canvas.setTitle(self.filename)
+        self.__header()
+        self.__body()
+        self.canvas.save()
         return self.filename

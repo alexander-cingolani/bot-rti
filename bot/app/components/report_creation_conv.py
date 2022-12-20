@@ -8,7 +8,7 @@ from typing import cast
 from zoneinfo import ZoneInfo
 
 from app.components import config
-from app.components.docs import ReportDocument
+from app.components.documents import ReportDocument
 from app.components.models import Category, Report, Round
 from app.components.queries import (
     delete_report,
@@ -21,7 +21,8 @@ from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -98,9 +99,9 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     for i, category in enumerate(championship.categories):
-        round = category.first_non_completed_round()
-        if round:
-            if round.date < datetime.now().date():
+        championship_round = category.first_non_completed_round()
+        if championship_round:
+            if championship_round.date < datetime.now().date():
                 category_alias = f"c{i}"
                 buttons.append(
                     InlineKeyboardButton(category.name, callback_data=category_alias)
@@ -140,10 +141,10 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_data["sessions"] = {}
     category: Category = user_data["category"]
 
-    round = category.first_non_completed_round()
-    user_data["round"] = round
+    championship_round = category.first_non_completed_round()
+    user_data["round"] = championship_round
     buttons = []
-    for i, session in enumerate(round.sessions):  # type: ignore
+    for i, session in enumerate(championship_round.sessions):  # type: ignore
         session_alias = f"s{i}"
         user_data["sessions"][session_alias] = session
         buttons.append(InlineKeyboardButton(session.name, callback_data=session_alias))
@@ -156,7 +157,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
     )
 
-    round_number = round.number  # type: ignore
+    round_number = championship_round.number  # type: ignore
     text = f"""
 <b>{user_data["category"].name}</b> - Tappa {round_number} 
 Scegli la sessione dove è avvenuto l'incidente:"""
@@ -535,9 +536,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data = cast(dict, context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
     category = cast(Category, user_data["category"])
-    round = cast(Round, user_data["round"])
+    championship_round = cast(Round, user_data["round"])
     report = cast(Report, user_data["report"])
-    championship_round: Round = report.round
 
     if (
         championship_round == category.championship.reporting_round()
@@ -556,7 +556,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     report.category = category
-    report.round = round
+    report.round = championship_round
     report.reported_team = report.reported_driver.current_team()
     report.reporting_team = report.reporting_driver.current_team()
     report.number = (

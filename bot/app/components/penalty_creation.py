@@ -8,7 +8,7 @@ from collections import defaultdict
 from typing import DefaultDict, cast
 
 from app.components import config
-from app.components.docs import PenaltyDocument
+from app.components.documents import PenaltyDocument
 from app.components.models import Category, Driver, Penalty, Report
 from app.components.queries import (
     get_championship,
@@ -19,7 +19,8 @@ from app.components.queries import (
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import (
     CallbackQueryHandler,
@@ -231,8 +232,8 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         driver: Driver = user_data["penalty"].session.participating_drivers()[
             int(update.callback_query.data.removeprefix("D"))
         ]
-        user_data["penalty"].reported_team = driver.current_team()
-        user_data["penalty"].reported_driver = driver
+        user_data["penalty"].team = driver.current_team()
+        user_data["penalty"].driver = driver
 
     buttons = []
     for i, infraction in enumerate(config.INFRACTIONS):
@@ -264,14 +265,14 @@ async def report_processing_entry_point(
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
 
+    user_data = cast(dict, context.user_data)
+    user_data["sqla_session"] = sqla_session
+    user_data["championship"] = championship
+
     if not championship:
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
-
-    user_data = cast(dict, context.user_data)
-    user_data["sqla_session"] = sqla_session
-    user_data["championship"] = championship
 
     if cast(User, update.effective_user).id not in config.ADMINS:
         text = "Questa funzione è riservata agli admin di RTI.\n"
@@ -433,7 +434,7 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             if user_data["current_report"].session.is_quali:
                 user_data["penalty"].fact = config.FACTS[
                     int(update.callback_query.data.removeprefix("qf"))
-                ].format(a=user_data["penalty"].reported_driver.current_race_number)
+                ].format(a=user_data["penalty"].driver.current_race_number)
                 await ask_licence_points(update, context)
                 return ASK_WARNINGS
 
@@ -557,12 +558,11 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             if licence_points > 1:
                 user_data["licence_points_text"] = (
                     f"{licence_points} punti sulla licenza"
-                    f" ({penalty.reported_driver.licence_points - licence_points}/10)"
+                    f" ({penalty.driver.licence_points - licence_points}/10)"
                 )
             elif licence_points == 1:
                 user_data["licence_points_text"] = (
-                    "1 punto sulla licenza"
-                    f" ({penalty.reported_driver.licence_points - 1}/10)"
+                    "1 punto sulla licenza" f" ({penalty.driver.licence_points - 1}/10)"
                 )
             else:
                 user_data["licence_points_text"] = ""
@@ -571,7 +571,7 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         penalty.licence_points = licence_points
         user_data["licence_points_text"] = (
             f"{licence_points} punti sulla licenza"
-            f" ({penalty.reported_driver.licence_points - licence_points}/10)"
+            f" ({penalty.driver.licence_points - licence_points}/10)"
         )
     text = "Quanti warning sono stati dati?"
 
@@ -611,7 +611,7 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if warnings > 0:
                 user_data["warnings_text"] = (
                     f"{warnings} warning"
-                    f" ({warnings + user_data['penalty'].reported_driver.warnings}/12)"
+                    f" ({warnings + user_data['penalty'].driver.warnings}/12)"
                 )
             else:
                 user_data["warnings_text"] = ""
@@ -641,7 +641,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         user_data["penalty"].penalty_reason = update.message.text
 
     penalty: Penalty = user_data["penalty"]
-    penalty.reported_team = penalty.reported_driver.current_team()
+    penalty.team = penalty.driver.current_team()
     penalty.decision = ", ".join(
         filter(
             None,
@@ -660,7 +660,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"<b>Segnalazione no.{penalty.number}</b> - Recap dati inseriti\n\n"
         f"<b>Tappa</b>: {penalty.round.number if penalty.round else '-'}\n"
         f"<b>Sessione</b>: {penalty.session.name}\n"
-        f"<b>Pilota</b>: {penalty.reported_driver.psn_id if penalty.reported_driver else '-'}\n"
+        f"<b>Pilota</b>: {penalty.driver.psn_id if penalty.driver else '-'}\n"
         f"<b>Fatto</b>: {penalty.fact if penalty.fact else '-'}\n"
         f"<b>Decisione</b>: {penalty.decision if penalty.decision else '-'}\n"
         f"<b>Motivazione</b>: {penalty.penalty_reason if penalty.penalty_reason else '-'}"
@@ -680,7 +680,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
     else:
         text += (
-            "\n\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
+            "\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
         )
 
     await send_or_edit_message(update, text, InlineKeyboardMarkup(reply_markup))
