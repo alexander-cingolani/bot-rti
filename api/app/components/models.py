@@ -5,6 +5,7 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
+import logging
 from statistics import stdev
 import uuid
 from collections import defaultdict
@@ -21,7 +22,6 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
     Integer,
     Interval,
@@ -35,7 +35,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.orm.relationships import _ORMColCollectionArgument
 
 # In this project "round" always refers to an instance of a Round object.
 
@@ -58,8 +57,8 @@ class Penalty(Base):
         round_id (int): Unique ID of the round where the incident happened.
         session_id (int): Unique ID of the session where the incident happened.
 
-        reported_driver_id (int): Unique ID of the driver receiving the report.
-        reported_team_id (int): Unique ID of the team receiving the report.
+        driver_id (int): Unique ID of the driver receiving the report.
+        team_id (int): Unique ID of the team receiving the report.
 
         incident_time (str): In-game time when the incident happened.
         fact (str): The fact given by the user creating the penalty.
@@ -84,7 +83,7 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    penalty_points: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    penalty_points: Mapped[Decimal] = mapped_column(Numeric, default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     category: Mapped[Category] = relationship("Category")
@@ -98,18 +97,16 @@ class Penalty(Base):
     session_id: Mapped[str] = mapped_column(
         ForeignKey("sessions.session_id"), nullable=False
     )
-    reported_driver_id: Mapped[str] = mapped_column(
+    driver_id: Mapped[str] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
-    reported_team_id: Mapped[int] = mapped_column(
-        ForeignKey("teams.team_id"), nullable=False
-    )
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
 
-    reported_driver: Mapped[Driver] = relationship(
-        back_populates="received_penalties", foreign_keys=[reported_driver_id]  # type: ignore
+    driver: Mapped[Driver] = relationship(
+        back_populates="received_penalties", foreign_keys=[driver_id]  # type: ignore
     )
-    reported_team: Mapped[Team] = relationship(
-        back_populates="received_penalties", foreign_keys=[reported_team_id]  # type: ignore
+    team: Mapped[Team] = relationship(
+        back_populates="received_penalties", foreign_keys=[team_id]  # type: ignore
     )
 
     @classmethod
@@ -142,7 +139,7 @@ class Penalty(Base):
             raise TypeError(f"Cannot initialize Penalty object from {type(report)}.")
 
         c = cls(
-            reported_driver=report.reported_driver,
+            driver=report.reported_driver,
             time_penalty=time_penalty,
             licence_points=licence_points,
             warnings=warnings,
@@ -157,10 +154,11 @@ class Penalty(Base):
 
     def is_complete(self) -> bool:
         """Returns True if all the necessary arguments have been provided."""
+        logging.info(self.__dict__)
         return all(
             (
-                self.reported_driver,
-                self.reported_team,
+                self.driver,
+                self.team,
                 self.category,
                 self.round,
                 self.session,
@@ -212,7 +210,7 @@ class Report(Base):
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
 
     __allow_unmapped__ = True
-    video_link: str
+    video_link: str | None = None
 
     report_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -405,7 +403,7 @@ class Driver(Base):
         "RaceResult", back_populates="driver"
     )
     received_penalties: Mapped[list[Penalty]] = relationship(
-        "Penalty", back_populates="reported_driver"
+        "Penalty", back_populates="driver"
     )
     reports_made: Mapped[list[Report]] = relationship(
         "Report",
@@ -511,7 +509,7 @@ class Driver(Base):
         result = round((100 * participation_ratio) - (stdev(positions) * 3))
         return str(max(result, 40))
 
-    # @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))
     def speed(self) -> str:
         """Statistic calculated on the average gap between
         the driver's qualifying times and the pole man's.
@@ -567,9 +565,8 @@ class Driver(Base):
             + rr.penalty_points
             for rr in self.received_penalties
         )
-        
-        return str(round(100 - sum(penalties) * 3 / len(self.race_results)))
 
+        return str(round(100 - sum(penalties) * 3 / len(self.race_results)))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def race_pace(self) -> str:
@@ -595,14 +592,12 @@ class Driver(Base):
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
-        
+
         return str(round(100 - average_gap_percentage))
 
-
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def stats(self) -> tuple[str, str, str, str, str, str, str]:
-        """Calculates the number of wins, podiums and poles achieved by the driver.
-        """
+    def stats(self) -> tuple[int | float, ...]:
+        """Calculates the number of wins, podiums and poles achieved by the driver."""
         wins = 0
         podiums = 0
         fastest_laps = 0
@@ -610,7 +605,7 @@ class Driver(Base):
         no_participation = 0
 
         if not self.race_results:
-            return "0", "0", "0", "0", "0", "0", "0"
+            return tuple(0 for _ in range(7))
 
         positions = 0
         for race_result in self.race_results:
@@ -620,8 +615,10 @@ class Driver(Base):
 
             if race_result.relative_position:
                 positions += race_result.relative_position
+
             if race_result.relative_position == 1:
                 wins += 1
+
             if race_result.relative_position <= 3:
                 podiums += 1
 
@@ -807,8 +804,8 @@ class Team(Base):
     )
     received_penalties: Mapped[list[Penalty]] = relationship(
         "Penalty",
-        back_populates="reported_team",
-        foreign_keys=[Penalty.reported_team_id],
+        back_populates="team",
+        foreign_keys=[Penalty.team_id],
     )
 
     def __eq__(self, other: object) -> bool:
@@ -934,6 +931,8 @@ class Category(Base):
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), nullable=False)
+    display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
@@ -1012,20 +1011,20 @@ class Category(Base):
             raise ValueError("n must be less or equals to 0")
 
         completed_rounds: list[Round] = []
-        for round in self.rounds:
-            if round.completed:
-                completed_rounds.append(round)
+        for championship_round in self.rounds:
+            if championship_round.completed:
+                completed_rounds.append(championship_round)
 
         if n == 0:
             n = len(completed_rounds)
 
         results_up_to_n: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
 
-        for round in completed_rounds[:n]:
-            for race_result in round.race_results:
+        for championship_round in completed_rounds[:n]:
+            for race_result in championship_round.race_results:
                 results_up_to_n[race_result.driver][0] += race_result.points_earned
 
-            for qualifying_result in round.qualifying_results:
+            for qualifying_result in championship_round.qualifying_results:
                 results_up_to_n[qualifying_result.driver][
                     0
                 ] += qualifying_result.points_earned
@@ -1039,10 +1038,10 @@ class Category(Base):
 
         # Calculates the points earned in the last n races
         results_after_n: DefaultDict[Driver, float] = defaultdict(lambda: 0)
-        for round in completed_rounds[n:]:
-            for race_result in round.race_results:
+        for championship_round in completed_rounds[n:]:
+            for race_result in championship_round.race_results:
                 results_after_n[race_result.driver] += race_result.points_earned
-            for qualifying_result in round.qualifying_results:
+            for qualifying_result in championship_round.qualifying_results:
                 results_after_n[
                     qualifying_result.driver
                 ] += qualifying_result.points_earned
@@ -1097,16 +1096,16 @@ class Category(Base):
         drivers = [driver.driver.psn_id for driver in self.drivers]
         driver_map = defaultdict.fromkeys(drivers, 0.0)
         array.append(["Tappa"] + drivers)
-        for number, round in enumerate(self.rounds, start=1):
+        for number, championship_round in enumerate(self.rounds, start=1):
 
-            if not round.completed:
+            if not championship_round.completed:
                 continue
 
             array.append([number])
 
-            for race_result in round.race_results:
+            for race_result in championship_round.race_results:
                 driver_map[race_result.driver.psn_id] += race_result.points_earned
-            for qualifying_result in round.qualifying_results:
+            for qualifying_result in championship_round.qualifying_results:
                 driver_map[
                     qualifying_result.driver.psn_id
                 ] += qualifying_result.points_earned
@@ -1352,7 +1351,7 @@ class Session(Base):
         """Returns total time penalties received by a driver."""
         seconds = 0
         for penalty in self.penalties:
-            if penalty.reported_driver_id == driver_id:
+            if penalty.driver_id == driver_id:
                 seconds += penalty.time_penalty
         return seconds
 
@@ -1528,16 +1527,16 @@ class Championship(Base):
     def reporting_round(self) -> Round | None:
         """Returns the round in which reports can currently be created."""
         now = datetime.datetime.now().date()
-        for round in self.rounds:
-            if (round.date + timedelta(hours=24)) == now:
-                return round
+        for championship_roud in self.rounds:
+            if (championship_roud.date + timedelta(hours=24)) == now:
+                return championship_roud
         return None
 
     def current_racing_category(self) -> Category | None:
         """Returns the category which races today."""
-        for round in self.rounds:
-            if round.date == datetime.datetime.now().date():
-                return round.category
+        for championship_round in self.rounds:
+            if championship_round.date == datetime.datetime.now().date():
+                return championship_round.category
         return None
 
     def is_active(self) -> bool:
