@@ -740,7 +740,7 @@ async def save_race_2_results(
 
 def separate_car_classes(
     category: Category, results: list[Result]
-) -> dict[CarClass, list[Result]]:
+) -> dict[int, list[Result]]:
     """Separates a list of mixed Results or RaceResults into as many lists as there are
     categories in the original list.
 

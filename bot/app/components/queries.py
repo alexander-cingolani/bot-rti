@@ -145,7 +145,7 @@ def get_driver(
     return result[0] if result else None
 
 
-def get_report(session: SQLASession, report_id: uuid.UUID) -> Report | None:
+def get_report(session: SQLASession, report_id: str) -> Report | None:
     """Returns the report matching the given report_id.
 
     Args:
@@ -316,9 +316,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     for position, result in enumerate(race_results, start=1):
         result.finishing_position = position
 
-    for _, class_results in _separate_race_results(
-        penalty.category, race_results
-    ).items():
+    for _, class_results in _separate_race_results(race_results).items():
         winners_racetime = class_results[0].total_racetime
         for relative_position, race_result in enumerate(class_results, start=1):
             race_result.relative_position = relative_position

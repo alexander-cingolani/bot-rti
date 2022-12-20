@@ -562,7 +562,7 @@ class Driver(Base):
             (rr.time_penalty / 1.5)
             + rr.warnings
             + (rr.licence_points * 2)
-            + rr.penalty_points
+            + float(rr.penalty_points)
             for rr in self.received_penalties
         )
 
