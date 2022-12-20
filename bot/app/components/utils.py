@@ -1,12 +1,14 @@
 """
-Helper stuff. Hope to get rid of it soon.
+Helper stuff.
 """
-from decimal import Decimal
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from telegram import Update
+
+from app.components.models import Driver
 
 
 @dataclass
@@ -15,7 +17,7 @@ class Result:
     or a QualifyingResult
     """
 
-    driver: str
+    driver: Driver
     seconds: Decimal | None
     car_class: Any
     position: int | None
@@ -23,8 +25,8 @@ class Result:
     def __init__(self, driver, seconds):
         self.seconds = seconds
         self.driver = driver
-        self.car_class = None
-        self.position = None
+        self.car_class = 0
+        self.position = 0
 
     def __hash__(self) -> int:
         return hash(str(self))
@@ -90,30 +92,6 @@ def string_to_seconds(string) -> Decimal | None | str:
     return Decimal(
         f"{int(hours_str) * 3600 + int(minutes_str) * 60 + int(seconds_str)}.{int(milliseconds_str)}"
     )
-
-
-def separate_car_classes(
-    category: Any, results: list[Result] | list[Any]
-) -> dict[Any, list[Result]] | dict[Any, list[Any]]:
-    separated_classes: dict[int, list[Result]] = {
-        car_class.car_class_id: [] for car_class in category.car_classes
-    }
-    if isinstance(results[0], Result):
-        best_laptime = results[0].seconds
-
-        for pos, result in enumerate(results, start=1):
-            if result.car_class.car_class_id in separated_classes:
-                separated_classes[result.car_class.car_class_id].append(
-                    result.prepare_result(best_laptime, pos)
-                )
-        return separated_classes
-    best_laptime = results[0].total_racetime
-
-    for pos, result in enumerate(results, start=1):
-        car_class = result.driver.current_class().car_class_id
-        if car_class in separated_classes:
-            separated_classes[car_class].append(result)
-    return separated_classes
 
 
 async def send_or_edit_message(update: Update, message, reply_markup=None) -> None:

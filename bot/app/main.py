@@ -13,11 +13,11 @@ from uuid import uuid4
 import pytz
 from app.components import config
 from app.components.driver_registration import driver_registration
+from app.components.models import Team
+from app.components.penalty_creation import penalty_creation
 from app.components.queries import get_championship, get_driver, get_team_leaders
 from app.components.report_creation_conv import report_creation
-from app.components.penalty_creation import penalty_creation
 from app.components.result_recognition import save_results_conv
-from app.components.models import Team
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from telegram import (
@@ -236,7 +236,12 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.inline_query.query
     session = DBSession()
     results = []
-    for driver in get_championship(session).driver_list:
+    championship = get_championship(session)
+
+    if not championship:
+        return
+
+    for driver in championship.driver_list:
         if query.lower() in driver.psn_id.lower():
             (
                 wins,
@@ -286,19 +291,21 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 input_message_content=InputTextMessageContent(
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
-                        f"<b>Overall:</b> <i>{overall}</i>\n"
-                        f"<b>Affidabilità:</b> <i>{consistency}</i>\n"
-                        f"<b>Sportività:</b> <i>{sportsmanship}</i>\n"
-                        f"<b>Qualifica:</b> <i>{quali_pace}</i>\n"
-                        f"<b>Passo gara:</b> <i>{race_pace}</i>\n\n"
-                        f"<b>Vittorie:</b> <i>{wins}</i>\n"
-                        f"<b>Podi:</b> <i>{podiums}</i>\n"
-                        f"<b>Pole:</b> <i>{poles}</i>\n"
-                        f"<b>Giri veloci:</b> <i>{fastest_laps}</i>\n"
-                        f"<b>Gare disputate:</b> <i>{races_disputed}</i>\n"
-                        f"<b>Piazzamento medio (Gara):</b> <i>{avg_position}</i>\n"
-                        f"<b>Piazzamento medio (Qualifica)</b>: <i>{avg_quali_position}</i>\n"
-                        f"<b>Team:</b> <i>{unique_teams}</i>"
+                        f"<b>Overall</b>: <i>{overall}</i>\n"
+                        f"<b>Affidabilità</b>: <i>{consistency}</i>\n"
+                        f"<b>Sportività</b>: <i>{sportsmanship}</i>\n"
+                        f"<b>Qualifica</b>: <i>{quali_pace}</i>\n"
+                        f"<b>Passo gara</b>: <i>{race_pace}</i>\n\n"
+                        f"<b>Vittorie</b>: <i>{wins}</i>\n"
+                        f"<b>Podi</b>: <i>{podiums}</i>\n"
+                        f"<b>Pole</b>: <i>{poles}</i>\n"
+                        f"<b>Giri veloci</b>: <i>{fastest_laps}</i>\n"
+                        f"<b>Gare disputate</b>: <i>{races_disputed}</i>\n"
+                        f"<b>Piazz. medio gara</b>: <i>{avg_position}</i>\n"
+                        f"<b>Piazz. medio quali</b>: <i>{avg_quali_position}</i>\n"
+                        f"<b>Punti licenza</b>: <i>{driver.licence_points}</i>\n"
+                        f"<b>Warning</b>: <i>{driver.warnings}</i>\n"
+                        f"<b>Team</b>: <i>{unique_teams}</i>"
                     ),
                 ),
             )
@@ -378,18 +385,20 @@ async def complete_championship_standings(
         for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
 
             if diff > 0:
-                diff = f" ↓{abs(diff)}"
+                diff_text = f" ↓{abs(diff)}"
             elif diff < 0:
-                diff = f" ↑{abs(diff)}"
+                diff_text = f" ↑{abs(diff)}"
             else:
-                diff = ""
+                diff_text = ""
 
             team = driver.current_team()
             if team:
                 team_name = team.name
             else:
                 team_name = ""
-            message += f"{pos} - {team_name} {driver.psn_id} <i>{points}{diff}</i>\n"
+            message += (
+                f"{pos} - {team_name} {driver.psn_id} <i>{points}{diff_text}</i>\n"
+            )
 
             if (
                 team_obj := driver.current_team()
@@ -493,7 +502,8 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         text = (
             f"<b>Segnalazioni Categoria {championship_round.category.name}</b>\n"
             f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
-            f"#{championship.abbreviated_name}Tappa{championship_round.number} #{championship_round.category.name}"
+            f"#{championship.abbreviated_name}Tappa{championship_round.number}"
+            f" #{championship_round.category.name}"
         )
 
         await context.bot.send_message(
@@ -511,8 +521,8 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     championship = get_championship(sqla_session)
 
     if championship:
-        if round := championship.reporting_round():
-            if not round.reports:
+        if championship_round := championship.reporting_round():
+            if not championship_round.reports:
                 await context.bot.send_message(
                     chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
                 )
