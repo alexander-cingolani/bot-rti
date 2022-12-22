@@ -1,7 +1,7 @@
 more-itertools==9.0.0
 Pillow==9.3.0
 pytesseract==0.3.10
-python-telegram-bot==20.0a6
+python-telegram-bot==20.0b0
 pytz==2022.6
 reportlab==3.6.12
 SQLAlchemy==2.0.0b4
