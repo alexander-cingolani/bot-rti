@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:latest
+    restart: on-failure
+    ports:
+      - '8001:5432'
+    env_file:
+      - .env
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./sql/create_db.sql:/docker-entrypoint-initdb.d/create_tables.sql
+    networks:
+      - backend
+
+  # cloudfare-ddns key valid until 04/12/2024
+  #cloudflare-ddns:
+  #  image: oznu/cloudflare-ddns:latest
+  #  restart: always
+  #  env_file:
+  #    - .env
+
+  bot:
+    image: alexcingolani/rti:rti_bot
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+      target: debugger
+    ports:
+      - 5678:5678 # Debugging ports
+    env_file:
+      - .env
+    networks:
+      - backend
+    depends_on:
+      - db
+    restart: on-failure
+    volumes:
+      - ./debug:/debug
+
+  #api:
+  #  build: ./api
+  #  image: alexcingolani/rti:rti_api
+  #  depends_on:
+  #    - db
+  #    - cloudflare-ddns
+  #  env_file:
+  #    - .env
+  #  labels:
+  #    - traefik.enable=true
+  #    - traefik.http.services.app.loadbalancer.server.port=80
+  #    - traefik.http.routers.app-http.entrypoints=http
+  #    - traefik.http.routers.app-http.rule=Host(`rti.alexander-cingolani.com`)
+  #    
+  #    - traefik.docker.network=traefik-public
+#
+  #    - traefik.http.routers.app-https.entrypoints=https
+  #    - traefik.http.routers.app-https.rule=Host(`rti.alexander-cingolani.com`)
+  #    - traefik.http.routers.app-https.tls=true
+  #    - traefik.http.routers.app-https.tls.certresolver=le
+  #    
+  #    - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+  #    - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
+  #    - traefik.routers.app-http.middlewares=https-redirect
+  #  networks:
+  #    - backend
+  #    - traefik-public
+#
+  #  restart: on-failure
+
+volumes:
+  postgres-data:
+  debug:
+
+networks:
+  backend:
+    driver: bridge
+  traefik-public:
+    external: true

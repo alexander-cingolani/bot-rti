@@ -1,24 +1,34 @@
-FROM arm64v8/python:3.11-alpine
+FROM python:3.11-bullseye as base
+
+# Keeps Python from generating .pyc files in the container
+ENV PYTHONDONTWRITEBYTECODE 1
+
+# Turns off buffering for easier container logging
+ENV PYTHONUNBUFFERED 1
 
 WORKDIR /bot
 
 COPY ./requirements.txt /bot/requirements.txt
 
-RUN apk update
-RUN apk upgrade
 
-RUN apk add build-base
-RUN apk add freetype-dev
-RUN apk add tesseract-ocr
-RUN apk --update add libxml2-dev libxslt-dev libffi-dev gcc musl-dev libgcc openssl-dev curl
-RUN apk add jpeg-dev zlib-dev freetype-dev lcms2-dev openjpeg-dev tiff-dev tk-dev tcl-dev
+RUN apt-get update -y && apt-get upgrade -y
+RUN apt-get install tesseract-ocr -y
 
 COPY ./requirements.txt /bot/requirements.txt
 
 RUN pip install pip --upgrade
-RUN pip3 install python-telegram-bot[all] --pre
-RUN pip3 install -r requirements.txt --use-pep517
+RUN pip install -r requirements.txt
 
 COPY ./app /bot/app
 
-CMD ["python3.11", "-m" , "app.main"]
+# DEBUGGER ##################################################################################################################
+FROM base as debugger
+
+RUN pip install debugpy
+
+CMD [ "python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "-m", "app.main", "-Xfrozen_modules=off" ]
+
+# PRIMARY ##############################
+FROM base as primary
+
+CMD [ "python", "-m", "app.main" ]

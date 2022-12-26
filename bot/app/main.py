@@ -1,6 +1,7 @@
 """
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
+
 import json
 import logging
 import os
@@ -10,14 +11,15 @@ from datetime import time
 from typing import DefaultDict, cast
 from uuid import uuid4
 
+
 import pytz
 from app.components import config
-from app.components.driver_registration import driver_registration
+from app.components.conversations.driver_registration import driver_registration
+from app.components.conversations.penalty_creation import penalty_creation
+from app.components.conversations.report_creation import report_creation
+from app.components.conversations.result_recognition2 import save_results
 from app.components.models import Team
-from app.components.penalty_creation import penalty_creation
 from app.components.queries import get_championship, get_driver, get_team_leaders
-from app.components.report_creation_conv import report_creation
-from app.components.result_recognition import save_results_conv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from telegram import (
@@ -33,7 +35,7 @@ from telegram import (
     User,
 )
 from telegram.constants import ChatType, ParseMode
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -51,7 +53,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 TOKEN = os.environ["BOT_TOKEN"]
-
 
 if os.environ.get("DB_URL"):
     engine = create_engine(os.environ["DB_URL"])
@@ -110,19 +111,20 @@ async def post_shutdown(_: Application) -> None:
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Writes full error traceback to a file and sends it to the dev channel.
     If the error was caused by a user a message will be displayed informing him
-    to not repeat the action which caused the error.
+    about the error.
     """
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
+    if isinstance(context.error, NetworkError):
+        return
+
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
     try:
         if update.message.chat.type == ChatType.PRIVATE:
             await cast(User, update.effective_user).send_message(
                 text=(
-                    "⚠️ Si è verificato un errore inaspettato!\n\n"
-                    "Lo sviluppatore è stato informato del problema e cercherà"
-                    " di risolverlo al più presto.\n"
-                    "Nel frattempo si sconsiglia di ripetere l'operazione, in quanto "
-                    "avrebbe scarsa probabilità di successo."
+                    "⚠️ Si è verificato un errore!\n\n"
+                    "Lo sviluppatore è stato informato del problema e cercherà "
+                    "di risolverlo al più presto.\n"
                 )
             )
     except AttributeError:
@@ -157,30 +159,31 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
-    owner_mention = config.OWNER.mention_html(config.OWNER.full_name)
+    session = DBSession()
     user = cast(User, update.effective_user)
-    await update.message.reply_text(
-        f"Ciao {user.first_name}!\n"
-        "Sono il bot di Racing Team Italia, mi occupo delle segnalazioni, comunicazioni"
-        "penalità e statistiche dei nostri campionati.\n"
-        f"Per qualsiasi problema o idea per migliorarmi puoi contattare {owner_mention}.",
-        reply_markup=ForceReply(selective=True),
+    text = (
+        f"Ciao {user.first_name}!\n\n"
+        "Sono il bot di Racing Team Italia 🇮🇹 e mi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
+        "e <i>classifiche</i> dei nostri campionati.\n\n"
     )
 
-    session = DBSession()
     driver = get_driver(session, telegram_id=user.id)
-
-    if not driver:
-        await update.message.reply_text(
-            "Pare che non ti sia ancora registrato, puoi farlo con /registrami.\n\n"
-            "Questa operazione va fatta solo una volta, a meno che tu non decida "
-            "di cambiare account Telegram in futuro."
+    if driver:
+        text += (
+            f"Se sei nuovo e vorresti entrare nel team puoi iscriverti sul nostro "
+            "<i><a href='https://racingteamitalia.it/#user-registration-form-1115'>sito web</a></i>."
         )
     elif team := driver.current_team():
         if getattr(team.leader, "telegram_id") == user.id:
             await context.bot.set_my_commands(
                 commands=config.LEADER_COMMANDS, scope=BotCommandScopeChat(user.id)
             )
+
+    await update.message.reply_text(
+        text=text,
+        reply_markup=ForceReply(selective=True),
+    )
+
     session.close()
 
 
@@ -206,6 +209,7 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
+
     session = DBSession()
     user = cast(User, update.effective_user)
     driver = get_driver(session, telegram_id=user.id)
@@ -260,7 +264,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             else:
                 team_text = current_team.name
 
-            unique_teams = unique_teams.replace(current_team, f"{team_text} [Attuale]")
+            unique_teams = unique_teams.replace(team_text, f"{team_text} [Attuale]")
 
             if not unique_teams:
                 unique_teams = "/"
@@ -727,7 +731,7 @@ def main() -> None:
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)
-    application.add_handler(save_results_conv)
+    application.add_handler(save_results)
 
     application.add_handler(
         CallbackQueryHandler(

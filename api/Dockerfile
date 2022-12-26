@@ -1,14 +1,15 @@
-FROM arm64v8/python:3.11-alpine
+FROM python:3.11-bullseye
 
 WORKDIR /api/
 
 COPY ./requirements.txt /api/requirements.txt
 
-RUN apk update && apk upgrade
+RUN apt-get update -y && apt-get upgrade -y
 
 RUN pip install pip --upgrade
 RUN pip install --no-cache-dir --upgrade -r /api/requirements.txt
 
 COPY ./app /api/app
+
 
 CMD ["hypercorn", "--bind", "0.0.0.0:80", "app.main:app"]

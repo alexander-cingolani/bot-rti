@@ -1,0 +1,9 @@
+{
+    "editor.formatOnSave": true,
+    "python.formatting.provider": "black",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.linting.pylintArgs": [
+        "--rcfile=${env:HOME}/python_projects/pylintrc"
+    ],
+    "python.analysis.typeCheckingMode": "off"}
