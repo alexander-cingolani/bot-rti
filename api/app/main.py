@@ -1,8 +1,9 @@
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.components.json_formatting import (
@@ -21,19 +22,19 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# app.mount(
-#     "/static",
-#     StaticFiles(directory="api/app/static/standings-page/"),
-#     name="standings-page",
-# )
-# app.mount(
-#     "/tg-webapp", StaticFiles(directory="./app/static/telegram-webapp/"), name="tg-app"
-# )
+origin = r"http([s])?:\/\/racingteamitalia.it/(.){0,}"
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=origin,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():
-    return HTMLResponse(open("api/app/static/standings-page/index.html", "r").read())
+    return HTMLResponse("<h1>Hello!</h1>")
 
 
 class Item(BaseModel):
@@ -43,48 +44,37 @@ class Item(BaseModel):
 
 
 @app.post("/api")
-async def rti(item: Item):
-    match item.action:
+async def rti(action: str = Form(), championship_id: int | None = Form(default=None), category_id: int | None = Form(default=None)):
+    match action:
+        
         case "get_category_list":
-            result = get_categories(item.championship_id)
+            result = get_categories(championship_id)
+            
         case "get_calendar":
-            if item.category_id is None:
+            if category_id is None:
                 raise HTTPException(
                     422,
                     "Argument 'category_id' must be provided for 'get_calendar' action",
                 )
-            result = get_calendar(int(item.category_id))
+            result = get_calendar(int(category_id))
+            
         case "get_standings":
-
-            if item.category_id is None:
+            if category_id is None:
                 raise HTTPException(
                     422,
                     "Argument 'category_id' must be provided for 'get_standings' action",
                 )
-
-            result = get_standings_with_results(int(item.category_id))
+            result = get_standings_with_results(int(category_id))
+            
         case "get_driver_points":
-            if item.category_id is None:
+            if category_id is None:
                 raise HTTPException(
                     422,
                     "Argument 'category_id' must be provided for 'get_driver_points' action",
                 )
-            result = get_standings_with_results(int(item.category_id))
-
-            result = get_drivers_points(int(item.championship_id))
+            result = get_drivers_points(int(championship_id))
+            
         case other:
             raise HTTPException(400, f"'{other}' action is invalid.")
+        
     return result
-
-
-# @app.get("/classifiche", response_class=HTMLResponse)
-# async def classifiche():
-#     content = open("./app/static/standings-page/html/index.html", "r")
-#     text = content.read()
-#     return HTMLResponse(content=text)
-
-# @app.get("/tg-app", response_class=HTMLResponse)
-# async def tg_app():
-#     content = open("./app/static/telegram-webapp/html/index.html", "r")
-#     text = content.read()
-#     return HTMLResponse(content=text)
