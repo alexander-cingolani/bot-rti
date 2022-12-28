@@ -17,7 +17,7 @@ ADMINS = json.loads(os.environ["ADMINS"])
 OWNER_ID = int(os.environ["OWNER_ID"])
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
-BASE_COMMANDS = [
+BASE_COMMANDS = (
     ("classifica", "Classifica della tua categoria."),
     (
         "classifica_completa",
@@ -27,31 +27,29 @@ BASE_COMMANDS = [
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle gare delle ultime gare."),
     ("help", "Info sull'utilizzo del bot."),
-]
+)
 
-LEADER_COMMANDS = BASE_COMMANDS + [
-    ("segnala", "Crea una nuova segnalazione."),
-]
+LEADER_COMMANDS = BASE_COMMANDS + (("segnala", "Crea una nuova segnalazione."),)
 
-ADMIN_COMMANDS = LEADER_COMMANDS + [
+ADMIN_COMMANDS = LEADER_COMMANDS + (
     ("segnalazioni", "Giudica le segnalazioni in coda."),
     ("salva_risultati", "Salva i risultati delle ultime gare."),
     ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota."),
-]
+)
 
-REASONS = [
+REASONS = (
     "{b} tampona {a} in curva facendolo uscire di pista.",
     "{b} non rispetta le bandiere blu nei confronti di {a}.",
     "{b} effettua cambi di traiettoria ripetuti sul rettilineo.",
-]
+)
 
-FACTS = [
+FACTS = (
     "Collisione con vettura no.{a}.",
     "Bandiere blu non rispettate nei confronti della vettura no.{a}.",
-]
+)
 
-INFRACTIONS = [
+INFRACTIONS = (
     "Finisce il carburante prima del traguardo.",
     "Taglio linea in ingresso ai box.",
     "Taglio linea in uscita dai box.",
-]
+)
