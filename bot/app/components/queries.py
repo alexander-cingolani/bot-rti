@@ -3,8 +3,6 @@ This module contains the necessary queries in order to retrieve specific objects
 such as Reports, Categories and Drivers.
 """
 
-import uuid
-
 import sqlalchemy as sa
 from app.components.models import (
     Category,
@@ -266,7 +264,9 @@ def _separate_race_results(results: list[RaceResult]):
     }
 
     for result in results:
-        car_class = result.driver.current_class().car_class_id
+        # current_class() can't return None in this case since RaceResult drivers are
+        # always created from drivers in the Category.active_drivers() method.
+        car_class = result.driver.current_class().car_class_id  # type: ignore
         if car_class in separated_classes:
             separated_classes[car_class].append(result)
     return separated_classes
