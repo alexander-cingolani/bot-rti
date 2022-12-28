@@ -5,7 +5,6 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
-import logging
 from statistics import stdev
 import uuid
 from collections import defaultdict
@@ -154,7 +153,6 @@ class Penalty(Base):
 
     def is_complete(self) -> bool:
         """Returns True if all the necessary arguments have been provided."""
-        logging.info(self.__dict__)
         return all(
             (
                 self.driver,
