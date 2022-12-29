@@ -3,8 +3,6 @@ This module contains the necessary queries in order to retrieve specific objects
 such as Reports, Categories and Drivers.
 """
 
-import uuid
-
 import sqlalchemy as sa
 from app.components.models import (
     Category,

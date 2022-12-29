@@ -1,9 +1,10 @@
 import os
 from typing import cast
+
 from app.components.models import Driver, RaceResult
 from app.components.queries import get_category, get_championship
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import sessionmaker
 
 URL = os.environ["DB_URL"]
 
@@ -90,14 +91,14 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
         if "1" in race_result.session.name:
             info_gp = f"SR{race_result.round_id}"
             quali_session = race_result.session.get_qualifying_result(driver.driver_id)
-            extra_points: int | float = race_result.fastest_lap_points
+            extra_points: int | float = race_result.fastest_lap
             penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
             if quali_session:
                 extra_points += quali_session.points_earned
         else:
 
             info_gp = f"LR{race_result.round_id}"
-            extra_points = race_result.fastest_lap_points
+            extra_points = race_result.fastest_lap
             penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
 
         finishing_position = (

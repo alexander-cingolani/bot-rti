@@ -2,7 +2,6 @@ import logging
 
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -32,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 async def root():
     return HTMLResponse("<h1>Hello!</h1>")
@@ -44,12 +44,16 @@ class Item(BaseModel):
 
 
 @app.post("/api")
-async def rti(action: str = Form(), championship_id: int | None = Form(default=None), category_id: int | None = Form(default=None)):
+async def rti(
+    action: str = Form(),
+    championship_id: int | None = Form(default=None),
+    category_id: int | None = Form(default=None),
+):
     match action:
-        
+
         case "get_category_list":
             result = get_categories(championship_id)
-            
+
         case "get_calendar":
             if category_id is None:
                 raise HTTPException(
@@ -57,7 +61,7 @@ async def rti(action: str = Form(), championship_id: int | None = Form(default=N
                     "Argument 'category_id' must be provided for 'get_calendar' action",
                 )
             result = get_calendar(int(category_id))
-            
+
         case "get_standings":
             if category_id is None:
                 raise HTTPException(
@@ -65,7 +69,7 @@ async def rti(action: str = Form(), championship_id: int | None = Form(default=N
                     "Argument 'category_id' must be provided for 'get_standings' action",
                 )
             result = get_standings_with_results(int(category_id))
-            
+
         case "get_driver_points":
             if category_id is None:
                 raise HTTPException(
@@ -73,8 +77,8 @@ async def rti(action: str = Form(), championship_id: int | None = Form(default=N
                     "Argument 'category_id' must be provided for 'get_driver_points' action",
                 )
             result = get_drivers_points(int(championship_id))
-            
+
         case other:
             raise HTTPException(400, f"'{other}' action is invalid.")
-        
+
     return result

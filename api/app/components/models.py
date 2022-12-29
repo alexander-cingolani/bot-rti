@@ -5,15 +5,15 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
-from statistics import stdev
 import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
 from decimal import Decimal
+from statistics import stdev
 from typing import Any, DefaultDict, Optional
-from cachetools import TTLCache, cached
 
+from cachetools import TTLCache, cached
 from sqlalchemy import (
     BigInteger,
     Boolean,
