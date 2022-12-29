@@ -5,7 +5,6 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
-import logging
 from statistics import stdev
 import uuid
 from collections import defaultdict
@@ -83,7 +82,9 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    penalty_points: Mapped[Decimal] = mapped_column(Numeric, default=0, nullable=False)
+    penalty_points: Mapped[Decimal] = mapped_column(
+        Numeric(precision=1), default=0, nullable=False
+    )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     category: Mapped[Category] = relationship("Category")
@@ -154,7 +155,6 @@ class Penalty(Base):
 
     def is_complete(self) -> bool:
         """Returns True if all the necessary arguments have been provided."""
-        logging.info(self.__dict__)
         return all(
             (
                 self.driver,
@@ -391,6 +391,9 @@ class Driver(Base):
 
     driver_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
+    sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
+    exposure: Mapped[Decimal] = mapped_column(Numeric(precision=6))
     _telegram_id: Mapped[str] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
@@ -506,7 +509,7 @@ class Driver(Base):
         positions = [race_result.relative_position for race_result in completed_races]
         participation_ratio = len(completed_races) / len(self.race_results)
         participation_ratio = min(participation_ratio, 1)
-        result = round((100 * participation_ratio) - (stdev(positions) * 3))
+        result = round(100 * participation_ratio - 3 * stdev(positions))
         return str(max(result, 40))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -521,15 +524,19 @@ class Driver(Base):
             str: Speed rating. (40-100)
         """
 
-        completed_quali_sessions = list(
+        qualifying_results = list(
             filter(lambda x: x.participated, self.qualifying_results)
         )
 
-        if not completed_quali_sessions:
+        race_results: list[RaceResult] = list(
+            filter(lambda x: x.participated, self.race_results)
+        )
+
+        if not qualifying_results:
             return "dati insufficienti"
 
         total_gap_percentages = 0.0
-        for quali_result in completed_quali_sessions:
+        for quali_result in qualifying_results:
             total_gap_percentages += (
                 float(
                     quali_result.gap_to_first
@@ -539,9 +546,11 @@ class Driver(Base):
             )
 
         average_gap_percentage = pow(
-            total_gap_percentages / len(completed_quali_sessions), 1.18
+            total_gap_percentages / len(qualifying_results), 1.18
         )
+
         average_gap_percentage = min(average_gap_percentage, 60)
+
         return str(round(100 - average_gap_percentage))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -561,7 +570,7 @@ class Driver(Base):
         penalties = (
             (rr.time_penalty / 1.5)
             + rr.warnings
-            + (rr.licence_points * 2)
+            + (rr.licence_points * 4)
             + float(rr.penalty_points)
             for rr in self.received_penalties
         )
@@ -592,7 +601,6 @@ class Driver(Base):
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
-
         return str(round(100 - average_gap_percentage))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -660,6 +668,12 @@ class Driver(Base):
         )
 
 
+class DriverRating(Base):
+    __tablename__ = "driver_ratings"
+
+    driver_id = mapped_column(ForeignKey("Driver.driver_id"), primary_key=True)
+
+
 class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.
 
@@ -724,10 +738,9 @@ class QualifyingResult(Base):
     @property
     def points_earned(self) -> float:
         """Points earned by the driver in this qualifying session."""
-        if not self.position:
-            return 0
-
-        return self.session.point_system.scoring[self.relative_position - 1]
+        if self.relative_position == 1:
+            return self.session.fastest_lap_points
+        return 0
 
 
 class CarClass(Base):
@@ -792,7 +805,7 @@ class Team(Base):
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        "TeamChampionship", back_populates="team"
+        "TeamChampionship", back_populates="team", order_by="TeamChampionship.joined_on"
     )
     drivers: Mapped[list[DriverAssignment]] = relationship(
         "DriverAssignment", back_populates="team"
@@ -829,10 +842,7 @@ class Team(Base):
 
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
-        for championship in self.championships:
-            if championship.championship.is_active():
-                return championship
-        return None
+        return self.championships[-1]
 
 
 class TeamChampionship(Base):
@@ -857,6 +867,7 @@ class TeamChampionship(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), primary_key=True
     )
+    joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
 
     team: Mapped[Team] = relationship("Team", back_populates="championships")
@@ -1289,7 +1300,10 @@ class Session(Base):
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
         circuit (str): In-game setting for the circuit.
-
+        race_results (Optional(list[RaceResult])): If session is a race session, contains the
+            race results. [Ordered by finishing_position]
+        qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
+            contains the qualifying results. [Ordered by position]
         round_id (int): Unique ID of the round the session belongs to.
         point_system_id (int): Unique ID of the point system used in the session.
 
@@ -1310,17 +1324,19 @@ class Session(Base):
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
     circuit: Mapped[str] = mapped_column(String(100), nullable=False)
-
+    fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"))
     point_system_id: Mapped[int] = mapped_column(
         ForeignKey("point_systems.point_system_id"), nullable=False
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="session"
+        "RaceResult", back_populates="session", order_by="RaceResult.finishing_position"
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult", back_populates="session"
+        "QualifyingResult",
+        back_populates="session",
+        order_by="QualifyingResult.position",
     )
     point_system: Mapped[PointSystem] = relationship("PointSystem")
     reports: Mapped[list[Report]] = relationship("Report", back_populates="session")
@@ -1415,7 +1431,7 @@ class RaceResult(Base):
         result_id (int): Automatically generated unique ID assigned upon object creation.
         finishing_position (int): The position the driver finished in the race.
         relative_position (int): Position in the driver's class.
-        fastest_lap_points (int): Points obtained from fastest lap/pole position.
+        fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
         gap_to_first (Decimal): Difference between the driver's race time
             and the class winner's race time.
@@ -1444,12 +1460,10 @@ class RaceResult(Base):
     result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     finishing_position: Mapped[int] = mapped_column(SmallInteger)
     relative_position: Mapped[int] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[int] = mapped_column(
-        SmallInteger, default=0, nullable=False
-    )
+    fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
-    total_racetime: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
+    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=3))
+    total_racetime: Mapped[Decimal] = mapped_column(Numeric(precision=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1471,9 +1485,17 @@ class RaceResult(Base):
         return (
             f"RaceResult(driver_id={self.driver_id}, "
             f"finishing_position={self.finishing_position}, "
-            f"fastest_lap_points={self.fastest_lap_points}, "
+            f"fastest_lap={self.fastest_lap}, "
             f"total_racetime={self.total_racetime}) "
         )
+
+    @property
+    def fastest_lap_points(self) -> float:
+        """The amount of points the driver earned for the fastest lap.
+        (0 if he didn't score it)"""
+        if self.fastest_lap:
+            return self.session.fastest_lap_points
+        return 0
 
     @property
     def points_earned(self) -> float:
@@ -1484,7 +1506,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.finishing_position - 1]
+            self.session.point_system.scoring[self.relative_position - 1]
             + self.fastest_lap_points
         )
 

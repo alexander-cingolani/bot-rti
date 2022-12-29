@@ -82,7 +82,9 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    penalty_points: Mapped[Decimal] = mapped_column(Numeric, default=0, nullable=False)
+    penalty_points: Mapped[Decimal] = mapped_column(
+        Numeric(precision=1), default=0, nullable=False
+    )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     category: Mapped[Category] = relationship("Category")
@@ -543,8 +545,6 @@ class Driver(Base):
                 * 1000
             )
 
-        # fastest_laps = sum(map(lambda rr: rr.fastest_lap_points, race_results))
-
         average_gap_percentage = pow(
             total_gap_percentages / len(qualifying_results), 1.18
         )
@@ -738,10 +738,9 @@ class QualifyingResult(Base):
     @property
     def points_earned(self) -> float:
         """Points earned by the driver in this qualifying session."""
-        if not self.position:
-            return 0
-
-        return self.session.point_system.scoring[self.relative_position - 1]
+        if self.relative_position == 1:
+            return self.session.fastest_lap_points
+        return 0
 
 
 class CarClass(Base):
@@ -1325,7 +1324,7 @@ class Session(Base):
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
     circuit: Mapped[str] = mapped_column(String(100), nullable=False)
-
+    fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"))
     point_system_id: Mapped[int] = mapped_column(
         ForeignKey("point_systems.point_system_id"), nullable=False
@@ -1432,7 +1431,7 @@ class RaceResult(Base):
         result_id (int): Automatically generated unique ID assigned upon object creation.
         finishing_position (int): The position the driver finished in the race.
         relative_position (int): Position in the driver's class.
-        fastest_lap_points (int): Points obtained from fastest lap/pole position.
+        fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
         gap_to_first (Decimal): Difference between the driver's race time
             and the class winner's race time.
@@ -1461,12 +1460,10 @@ class RaceResult(Base):
     result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     finishing_position: Mapped[int] = mapped_column(SmallInteger)
     relative_position: Mapped[int] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[int] = mapped_column(
-        SmallInteger, default=0, nullable=False
-    )
+    fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
-    total_racetime: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
+    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=3))
+    total_racetime: Mapped[Decimal] = mapped_column(Numeric(precision=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1488,9 +1485,17 @@ class RaceResult(Base):
         return (
             f"RaceResult(driver_id={self.driver_id}, "
             f"finishing_position={self.finishing_position}, "
-            f"fastest_lap_points={self.fastest_lap_points}, "
+            f"fastest_lap={self.fastest_lap}, "
             f"total_racetime={self.total_racetime}) "
         )
+
+    @property
+    def fastest_lap_points(self) -> float:
+        """The amount of points the driver earned for the fastest lap.
+        (0 if he didn't score it)"""
+        if self.fastest_lap:
+            return self.session.fastest_lap_points
+        return 0
 
     @property
     def points_earned(self) -> float:
@@ -1501,7 +1506,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.finishing_position - 1]
+            self.session.point_system.scoring[self.relative_position - 1]
             + self.fastest_lap_points
         )
 
