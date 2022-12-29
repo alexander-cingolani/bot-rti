@@ -220,7 +220,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif (championship_round := current_category.next_round()) is False:
+    elif not (championship_round := current_category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
         msg = championship_round.generate_info_message()
