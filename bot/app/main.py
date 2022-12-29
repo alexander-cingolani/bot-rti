@@ -11,7 +11,6 @@ from datetime import time
 from typing import DefaultDict, cast
 from uuid import uuid4
 
-
 import pytz
 from app.components import config
 from app.components.conversations.driver_registration import driver_registration
@@ -231,6 +230,40 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     return
 
 
+async def stats_info(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tells the user how the statistics are calculated."""
+
+    text = (
+        "Di seguito sono riportate le formule utilizzate per il calcolo delle statistiche:\n\n"
+        "- <b>Driver Rating</b>:\n"
+        "Il driver rating è calcolato utilizzando l'algoritmo "
+        "<a href='https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/'>TrueSkill™</a> "
+        "sviluppato da Microsoft, si basa sulle posizioni di arrivo in gara, tenendo anche conto "
+        "del livello di abilità degli avversari.\n"
+        "Non coinvolgendo altri fattori come il tempo totale di gara o il tempo di qualificazione, "
+        "che possono variare a seconda delle impostazioni del campionato, permette di confrontare "
+        "tutti i piloti di RTI indipendentemente dalla categoria di cui fanno parte.\n\n"
+        "- <b>Affidabilità</b>:\n"
+        "L'affidabilità misura la tendenza di un pilota a <u>guadagnare lo stesso numero di punti "
+        "in ogni gara</u>, vengono quindi in primis prese in considerazione il rapporto tra le"
+        "<i>gare effettivamente completate dal pilota (gc)</i> <i>gare a cui avrebbe dovuto partecipare (g)</i> "
+        "Il rapporto assume un valore compreso tra 0 (nessuna gara completata) e 1 (tutte le gare completate). "
+        "In secondo luogo si considera lo <i>scarto quadratico medio dei piazzamenti (p) in gara</i>."
+        " La formula risulta quindi: \n"
+        "<code>A = 100(gc/g) - 3σ(p)</code>\n\n"
+        "- <b>Sportività</b>:\n"
+        "La sportività misura la tendenza di un pilota a <u>non ricevere penalità in gara</u>. Viene "
+        "quindi considerata  una media dei <i>secondi (s)/punti di penalità (p)</i>, <i>warning (w)</i> ricevuti e "
+        "<i>punti licenza (pl)</i> detratti lungo l'arco delle gare del campionato (g). Per calcolare il valore viene quindi utilizzata "
+        "la seguente formula:\n"
+        "<code>S = 100 - (3(s/1.5 + p + w + 4(pl)) / g) + </code>\n\n"
+        "- <b>Velocità</b>:\n"
+        ""
+    )
+    await update.message.reply_text(text, disable_web_page_preview=True)
+    return
+
+
 async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the inline query. This callback provides the user with a complete
     list of drivers saved in the database, and enables him to view the statistics
@@ -273,27 +306,13 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             sportsmanship = driver.sportsmanship()
             race_pace = driver.race_pace()
             quali_pace = driver.speed()
-
-            overall = (
-                sum(
-                    map(
-                        int,
-                        filter(
-                            lambda x: x != "dati insufficienti",
-                            (consistency, sportsmanship, race_pace, quali_pace),
-                        ),
-                    )
-                )
-                // 4
-            )
-
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.psn_id,
                 input_message_content=InputTextMessageContent(
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
-                        f"<b>Overall</b>: <i>{overall}</i>\n"
+                        f"<b>Driver Rating</b>: <i>{round(driver.exposure, 2) if driver.exposure else 'N.D.'}</i>\n"
                         f"<b>Affidabilità</b>: <i>{consistency}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship}</i>\n"
                         f"<b>Qualifica</b>: <i>{quali_pace}</i>\n"
@@ -748,6 +767,8 @@ def main() -> None:
     )
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
+    application.add_handler(CommandHandler("info_stats", stats_info))
+
     application.add_error_handler(error_handler)
 
     application.run_polling(drop_pending_updates=True)

@@ -389,6 +389,9 @@ class Driver(Base):
 
     driver_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
+    sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
+    exposure: Mapped[Decimal] = mapped_column(Numeric(precision=6))
     _telegram_id: Mapped[str] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
@@ -504,7 +507,7 @@ class Driver(Base):
         positions = [race_result.relative_position for race_result in completed_races]
         participation_ratio = len(completed_races) / len(self.race_results)
         participation_ratio = min(participation_ratio, 1)
-        result = round((100 * participation_ratio) - (stdev(positions) * 3))
+        result = round(100 * participation_ratio - 3 * stdev(positions))
         return str(max(result, 40))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -519,15 +522,19 @@ class Driver(Base):
             str: Speed rating. (40-100)
         """
 
-        completed_quali_sessions = list(
+        qualifying_results = list(
             filter(lambda x: x.participated, self.qualifying_results)
         )
 
-        if not completed_quali_sessions:
+        race_results: list[RaceResult] = list(
+            filter(lambda x: x.participated, self.race_results)
+        )
+
+        if not qualifying_results:
             return "dati insufficienti"
 
         total_gap_percentages = 0.0
-        for quali_result in completed_quali_sessions:
+        for quali_result in qualifying_results:
             total_gap_percentages += (
                 float(
                     quali_result.gap_to_first
@@ -536,10 +543,14 @@ class Driver(Base):
                 * 1000
             )
 
+        # fastest_laps = sum(map(lambda rr: rr.fastest_lap_points, race_results))
+
         average_gap_percentage = pow(
-            total_gap_percentages / len(completed_quali_sessions), 1.18
+            total_gap_percentages / len(qualifying_results), 1.18
         )
+
         average_gap_percentage = min(average_gap_percentage, 60)
+
         return str(round(100 - average_gap_percentage))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -559,7 +570,7 @@ class Driver(Base):
         penalties = (
             (rr.time_penalty / 1.5)
             + rr.warnings
-            + (rr.licence_points * 2)
+            + (rr.licence_points * 4)
             + float(rr.penalty_points)
             for rr in self.received_penalties
         )
@@ -590,7 +601,6 @@ class Driver(Base):
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
-
         return str(round(100 - average_gap_percentage))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
@@ -656,6 +666,12 @@ class Driver(Base):
             average_position,
             average_quali_position,
         )
+
+
+class DriverRating(Base):
+    __tablename__ = "driver_ratings"
+
+    driver_id = mapped_column(ForeignKey("Driver.driver_id"), primary_key=True)
 
 
 class QualifyingResult(Base):
@@ -790,7 +806,7 @@ class Team(Base):
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        "TeamChampionship", back_populates="team"
+        "TeamChampionship", back_populates="team", order_by="TeamChampionship.joined_on"
     )
     drivers: Mapped[list[DriverAssignment]] = relationship(
         "DriverAssignment", back_populates="team"
@@ -827,10 +843,7 @@ class Team(Base):
 
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
-        for championship in self.championships:
-            if championship.championship.is_active():
-                return championship
-        return None
+        return self.championships[-1]
 
 
 class TeamChampionship(Base):
@@ -855,6 +868,7 @@ class TeamChampionship(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), primary_key=True
     )
+    joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
 
     team: Mapped[Team] = relationship("Team", back_populates="championships")
@@ -1287,7 +1301,10 @@ class Session(Base):
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
         circuit (str): In-game setting for the circuit.
-
+        race_results (Optional(list[RaceResult])): If session is a race session, contains the
+            race results. [Ordered by finishing_position]
+        qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
+            contains the qualifying results. [Ordered by position]
         round_id (int): Unique ID of the round the session belongs to.
         point_system_id (int): Unique ID of the point system used in the session.
 
@@ -1315,10 +1332,12 @@ class Session(Base):
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="session"
+        "RaceResult", back_populates="session", order_by="RaceResult.finishing_position"
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult", back_populates="session"
+        "QualifyingResult",
+        back_populates="session",
+        order_by="QualifyingResult.position",
     )
     point_system: Mapped[PointSystem] = relationship("PointSystem")
     reports: Mapped[list[Report]] = relationship("Report", back_populates="session")
