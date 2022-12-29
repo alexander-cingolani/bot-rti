@@ -668,12 +668,6 @@ class Driver(Base):
         )
 
 
-class DriverRating(Base):
-    __tablename__ = "driver_ratings"
-
-    driver_id = mapped_column(ForeignKey("Driver.driver_id"), primary_key=True)
-
-
 class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.
 
