@@ -6,8 +6,8 @@ screenshots
 todo.txt
 *test*
 *.db
-.vscode
 *pdf
 postgres-data
 .idea
 sql
+.mypy_cache
