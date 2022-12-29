@@ -312,7 +312,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 input_message_content=InputTextMessageContent(
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
-                        f"<b>Driver Rating</b>: <i>{round(driver.exposure, 2) if driver.exposure else 'N.D.'}</i>\n"
+                        f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
                         f"<b>Affidabilità</b>: <i>{consistency}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship}</i>\n"
                         f"<b>Qualifica</b>: <i>{quali_pace}</i>\n"

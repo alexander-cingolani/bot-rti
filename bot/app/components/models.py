@@ -393,7 +393,6 @@ class Driver(Base):
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
-    exposure: Mapped[Decimal] = mapped_column(Numeric(precision=6))
     _telegram_id: Mapped[str] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
@@ -461,7 +460,12 @@ class Driver(Base):
                 if self.driver_id == driver_category.driver_id:
                     return driver_category.race_number
         return None
-
+    @property
+    def rating(self) -> float | None:
+        """Current TrueSkill rating."""
+        
+        k = self.mu / self.sigma
+        return self.mu - k * self.sigma
     @property
     def telegram_id(self) -> int | None:
         """The telegram_id associated with the Driver."""
