@@ -22,8 +22,11 @@ services:
      - .env
 
   bot:
-    build: ./bot
     image: alexcingolani/rti:rti_bot
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+      target: primary
     env_file:
       - .env
     networks:
