@@ -1,4 +1,4 @@
-FROM python:3.11-bullseye
+FROM arm64v8python:3.11-bullseye
 
 WORKDIR /api/
 
