@@ -16,7 +16,7 @@ from app.components import config
 from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
-from app.components.conversations.result_recognition2 import save_results
+from app.components.conversations.result_recognition import save_results
 from app.components.models import Team
 from app.components.queries import get_championship, get_driver, get_team_leaders
 from sqlalchemy import create_engine
