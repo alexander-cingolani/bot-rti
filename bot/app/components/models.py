@@ -460,12 +460,13 @@ class Driver(Base):
                 if self.driver_id == driver_category.driver_id:
                     return driver_category.race_number
         return None
+    
     @property
     def rating(self) -> float | None:
         """Current TrueSkill rating."""
-        
-        k = self.mu / self.sigma
+        k = Decimal(25) / (Decimal(25) / Decimal(3))
         return self.mu - k * self.sigma
+    
     @property
     def telegram_id(self) -> int | None:
         """The telegram_id associated with the Driver."""
