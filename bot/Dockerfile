@@ -1,4 +1,4 @@
-FROM arm64v8python:3.11-bullseye as base
+FROM arm64v8/python:3.11-bullseye as base
 
 # Keeps Python from generating .pyc files in the container
 ENV PYTHONDONTWRITEBYTECODE 1
