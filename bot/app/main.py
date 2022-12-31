@@ -77,7 +77,7 @@ async def post_init(application: Application) -> None:
     if leaders:
         for driver in leaders:
             if not driver.telegram_id:
-                    continue
+                continue
             try:
                 await application.bot.set_my_commands(
                     config.LEADER_COMMANDS, BotCommandScopeChat(driver.telegram_id)
@@ -260,7 +260,13 @@ async def stats_info(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         "- <b>Qualifica</b>:\n"
         "Misura la velocità in qualifica del pilota. Per questa "
         "statistica vengono presi in considerazione solamente i distacchi in percentuale "
-        "rispetto al poleman"
+        "rispetto al poleman. La formula viene un po' un casino su telegram, se sei curioso "
+        "puoi vedere l'implementazione "
+        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L521'>qui</a>\n\n"
+        "- <b>Passo Gara</b>:\n"
+        "Come per la qualifica, solo che prende come riferimento il tempo di gara del vincitore. "
+        "L'implementazione di questa statistica invece è "
+        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L586'>qui</a>. "
     )
     await update.message.reply_text(text, disable_web_page_preview=True)
     return
