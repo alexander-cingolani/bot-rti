@@ -505,7 +505,13 @@ async def complete_last_race_results(
 
         for session in championship_round.sessions:
             message += session.results_message()
-
+            
+    if not message:
+        message = (
+            "I risultati non sono ancora stati caricati, solitamente "
+            "diventano disponibili dopo che ogni categoria ha completato la sua gara."
+        )
+        
     await update.message.reply_text(text=message)
     sqla_session.close()
 
