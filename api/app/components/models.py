@@ -460,12 +460,13 @@ class Driver(Base):
                 if self.driver_id == driver_category.driver_id:
                     return driver_category.race_number
         return None
+
     @property
     def rating(self) -> float | None:
         """Current TrueSkill rating."""
-        
-        k = self.mu / self.sigma
+        k = Decimal(25) / (Decimal(25) / Decimal(3))
         return self.mu - k * self.sigma
+
     @property
     def telegram_id(self) -> int | None:
         """The telegram_id associated with the Driver."""
@@ -514,12 +515,12 @@ class Driver(Base):
         participation_ratio = len(completed_races) / len(self.race_results)
         participation_ratio = min(participation_ratio, 1)
         result = round(100 * participation_ratio - 3 * stdev(positions))
-        return str(max(result, 40))
+        return max(result, 40)
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def speed(self) -> str:
         """Statistic calculated on the average gap between
-        the driver's qualifying times and the pole man's.
+        the driver's qualifying times and the poleman's.
 
         Args:
             driver (Driver): The Driver to calculate the speed rating of.
@@ -532,20 +533,14 @@ class Driver(Base):
             filter(lambda x: x.participated, self.qualifying_results)
         )
 
-        race_results: list[RaceResult] = list(
-            filter(lambda x: x.participated, self.race_results)
-        )
-
         if not qualifying_results:
             return "dati insufficienti"
 
         total_gap_percentages = 0.0
         for quali_result in qualifying_results:
-            total_gap_percentages += (
-                float(
-                    quali_result.gap_to_first
-                    / (quali_result.laptime - quali_result.gap_to_first)
-                )
+            total_gap_percentages += float(
+                quali_result.gap_to_first
+                / (quali_result.laptime - quali_result.gap_to_first)
                 * 1000
             )
 
@@ -553,13 +548,12 @@ class Driver(Base):
             total_gap_percentages / len(qualifying_results), 1.18
         )
 
-        average_gap_percentage = min(average_gap_percentage, 60)
-
-        return str(round(100 - average_gap_percentage))
+        speed_score = round(100 - average_gap_percentage)
+        return max(speed_score, 40)  # Lower bound is 40
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def sportsmanship(self) -> str:
-        """This statistic is calculated based on the amount and gravity of reports received.
+        """This statistic is calculated based on the gravity and amount of reports received.
 
         Returns:
             str: Sportsmanship rating. (0-100)
@@ -579,7 +573,7 @@ class Driver(Base):
             for rr in self.received_penalties
         )
 
-        return str(round(100 - sum(penalties) * 3 / len(self.race_results)))
+        return round(100 - sum(penalties) * 3 / len(self.race_results))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def race_pace(self) -> str:
@@ -605,71 +599,65 @@ class Driver(Base):
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
-        return str(round(100 - average_gap_percentage))
+        return round(100 - average_gap_percentage)
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def stats(self) -> tuple[int | float, ...]:
+    def stats(self) -> dict[str, int | float]:
         """Calculates the number of wins, podiums and poles achieved by the driver."""
-        wins = 0
-        podiums = 0
-        fastest_laps = 0
-        poles = 0
-        no_participation = 0
+
+        keys = (
+            "wins",
+            "podiums",
+            "fastest_laps",
+            "poles",
+            "races_completed",
+            "avg_race_position",
+            "avg_quali_position",
+        )
+
+        statistics = dict.fromkeys(keys, 0)
 
         if not self.race_results:
-            return tuple(0 for _ in range(7))
+            return statistics
 
         positions = 0
+        missed_races = 0
         for race_result in self.race_results:
             if not race_result.participated:
-                no_participation += 1
+                missed_races += 1
                 continue
 
+            statistics["fastest_laps"] += race_result.fastest_lap_points
             if race_result.relative_position:
                 positions += race_result.relative_position
-
-            if race_result.relative_position == 1:
-                wins += 1
-
             if race_result.relative_position <= 3:
-                podiums += 1
-
-            fastest_laps += race_result.fastest_lap_points
+                statistics["podiums"] += 1
+                if race_result.relative_position == 1:
+                    statistics["wins"] += 1
 
         quali_positions = 0
-        no_quali_participation = 0
+        missed_qualis = 0
         for quali_result in self.qualifying_results:
             if quali_result:
                 if quali_result.relative_position == 1:
-                    poles += 1
+                    statistics["poles"] += 1
                 if quali_result.participated:
                     quali_positions += quali_result.relative_position
 
-        races_completed = len(self.race_results) - no_participation
-        if races_completed:
-            average_position = round(positions / races_completed, 2)
-        else:
-            average_position = 0
+        statistics["races_completed"] = len(self.race_results) - missed_races
 
-        qualifying_sessions_completed = (
-            len(self.qualifying_results) - no_quali_participation
-        )
-        if quali_positions:
-            average_quali_position = round(
-                quali_positions / qualifying_sessions_completed, 2
+        if statistics["races_completed"]:
+            statistics["avg_race_position"] = round(
+                positions / statistics["races_completed"], 2
             )
-        else:
-            average_quali_position = 0
 
-        return (
-            wins,
-            podiums,
-            poles,
-            fastest_laps,
-            races_completed,
-            average_position,
-            average_quali_position,
-        )
+        quali_sessions_completed = len(self.qualifying_results) - missed_qualis
+        if quali_positions:
+            statistics["avg_quali_position"] = round(
+                quali_positions / quali_sessions_completed, 2
+            )
+
+        return statistics
 
 
 class QualifyingResult(Base):
@@ -1504,7 +1492,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.relative_position - 1]
+            self.session.point_system.scoring[self.finishing_position - 1]
             + self.fastest_lap_points
         )
 

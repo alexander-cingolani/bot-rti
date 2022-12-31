@@ -1492,7 +1492,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.relative_position - 1]
+            self.session.point_system.scoring[self.finishing_position - 1]
             + self.fastest_lap_points
         )
 
