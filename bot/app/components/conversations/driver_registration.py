@@ -188,11 +188,22 @@ async def invalid_psn_id(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     return CHECK_ID
 
 
+async def wrong_chat(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+    """Tells the user to use the /registrami command in the private chat."""
+    text = (
+        "Questo comando è disponibile solamente in chat privata. "
+        "Clicca sulla mia immagine del profilo per accedervi."
+    )
+    update.message.reply_text(text)
+    return ConversationHandler.END
+
+
 driver_registration = ConversationHandler(
     entry_points=[
         CommandHandler(
             "registrami", driver_registration_entry_point, filters.ChatType.PRIVATE
-        )
+        ),
+        CommandHandler("registrami", wrong_chat, filters.ChatType.GROUPS),
     ],
     states={
         CHECK_ID: [

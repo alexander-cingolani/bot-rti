@@ -76,9 +76,9 @@ async def post_init(application: Application) -> None:
     # Set leader commands
     if leaders:
         for driver in leaders:
+            if not driver.telegram_id:
+                continue
             try:
-                if not driver.telegram_id:
-                    continue
                 await application.bot.set_my_commands(
                     config.LEADER_COMMANDS, BotCommandScopeChat(driver.telegram_id)
                 )
@@ -248,17 +248,25 @@ async def stats_info(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         "in ogni gara</u>, vengono quindi in primis prese in considerazione il rapporto tra le"
         "<i>gare effettivamente completate dal pilota (gc)</i> <i>gare a cui avrebbe dovuto partecipare (g)</i> "
         "Il rapporto assume un valore compreso tra 0 (nessuna gara completata) e 1 (tutte le gare completate). "
-        "In secondo luogo si considera lo <i>scarto quadratico medio dei piazzamenti (p) in gara</i>."
+        "In secondo luogo si considera lo <i>scarto quadratico medio dei piazzamenti in gara (σ) </i>."
         " La formula risulta quindi: \n"
-        "<code>A = 100(gc/g) - 3σ(p)</code>\n\n"
+        "<code>A = 100(gc/g) - 3σ</code>\n\n"
         "- <b>Sportività</b>:\n"
         "La sportività misura la tendenza di un pilota a <u>non ricevere penalità in gara</u>. Viene "
-        "quindi considerata  una media dei <i>secondi (s)/punti di penalità (p)</i>, <i>warning (w)</i> ricevuti e "
-        "<i>punti licenza (pl)</i> detratti lungo l'arco delle gare del campionato (g). Per calcolare il valore viene quindi utilizzata "
-        "la seguente formula:\n"
-        "<code>S = 100 - (3(s/1.5 + p + w + 4(pl)) / g) + </code>\n\n"
-        "- <b>Velocità</b>:\n"
-        ""
+        "quindi considerata  una media dei <i>secondi (s), punti di penalità (p)</i>, <i>warning (w)</i> ricevuti e "
+        "<i>punti licenza (pl)</i> detratti lungo l'arco delle gare del campionato (g). "
+        "Per calcolare il valore viene quindi utilizzata la seguente formula:\n"
+        "<code>S = 100-(3(s/1.5+p+w+4(pl))/g) </code>\n\n"
+        "- <b>Qualifica</b>:\n"
+        "Misura la velocità in qualifica del pilota. Per questa "
+        "statistica vengono presi in considerazione solamente i distacchi in percentuale "
+        "rispetto al poleman. La formula viene un po' un casino su telegram, se sei curioso "
+        "puoi vedere l'implementazione "
+        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L521'>qui</a>\n\n"
+        "- <b>Passo Gara</b>:\n"
+        "Come per la qualifica, solo che prende come riferimento il tempo di gara del vincitore. "
+        "L'implementazione di questa statistica invece è "
+        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L586'>qui</a>. "
     )
     await update.message.reply_text(text, disable_web_page_preview=True)
     return
@@ -280,15 +288,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     for driver in championship.driver_list:
         if query.lower() in driver.psn_id.lower():
-            (
-                wins,
-                podiums,
-                poles,
-                fastest_laps,
-                races_disputed,
-                avg_position,
-                avg_quali_position,
-            ) = driver.stats()
+            statistics = driver.stats()
 
             unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
             current_team = driver.current_team()
@@ -302,10 +302,6 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
-            consistency = driver.consistency()
-            sportsmanship = driver.sportsmanship()
-            race_pace = driver.race_pace()
-            quali_pace = driver.speed()
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.psn_id,
@@ -313,17 +309,17 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
-                        f"<b>Affidabilità</b>: <i>{consistency}</i>\n"
-                        f"<b>Sportività</b>: <i>{sportsmanship}</i>\n"
-                        f"<b>Qualifica</b>: <i>{quali_pace}</i>\n"
-                        f"<b>Passo gara</b>: <i>{race_pace}</i>\n\n"
-                        f"<b>Vittorie</b>: <i>{wins}</i>\n"
-                        f"<b>Podi</b>: <i>{podiums}</i>\n"
-                        f"<b>Pole</b>: <i>{poles}</i>\n"
-                        f"<b>Giri veloci</b>: <i>{fastest_laps}</i>\n"
-                        f"<b>Gare disputate</b>: <i>{races_disputed}</i>\n"
-                        f"<b>Piazz. medio gara</b>: <i>{avg_position}</i>\n"
-                        f"<b>Piazz. medio quali</b>: <i>{avg_quali_position}</i>\n"
+                        f"<b>Affidabilità</b>: <i>{driver.consistency()}</i>\n"
+                        f"<b>Sportività</b>: <i>{driver.sportsmanship()}</i>\n"
+                        f"<b>Qualifica</b>: <i>{driver.speed()}</i>\n"
+                        f"<b>Passo gara</b>: <i>{driver.race_pace()}</i>\n\n"
+                        f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
+                        f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
+                        f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
+                        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']}</i>\n"
+                        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
+                        f"<b>Piazz. medio gara</b>: <i>{statistics['avg_race_position']}</i>\n"
+                        f"<b>Piazz. medio quali</b>: <i>{statistics['avg_quali_position']}</i>\n"
                         f"<b>Punti licenza</b>: <i>{driver.licence_points}</i>\n"
                         f"<b>Warning</b>: <i>{driver.warnings}</i>\n"
                         f"<b>Team</b>: <i>{unique_teams}</i>"
@@ -429,7 +425,7 @@ async def complete_championship_standings(
 
             if (
                 team_obj := driver.current_team()
-            ):  # Check if the driver has left the team
+            ):  # Checks if the driver has left the team
                 teams[team_obj] += points
 
     for team_obj, points in teams.items():

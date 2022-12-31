@@ -14,7 +14,7 @@ services:
     networks:
       - backend
 
-  #cloudflare-ddns key valid until 04/12/2024
+  # cloudflare api key valid until 04/12/2024
   cloudflare-ddns:
     image: oznu/cloudflare-ddns:latest
     restart: always
