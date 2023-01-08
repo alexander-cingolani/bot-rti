@@ -95,18 +95,6 @@ async def post_init(application: Application) -> None:
             pass
 
 
-async def post_shutdown(_: Application) -> None:
-    """Deletes any leftover race result images"""
-    if os.path.exists("./app/results.jpg"):
-        os.remove("./app/results.jpg")
-
-    if os.path.exists("./app/results_1.jpg"):
-        os.remove("./app/results_1.jpg")
-
-    if os.path.exists("./app/results_2.jpg"):
-        os.remove("./app/results_2.jpg")
-
-
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Writes full error traceback to a file and sends it to the dev channel.
     If the error was caused by a user a message will be displayed informing him
@@ -714,7 +702,6 @@ def main() -> None:
         Application.builder()
         .token(TOKEN)
         .defaults(defaults)
-        .post_init(post_init)
         .post_shutdown(post_shutdown)
         .persistence(persistence)
         .build()
