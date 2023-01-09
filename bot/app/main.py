@@ -708,7 +708,7 @@ def main() -> None:
         Application.builder()
         .token(TOKEN)
         .defaults(defaults)
-        .post_shutdown(post_shutdown)
+        .post_init(post_init)
         .persistence(persistence)
         .build()
     )
