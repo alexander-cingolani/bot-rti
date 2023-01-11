@@ -25,3 +25,11 @@
 **/values.dev.yaml
 LICENSE
 README.md
+node_modules
+package-lock.json
+package.json
+.eslintrc.yml
+.prettierrc.json
+tsconfig.json
+requirements-dev.txt
+

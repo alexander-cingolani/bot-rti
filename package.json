@@ -1,0 +1,25 @@
+{
+  "name": "rti",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexander-cingolani/bot-rti.git"
+  },
+  "author": "Alexander M. Cingolani",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alexander-cingolani/bot-rti/issues"
+  },
+  "homepage": "https://github.com/alexander-cingolani/bot-rti#readme",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.48.1",
+    "@typescript-eslint/parser": "^5.48.1",
+    "eslint": "^8.31.0",
+    "eslint-plugin-react": "^7.32.0"
+  }
+}
