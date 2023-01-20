@@ -9,13 +9,6 @@ from typing import DefaultDict, cast
 
 from app.components import config
 from app.components.documents import PenaltyDocument
-from app.components.models import Category, Driver, Penalty, Report
-from app.components.queries import (
-    get_championship,
-    get_last_penalty_number,
-    get_reports,
-    save_and_apply_penalty,
-)
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
@@ -29,6 +22,14 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     filters,
+)
+
+from models import Category, Driver, Penalty, Report
+from queries import (
+    get_championship,
+    get_last_penalty_number,
+    get_reports,
+    save_and_apply_penalty,
 )
 
 (

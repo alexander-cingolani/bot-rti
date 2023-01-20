@@ -4,7 +4,7 @@ pytesseract==0.3.10
 python-telegram-bot[job-queue]==20.0
 pytz==2022.6
 reportlab==3.6.12
-SQLAlchemy==2.0.0rc2
+SQLAlchemy==2.0.0rc3
 cachetools==5.2.0
 psycopg2==2.9.5
 numpy==1.24.0

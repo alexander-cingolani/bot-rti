@@ -26,10 +26,12 @@
 LICENSE
 README.md
 node_modules
-package-lock.json
-package.json
 .eslintrc.yml
 .prettierrc.json
-tsconfig.json
+package-lock.json
+package.json
+pylintrc
 requirements-dev.txt
+tsconfig.json
+
 

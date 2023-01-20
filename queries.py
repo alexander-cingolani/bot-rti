@@ -4,7 +4,7 @@ such as Reports, Categories and Drivers.
 """
 
 import sqlalchemy as sa
-from app.components.models import (
+from models import (
     Category,
     Championship,
     Driver,

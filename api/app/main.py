@@ -1,16 +1,15 @@
 import logging
 
-from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
 from app.components.json_formatting import (
     get_calendar,
     get_categories,
     get_drivers_points,
     get_standings_with_results,
 )
+from fastapi import FastAPI, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 app = FastAPI()
 

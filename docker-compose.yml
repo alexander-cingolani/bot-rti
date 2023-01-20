@@ -1,16 +1,22 @@
 version: "3.8"
 
 services:
+  
   db:
     image: postgres:latest
+  
     restart: on-failure
+  
     ports:
       - '8001:5432'
+  
     env_file:
       - .env
+  
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
       - ./sql/create_db.sql:/docker-entrypoint-initdb.d/create_tables.sql
+  
     networks:
       - backend
 
@@ -22,29 +28,40 @@ services:
       - .env
 
   bot:
-    image: alexcingolani/rti:rti_bot
+
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./bot/Dockerfile
       target: primary
+  
     env_file:
       - .env
+  
     networks:
       - backend
+  
     depends_on:
       - db
+  
     restart: on-failure
 
+  
   api:
-    build: ./api
-    image: alexcingolani/rti:rti_api
+
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile
+  
     depends_on:
       - db
       - cloudflare-ddns
+  
     env_file:
       - .env
+  
     ports:
       - 80:80
+  
     labels:
       - traefik.enable=true
       - traefik.http.services.app.loadbalancer.server.port=80
@@ -60,6 +77,7 @@ services:
       - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
       - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
       - traefik.routers.app-http.middlewares=https-redirect
+  
     networks:
       - backend
       - traefik-public
@@ -69,8 +87,11 @@ services:
 volumes:
   postgres-data:
 
+
 networks:
+
   backend:
     driver: bridge
+
   traefik-public:
     external: true

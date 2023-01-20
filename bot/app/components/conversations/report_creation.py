@@ -9,14 +9,6 @@ from zoneinfo import ZoneInfo
 
 from app.components import config
 from app.components.documents import ReportDocument
-from app.components.models import Category, Report, Round
-from app.components.queries import (
-    delete_report,
-    get_championship,
-    get_driver,
-    get_last_report_number,
-    get_report,
-)
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
@@ -32,6 +24,15 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     filters,
+)
+
+from models import Category, Report, Round
+from queries import (
+    delete_report,
+    get_championship,
+    get_driver,
+    get_last_report_number,
+    get_report,
 )
 
 (

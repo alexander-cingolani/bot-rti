@@ -1011,10 +1011,9 @@ class Category(Base):
         for championship_round in self.rounds:
             if championship_round.completed:
                 completed_rounds.append(championship_round)
-                
+
         if not completed_rounds:
-            return {dc.driver:[0, 0] for dc in self.drivers}
-                
+            return {dc.driver: [0, 0] for dc in self.drivers}
 
         if n == 0:
             n = len(completed_rounds)

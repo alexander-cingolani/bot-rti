@@ -1,10 +1,11 @@
 import os
 from typing import cast
 
-from app.components.models import Driver, RaceResult
-from app.components.queries import get_category, get_championship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from models import Driver, RaceResult
+from queries import get_category, get_championship
 
 URL = os.environ["DB_URL"]
 

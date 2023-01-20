@@ -17,8 +17,6 @@ from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results
-from app.components.models import Team
-from app.components.queries import get_championship, get_driver, get_team_leaders
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from telegram import (
@@ -47,6 +45,9 @@ from telegram.ext import (
     PicklePersistence,
 )
 
+from models import Team
+from queries import get_championship, get_driver, get_team_leaders
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -59,6 +60,7 @@ else:
     raise RuntimeError("No DB_URL in environment variables, can't connect to database.")
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
+session = DBSession()
 
 
 async def post_init(application: Application) -> None:
@@ -493,13 +495,13 @@ async def complete_last_race_results(
 
         for session in championship_round.sessions:
             message += session.results_message()
-            
+
     if not message:
         message = (
             "I risultati non sono ancora stati caricati, solitamente "
             "diventano disponibili dopo che ogni categoria ha completato la sua gara."
         )
-        
+
     await update.message.reply_text(text=message)
     sqla_session.close()
 
@@ -546,7 +548,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             await context.bot.send_sticker(
                 chat_id=config.REPORT_CHANNEL,
-                sticker=open("./app/images/sticker.webp", "rb"),
+                sticker=open("./app/assets/images/sticker.webp", "rb"),
                 disable_notification=True,
             )
     sqla_session.close()

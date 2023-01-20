@@ -1,5 +1,5 @@
 fastapi==0.88.0
-SQLAlchemy==2.0.0rc2
+SQLAlchemy==2.0.0rc3
 hypercorn==0.14.3
 python-multipart
 cachetools==5.2.0

@@ -8,10 +8,10 @@ from decimal import Decimal
 from difflib import get_close_matches
 from pathlib import Path
 
-from app.components.models import DriverCategory
 from PIL import Image, ImageFilter
-
 from pytesseract import image_to_string  # type: ignore
+
+from models import DriverCategory
 
 LEFT_1, RIGHT_1 = 410 * 3, 580 * 3
 LEFT_2, RIGHT_2 = 1320 * 3, 1405 * 3

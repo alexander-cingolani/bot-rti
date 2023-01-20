@@ -2,14 +2,14 @@
 Contains the function which recognizes results from a screenshot.
 """
 from difflib import get_close_matches
+from pathlib import Path
 
-from app.components.utils import Result, string_to_seconds
+from app.components.results_processing import Result, string_to_seconds
 from PIL import Image, ImageOps
 from PIL.ImageEnhance import Contrast
 from pytesseract import image_to_string  # type: ignore
 
-from app.components.models import Driver
-from pathlib import Path
+from models import Driver
 
 LEFT_1, RIGHT_1 = 400, 580
 LEFT_2, RIGHT_2 = 1280, 1500

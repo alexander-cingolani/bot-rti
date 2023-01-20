@@ -5,13 +5,14 @@ file given a Penalty or Report object.
 from datetime import datetime
 from textwrap import wrap
 
-from app.components.models import Driver, Penalty, Report
 from reportlab.pdfbase import pdfmetrics  # type: ignore
 from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
 from reportlab.pdfgen import canvas  # type: ignore
 
-pdfmetrics.registerFont(TTFont("arial", "./app/fonts/arial.ttf"))
-pdfmetrics.registerFont(TTFont("arialB", "./app/fonts/arialB.ttf"))
+from models import Driver, Penalty, Report
+
+pdfmetrics.registerFont(TTFont("arial", "./app/assets/fonts/arial.ttf"))
+pdfmetrics.registerFont(TTFont("arialB", "./app/assets/fonts/arialB.ttf"))
 
 
 class PenaltyDocument:
@@ -30,7 +31,7 @@ class PenaltyDocument:
 
     def __header(self):
         self.canvas.drawImage(
-            "./app/images/logo_rti.jpg",
+            "./app/assets/images/logo_rti.jpg",
             x=220,
             y=715,
             height=100,
@@ -149,7 +150,7 @@ class ReportDocument:
 
     def __header(self) -> None:
 
-        logo_rti = "./app/images/logo_rti.jpg"
+        logo_rti = "./app/assets/images/logo_rti.jpg"
         self.canvas.drawImage(
             logo_rti, x=220, y=715, height=90, width=180, preserveAspectRatio=True
         )

@@ -5,8 +5,6 @@ import os
 from typing import cast
 
 from app.components import config
-from app.components.models import Driver
-from app.components.queries import get_driver, get_similar_driver
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker
@@ -19,6 +17,9 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+from models import Driver
+from queries import get_driver, get_similar_driver
 
 CHECK_ID, ID = range(2)
 OWNER = User(id=config.OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
