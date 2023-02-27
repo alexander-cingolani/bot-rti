@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-origin = r"http([s])?:\/\/racingteamitalia.it/(.){0,}"
+origin = r".*"
 
 app.add_middleware(
     CORSMiddleware,
