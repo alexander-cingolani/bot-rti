@@ -35,8 +35,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# In this project "round" always refers to an instance of a Round object.
-
 
 class Base(DeclarativeBase):
     pass
