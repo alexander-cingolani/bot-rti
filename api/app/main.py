@@ -5,7 +5,7 @@ from app.components.handlers import (
     get_categories,
     get_drivers_points,
     get_standings_with_results,
-    get_teams_list
+    get_teams_list,
 )
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/api")
 async def rti(
     action: str = Form(),
@@ -42,7 +43,7 @@ async def rti(
     match action:
         case "get_teams":
             result = get_teams_list(int(championship_id))
-            
+
         case "get_category_list":
             result = get_categories(championship_id)
 
