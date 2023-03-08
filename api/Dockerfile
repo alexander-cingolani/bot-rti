@@ -19,6 +19,4 @@ ADD ./api/requirements.txt /api/requirements.txt
 RUN pip install --upgrade -r /api/requirements.txt
 
 
-
-
 CMD ["hypercorn", "--bind", "0.0.0.0:80", "app.main:app"]
