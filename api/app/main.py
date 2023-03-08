@@ -1,15 +1,15 @@
 import logging
 
-from app.components.json_formatting import (
+from app.components.handlers import (
     get_calendar,
     get_categories,
     get_drivers_points,
     get_standings_with_results,
+    get_teams_list
 )
 from fastapi import FastAPI, Form, HTTPException
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -22,6 +22,9 @@ app = FastAPI()
 
 origin = r".*"
 
+app.mount("/images", StaticFiles(directory="/api/app/public/images"), name="images")
+app.mount("/fonts", StaticFiles(directory="/api/app/public/fonts"), name="fonts")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=origin,
@@ -30,26 +33,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/")
-async def root():
-    return HTMLResponse("<h1>Hello!</h1>")
-
-
-class Item(BaseModel):
-    action: str | None = None
-    championship_id: str | int = "latest"
-    category_id: str | int | None = None
-
-
 @app.post("/api")
 async def rti(
     action: str = Form(),
-    championship_id: int | None = Form(default=None),
+    championship_id: str | int | None = Form(default="latest"),
     category_id: int | None = Form(default=None),
 ):
     match action:
-
+        case "get_teams":
+            result = get_teams_list(int(championship_id))
+            
         case "get_category_list":
             result = get_categories(championship_id)
 
