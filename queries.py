@@ -17,10 +17,9 @@ from models import (
     TeamChampionship,
 )
 from cachetools import TTLCache, cached
-from sqlalchemy import delete, desc
+from sqlalchemy import delete, desc, select
 from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.future import select
-from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import joinedload, Session as SQLASession
 
 
 def get_championship(
@@ -77,7 +76,7 @@ def get_team_leaders(
         .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
         .join(Team, DriverAssignment.team_id == Team.team_id)
         .where(
-            DriverAssignment.is_leader == True  # pylint: disable=singleton-comparison
+            DriverAssignment.is_leader is True  # pylint: disable=singleton-comparison
         )
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
         .where(TeamChampionship.championship_id == championship_id)
@@ -141,6 +140,35 @@ def get_driver(
         return None
 
     return result[0] if result else None
+
+
+def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
+    """Returns the list of teams participating to the given championship, ordered by
+    championship position.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+        championship_id (int): ID of the championship to get the teams of.
+
+    Returns:
+        list[Team]: Teams participating to the given championship.
+    """
+
+    statement = (
+        select(TeamChampionship)
+        .where(TeamChampionship.championship_id == championship_id)
+        .options(joinedload(TeamChampionship.team))
+        .order_by(desc(TeamChampionship.points))
+    )
+
+    result = session.execute(statement).all()
+    session.commit()
+
+    teams = []
+    if result:
+        for row in result:
+            teams.append(row[0].team)
+    return teams
 
 
 def get_report(session: SQLASession, report_id: str) -> Report | None:
