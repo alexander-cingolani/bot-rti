@@ -5,6 +5,7 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
+import os
 from statistics import stdev
 import uuid
 from collections import defaultdict
@@ -64,8 +65,6 @@ class Penalty(Base):
             by the bot).
         penalty_reason (str): Detailed explanation why the penalty was issued.
     """
-
-    # pylint: disable=too-many-instance-attributes, too-many-arguments
 
     __tablename__ = "penalties"
     __allow_unmapped__ = True
@@ -201,8 +200,6 @@ class Report(Base):
         reported_team (Team): The team receiving the report.
         reporting_team (Team): The team making the report.
     """
-
-    # pylint: disable=too-many-instance-attributes, too-many-arguments
 
     __tablename__ = "reports"
     __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
@@ -682,8 +679,6 @@ class QualifyingResult(Base):
         session (Session): Session the result was made in.
     """
 
-    # pylint: disable=too-many-instance-attributes, too-many-arguments
-
     __tablename__ = "qualifying_results"
 
     __table_args__ = (
@@ -780,6 +775,8 @@ class Team(Base):
         team_id (int): The team's unique ID.
         name (str): The team's unique name.
         credits (int): Number of credits available to the team. Used to buy cars and drivers.
+
+        logo (str): URL to the team's logo.
     """
 
     __tablename__ = "teams"
@@ -824,6 +821,15 @@ class Team(Base):
                 return driver.driver
         return None
 
+    @property
+    def logo(self) -> str:
+        """The path to the team's logo."""
+        domain = os.environ.get("ZONE")
+        subdomain = os.environ.get("SUBDOMAIN")
+        file = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
+        path = f"http://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
+        return path
+
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
         return self.championships[-1]
@@ -853,6 +859,7 @@ class TeamChampionship(Base):
     )
     joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    points: Mapped[float] = mapped_column(Numeric, nullable=False, default=0)
 
     team: Mapped[Team] = relationship("Team", back_populates="championships")
     championship: Mapped[Championship] = relationship(
@@ -1434,8 +1441,6 @@ class RaceResult(Base):
         category (Category): Category the result is registered to.
         session (Session): Session the result was registered in.
     """
-
-    # pylint: disable=too-many-instance-attributes, too-many-arguments
 
     __tablename__ = "race_results"
     __table_args__ = (
