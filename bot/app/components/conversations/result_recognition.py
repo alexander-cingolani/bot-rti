@@ -138,7 +138,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     the option to save the results and check that what he has entered is correct."""
 
     user_data = cast(dict, context.user_data)
-    results = cast(dict, user_data["results"])
+    cast(dict, user_data["results"])
 
     # Saves the category selected by the user.
     category = cast(
@@ -313,10 +313,10 @@ async def save_fastest_driver(
         await __ask_session(update, user_data["round"], user_data["results"])
         return SAVE_CATEGORY
 
-
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the results to the database."""
 
+    
     return SAVE_CATEGORY
 
 

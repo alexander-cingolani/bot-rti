@@ -159,7 +159,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     driver = get_driver(session, telegram_id=user.id)
     if not driver:
         text += (
-            f"Se sei nuovo e vorresti entrare nel team puoi iscriverti sul nostro "
+            "Se sei nuovo e vorresti entrare nel team puoi iscriverti sul nostro "
             "<i><a href='https://racingteamitalia.it/#user-registration-form-1115'>sito web</a></i>."
         )
     elif team := driver.current_team():

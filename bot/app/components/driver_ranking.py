@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from trueskill import Rating, TrueSkill, rate
 
 from queries import get_championship
 
@@ -14,7 +15,7 @@ MAX_INCREMENT = 32
 engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
-from trueskill import Rating, TrueSkill, rate
+
 
 
 # Only used to recalculate all of the championship's statistics when changes are made.
