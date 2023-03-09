@@ -40,11 +40,22 @@ async def rti(
     championship_id: str | int | None = Form(default="latest"),
     category_id: int | None = Form(default=None),
 ):
+
     match action:
         case "get_teams":
+            if championship_id is None:
+                raise HTTPException(
+                    422,
+                    "Argument 'championship_id' must be provided for 'get_teams' action",
+                )
             result = get_teams_list(int(championship_id))
 
         case "get_category_list":
+            if championship_id is None:
+                raise HTTPException(
+                    422,
+                    "Argument 'championship_id' must be provided for 'get_category_list' action",
+                )
             result = get_categories(championship_id)
 
         case "get_calendar":
