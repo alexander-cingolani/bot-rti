@@ -57,13 +57,13 @@ def get_calendar(category_id: int):
             info = [
                 {
                     "session_id": f"SR{championship_round.round_id}",
-                    "circuit": championship_round.circuit,
+                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.sprint_race.name,
                     "order": 1,
                 },
                 {
                     "session_id": f"LR{championship_round.round_id}",
-                    "circuit": championship_round.circuit,
+                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.long_race.name,
                     "order": 2,
                 },
@@ -72,7 +72,7 @@ def get_calendar(category_id: int):
             info = [
                 {
                     "session_id": f"LR{championship_round.round_id}",
-                    "circuit": championship_round.circuit,
+                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.long_race.name,
                     "order": 0,
                 }

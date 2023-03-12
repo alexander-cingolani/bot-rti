@@ -52,7 +52,7 @@ class PenaltyDocument:
         self.canvas.drawCentredString(
             297,
             663,
-            f"{self.penalty.round.number}ª Tappa | {self.penalty.round.circuit}",
+            f"{self.penalty.round.number}ª Tappa | {self.penalty.round.circuit.circuit_name}",
         )
 
         self.canvas.setFontSize(11)
