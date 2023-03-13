@@ -25,6 +25,9 @@ __pycache__
 # misc
 **/.DS_Store
 **/*.pem
+**/screenshots
+**/*.pdf
+**/*.sql
 
 # debug
 **/npm-debug.log*
@@ -45,7 +48,3 @@ __pycache__
 # typescript
 **/*.tsbuildinfo/*
 next-env.d.ts
-
-# other
-screenshots
-*pdf
