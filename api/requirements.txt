@@ -1,6 +1,6 @@
-fastapi==0.88.0
-SQLAlchemy==2.0.0rc3
+fastapi==0.92.0
+SQLAlchemy==2.0.5.post1
 hypercorn==0.14.3
-python-multipart
-cachetools==5.2.0
 psycopg2==2.9.5
+python-multipart
+cachetools

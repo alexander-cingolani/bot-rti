@@ -827,8 +827,7 @@ class Team(Base):
         domain = os.environ.get("ZONE")
         subdomain = os.environ.get("SUBDOMAIN")
         file = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
-        path = f"http://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
-        return path
+        return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
 
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
@@ -906,7 +905,7 @@ class Game(Base):
 
     game_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
-
+    
     def __repr__(self) -> str:
         return f"Game(game_id={self.game_id}, name={self.name})"
 
@@ -932,7 +931,7 @@ class Category(Base):
     __tablename__ = "categories"
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
@@ -1185,12 +1184,16 @@ class Round(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
     )
+    circuit_id: Mapped[int] = mapped_column(ForeignKey("circuits.circuit_id"), nullable=False)
 
     championship: Mapped[Championship] = relationship(
         "Championship", back_populates="rounds"
     )
-    sessions: Mapped[list[Session]] = relationship("Session", back_populates="round")
+    
     category: Mapped[Category] = relationship("Category", back_populates="rounds")
+    circuit: Mapped[Circuit] = relationship("Circuit", back_populates="rounds")
+    sessions: Mapped[list[Session]] = relationship("Session", back_populates="round")
+    
     race_results: Mapped[list[RaceResult]] = relationship(
         "RaceResult", back_populates="round"
     )
@@ -1202,7 +1205,7 @@ class Round(Base):
     )
 
     def __repr__(self) -> str:
-        return f"Round(circuit={self.circuit}, date={self.date}, completed={self.completed})"
+        return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, completed={self.completed})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Round):
@@ -1214,7 +1217,7 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.abbreviated_name}</i>\n\n"
         )
 
         for session in self.sessions:
@@ -1293,7 +1296,6 @@ class Session(Base):
         weather (str): In-game weather setting.
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
-        circuit (str): In-game setting for the circuit.
         race_results (Optional(list[RaceResult])): If session is a race session, contains the
             race results. [Ordered by finishing_position]
         qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
@@ -1317,7 +1319,6 @@ class Session(Base):
     weather: Mapped[str] = mapped_column(String(60))
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
-    circuit: Mapped[str] = mapped_column(String(100), nullable=False)
     fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"))
     point_system_id: Mapped[int] = mapped_column(
@@ -1581,3 +1582,32 @@ class Championship(Base):
             for driver in category.drivers:
                 drivers.append(driver.driver)
         return drivers
+
+
+class Circuit(Base):
+    """Represents a circuit within the game.
+    
+    circuit_id (int): The circuit's unique ID. Different variations have different IDs.
+    circuit_name (str): The circuit's name.
+    abbreviated_name (str): Shorter version of the circuit name.
+    variation (str): Specifies the layout of the track.
+    
+    rounds (list[Round]): The rounds that took place at this circuit.
+    """
+
+    __tablename__ = "circuits"
+
+    circuit_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    circuit_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    variation: Mapped[str] = mapped_column(String(100))
+    
+    rounds: Mapped[list[Round]] = relationship("Round", back_populates="circuit")
+
+    @property
+    def logo(self) -> str:
+        domain = os.environ.get("ZONE")
+        subdomain = os.environ.get("SUBDOMAIN")
+        file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
+        return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
+    

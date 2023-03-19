@@ -520,7 +520,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     if championship_round := championship.reporting_round():
         text = (
             f"<b>Segnalazioni Categoria {championship_round.category.name}</b>\n"
-            f"{championship_round.number}ª Tappa / {championship_round.circuit}\n"
+            f"{championship_round.number}ª Tappa / {championship_round.circuit.abbreviated_name}\n"
             f"#{championship.abbreviated_name}Tappa{championship_round.number}"
             f" #{championship_round.category.name}"
         )
@@ -586,7 +586,7 @@ async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     drivers = category.active_drivers()
     text = (
         f"<b>{championship_round.number}ᵃ Tappa {category.name}</b>\n"
-        f"Circuito: <b>{championship_round.circuit}</b>"
+        f"Circuito: <b>{championship_round.circuit.abbreviated_name}</b>"
     )
 
     chat_data["participation_list_text"] = text

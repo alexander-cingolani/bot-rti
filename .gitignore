@@ -1,26 +1,19 @@
-TODO
-__pycache__
-screenshots
-todo.txt
-*test*
-*.db
-*pdf
-postgres-data
-sql
-.mypy_cache
-debug
-.env
+**/TODO
 
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# cache
+__pycache__
+.mypy_cache
+.ruff_cache
 
 # dependencies
 **/node_modules
 **/.pnp
 **/.pnp.js
-.venv
+**/*.venv
 
 # testing
 **/coverage
+*test*
 
 # next.js
 **/.next/
@@ -32,15 +25,22 @@ debug
 # misc
 **/.DS_Store
 **/*.pem
+**/screenshots
+**/*.pdf
+**/*.sql
 
 # debug
 **/npm-debug.log*
 **/yarn-debug.log*
 **/yarn-error.log*
 **/.pnpm-debug.log*
+**/*debug
 
 # local env files
 **/.env*.local
+**/*.db
+**/postgres-data
+**/*.env
 
 # vercel
 **/.vercel
@@ -48,4 +48,3 @@ debug
 # typescript
 **/*.tsbuildinfo/*
 next-env.d.ts
-
