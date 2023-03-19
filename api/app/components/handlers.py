@@ -57,13 +57,11 @@ def get_calendar(category_id: int):
             info = [
                 {
                     "session_id": f"SR{championship_round.round_id}",
-                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.sprint_race.name,
                     "order": 1,
                 },
                 {
                     "session_id": f"LR{championship_round.round_id}",
-                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.long_race.name,
                     "order": 2,
                 },
@@ -72,7 +70,6 @@ def get_calendar(category_id: int):
             info = [
                 {
                     "session_id": f"LR{championship_round.round_id}",
-                    "circuit": championship_round.circuit.abbreviated_name,
                     "race_name": championship_round.long_race.name,
                     "order": 0,
                 }
@@ -80,6 +77,8 @@ def get_calendar(category_id: int):
 
         calendar.append(
             {
+                "circuit_logo": championship_round.circuit.logo,
+                "circuit": championship_round.circuit.abbreviated_name,
                 "info": info,
             }
         )
@@ -143,8 +142,30 @@ def get_standings_with_results(category_id: int):
     if not car_class:
         return
 
-    standings = []
-    for driver_results, points_tally in car_class.standings_with_results():
+    results = car_class.standings_with_results()
+
+    response = []
+
+    if not results:
+        for driver in car_class.active_drivers():
+
+            team = driver.driver.current_team()
+
+            if not team:
+                team = driver.teams[-1].team
+
+            response.append(
+                {
+                    "driver_id": driver.driver_id,
+                    "driver_name": driver.driver.psn_id,
+                    "points": 0,
+                    "team": team.name,
+                    "info": [],
+                }
+            )
+        return response
+
+    for driver_results, points_tally in results:
         driver = cast(Driver, driver_results[0].driver)
         team = driver.current_team()
 
@@ -160,9 +181,11 @@ def get_standings_with_results(category_id: int):
                 driver_results,
             ),
         }
-        standings.append(driver_summary)
+        response.append(driver_summary)
+
     session.close()
-    return standings
+
+    return response
 
 
 def get_drivers_points(championship_id: int):
