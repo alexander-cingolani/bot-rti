@@ -722,7 +722,7 @@ def main() -> None:
     )
     application.job_queue.run_daily(
         callback=send_participation_list,
-        time=time(hour=0, minute=15, second=35),
+        time=time(hour=0, minute=0, second=0),
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
