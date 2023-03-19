@@ -931,7 +931,7 @@ class Category(Base):
     __tablename__ = "categories"
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
@@ -1610,3 +1610,4 @@ class Circuit(Base):
         subdomain = os.environ.get("SUBDOMAIN")
         file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
+    
