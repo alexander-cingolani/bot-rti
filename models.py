@@ -827,7 +827,7 @@ class Team(Base):
         domain = os.environ.get("ZONE")
         subdomain = os.environ.get("SUBDOMAIN")
         file = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
-        return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
+        return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
 
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
@@ -1609,5 +1609,5 @@ class Circuit(Base):
         domain = os.environ.get("ZONE")
         subdomain = os.environ.get("SUBDOMAIN")
         file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
-        return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
+        return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
     
