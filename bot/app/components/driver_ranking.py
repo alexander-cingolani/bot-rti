@@ -1,7 +1,6 @@
 """
 This module contains the driver ranking function.
 """
-import logging
 import os
 from decimal import Decimal
 
@@ -64,10 +63,3 @@ def update_ratings():
     drivers = championship.driver_list
 
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)
-    for driver in drivers:
-        logging.info(
-            f"{driver.psn_id} mu, sigma: {driver.mu}, {driver.sigma}  exp: {driver.rating}"
-        )
-
-
-TrueSkill.expose

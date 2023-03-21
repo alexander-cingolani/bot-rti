@@ -313,10 +313,10 @@ async def save_fastest_driver(
         await __ask_session(update, user_data["round"], user_data["results"])
         return SAVE_CATEGORY
 
+
 async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the results to the database."""
 
-    
     return SAVE_CATEGORY
 
 

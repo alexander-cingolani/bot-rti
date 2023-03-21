@@ -13,6 +13,7 @@ from models import Driver, Penalty, Report
 
 pdfmetrics.registerFont(TTFont("arial", "./app/assets/fonts/arial.ttf"))
 pdfmetrics.registerFont(TTFont("arialB", "./app/assets/fonts/arialB.ttf"))
+pdfmetrics.registerFont(TTFont("RaceSport", "./app/assets/fonts/RaceSport.ttf"))
 
 
 class PenaltyDocument:
@@ -43,9 +44,9 @@ class PenaltyDocument:
         self.canvas.line(x1=50, x2=550, y1=640, y2=640)
         self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
-        self.canvas.setFont("arialB", 24)
+        self.canvas.setFont("RaceSport", 24)
         self.canvas.drawCentredString(
-            297, 680, f"CATEGORIA {self.penalty.category.name}"
+            297, 680, f"{self.penalty.category.name}"
         )
 
         self.canvas.setFontSize(14)
@@ -55,7 +56,7 @@ class PenaltyDocument:
             f"{self.penalty.round.number}ª Tappa | {self.penalty.round.circuit.circuit_name}",
         )
 
-        self.canvas.setFontSize(11)
+        self.canvas.setFont("arialB", 11)
         self.canvas.drawString(50, 620, "Da")
         self.canvas.drawString(50, 600, "Per")
         self.canvas.drawString(410, 620, "Documento")
@@ -143,7 +144,7 @@ class ReportDocument:
         self.report: Report = report
         self.reporting_driver: Driver = report.reporting_driver
         self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.psn_id}.pdf"
-        self.subtitle: str = f"{report.round.number}ª Tappa | {report.round.circuit}"
+        self.subtitle: str = f"{report.round.number}° Round | {report.round.circuit.circuit_name}"
         self.canvas = canvas.Canvas(self.filename)
 
     filename: str
@@ -159,20 +160,21 @@ class ReportDocument:
         self.canvas.line(x1=50, x2=550, y1=640, y2=640)
         self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
-        self.canvas.setFont("arialB", 28)
+        self.canvas.setFont("RaceSport", 24)
         self.canvas.drawCentredString(
-            297, 690, f"CATEGORIA {self.report.category.name}"
+            297, 690, f"{self.report.category.name}"
         )
-        self.canvas.setFont("arialB", 14)
+        self.canvas.setFontSize(14)
         self.canvas.drawCentredString(297, 663, self.subtitle)
+        
         self.canvas.setFont("arialB", 10)
         self.canvas.drawString(50, 620, "Da")
         self.canvas.drawString(50, 600, "Per")
         self.canvas.drawString(410, 620, "Documento")
         self.canvas.drawString(410, 600, "Data")
         self.canvas.drawString(410, 580, "Orario")
+        
         self.canvas.setFont("arial", 10)
-
         current_team = self.reporting_driver.current_team()
         if not current_team:
             team_name = "-"
@@ -201,6 +203,7 @@ class ReportDocument:
         self.canvas.drawString(50, 400, "Sessione")
         self.canvas.drawString(50, 375, "Fatto")
 
+        self.canvas.setFont("arial", 11)
         reported_driver = self.report.reported_driver
         reporting_driver = self.report.reporting_driver
         self.canvas.drawString(
