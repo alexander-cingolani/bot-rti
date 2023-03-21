@@ -17,7 +17,6 @@ engine = create_engine(os.environ["DB_URL"])
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
-
 # Only used to recalculate all of the championship's statistics when changes are made.
 def update_ratings():
 

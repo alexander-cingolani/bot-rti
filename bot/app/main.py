@@ -111,9 +111,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if update.message.chat.type == ChatType.PRIVATE:
             await cast(User, update.effective_user).send_message(
                 text=(
-                    "⚠️ Si è verificato un errore!\n\n"
-                    "Lo sviluppatore è stato informato del problema e cercherà "
-                    "di risolverlo al più presto.\n"
+                    "Problemi, problemi, problemi! 😓\n"
+                    f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
+                    "Non farti problemi ad insultarlo in chat."
                 )
             )
     except AttributeError:
@@ -204,7 +204,10 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     driver = get_driver(session, telegram_id=user.id)
 
     if not driver:
-        message = "Per usare questa funzione devi essere registrato. Puoi farlo con /registrami."
+        message = (
+            "Per usare questa funzione devi essere registrato. Puoi farlo con /registrami "
+            "in chat privata."
+        )
         await update.message.reply_text(message)
         return
 
