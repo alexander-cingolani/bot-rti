@@ -76,8 +76,8 @@ def get_team_leaders(
         .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
         .join(Team, DriverAssignment.team_id == Team.team_id)
         .where(
-            DriverAssignment.is_leader is True  # pylint: disable=singleton-comparison
-        )
+            DriverAssignment.is_leader is True
+        )  # pylint: disable=singleton-comparison
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
         .where(TeamChampionship.championship_id == championship_id)
     )
@@ -286,7 +286,6 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
 
 
 def _separate_race_results(results: list[RaceResult]):
-
     separated_classes: dict[int, list[RaceResult]] = {
         car_class.car_class_id: [] for car_class in results[0].category.car_classes
     }

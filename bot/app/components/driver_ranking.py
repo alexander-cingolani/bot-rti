@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from trueskill import Rating, TrueSkill, rate
+from trueskill import Rating, rate
 
 from queries import get_championship
 
@@ -18,7 +18,6 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 
 # Only used to recalculate all of the championship's statistics when changes are made.
 def update_ratings():
-
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
     for category in championship.categories:

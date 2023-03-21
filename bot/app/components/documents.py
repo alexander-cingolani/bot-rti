@@ -45,9 +45,7 @@ class PenaltyDocument:
         self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
         self.canvas.setFont("RaceSport", 24)
-        self.canvas.drawCentredString(
-            297, 680, f"{self.penalty.category.name}"
-        )
+        self.canvas.drawCentredString(297, 680, f"{self.penalty.category.name}")
 
         self.canvas.setFontSize(14)
         self.canvas.drawCentredString(
@@ -144,13 +142,14 @@ class ReportDocument:
         self.report: Report = report
         self.reporting_driver: Driver = report.reporting_driver
         self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.psn_id}.pdf"
-        self.subtitle: str = f"{report.round.number}° Round | {report.round.circuit.circuit_name}"
+        self.subtitle: str = (
+            f"{report.round.number}° Round | {report.round.circuit.circuit_name}"
+        )
         self.canvas = canvas.Canvas(self.filename)
 
     filename: str
 
     def __header(self) -> None:
-
         logo_rti = "./app/assets/images/logo_rti.jpg"
         self.canvas.drawImage(
             logo_rti, x=220, y=715, height=90, width=180, preserveAspectRatio=True
@@ -161,19 +160,17 @@ class ReportDocument:
         self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
         self.canvas.setFont("RaceSport", 24)
-        self.canvas.drawCentredString(
-            297, 690, f"{self.report.category.name}"
-        )
+        self.canvas.drawCentredString(297, 690, f"{self.report.category.name}")
         self.canvas.setFontSize(14)
         self.canvas.drawCentredString(297, 663, self.subtitle)
-        
+
         self.canvas.setFont("arialB", 10)
         self.canvas.drawString(50, 620, "Da")
         self.canvas.drawString(50, 600, "Per")
         self.canvas.drawString(410, 620, "Documento")
         self.canvas.drawString(410, 600, "Data")
         self.canvas.drawString(410, 580, "Orario")
-        
+
         self.canvas.setFont("arial", 10)
         current_team = self.reporting_driver.current_team()
         if not current_team:

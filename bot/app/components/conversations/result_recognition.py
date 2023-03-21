@@ -96,7 +96,6 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def __ask_session(update: Update, round: Round, results: dict) -> None:
-
     session_buttons = []
     completed_sessions = 0
     for session in round.sessions:

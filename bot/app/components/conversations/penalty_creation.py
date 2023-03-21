@@ -395,13 +395,11 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     chunked_buttons = list(chunked(buttons, 4))
 
     if report.session.is_quali:
-
         next_step = ASK_LICENCE_POINTS
         next_step_button = InlineKeyboardButton(
             "Punti licenza »", callback_data=str(next_step)
         )
     else:
-
         next_step = ASK_SECONDS
         next_step_button = InlineKeyboardButton(
             "Secondi »", callback_data=str(next_step)
@@ -553,7 +551,6 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     penalty: Penalty = user_data["penalty"]
     if update.callback_query:
         if not update.callback_query.data.isdigit():
-
             licence_points = int(update.callback_query.data.removeprefix("lp"))
             penalty.licence_points = licence_points
             if licence_points > 1:
