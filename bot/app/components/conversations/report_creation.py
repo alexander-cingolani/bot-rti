@@ -310,7 +310,6 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     text = "Chi è la vittima?"
     buttons = []
-    import logging
 
     for i, driver in enumerate(user_data["leader"].current_team().active_drivers):
         driver = driver.driver

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from trueskill import Rating, TrueSkill, rate
+from trueskill import Rating, rate
 
 from queries import get_championship
 
