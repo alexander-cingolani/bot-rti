@@ -1004,13 +1004,7 @@ class Category(Base):
     def next_round(self) -> Round | None:
         """Returns the next round on the calendar."""
         # Rounds in self.rounds are ordered by date
-        import logging
-
         for championship_round in self.rounds:
-            logging.info(f"{championship_round.date}")
-            logging.info(
-                f"{dt.combine(championship_round.date, time(hour=23)) >= dt.now()}"
-            )
             if dt.combine(championship_round.date, time(hour=23)) >= dt.now():
                 return championship_round
         return None
