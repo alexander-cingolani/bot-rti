@@ -439,7 +439,7 @@ class Driver(Base):
         if not self.categories:
             return None
         return self.categories[-1]
-    
+
     def current_class(self) -> CarClass | None:
         """Returns the car class the driver is currently competing in."""
         for category in self.categories:
@@ -980,8 +980,7 @@ class Category(Base):
 
     def __repr__(self) -> str:
         return f"Category(category_id={self.category_id},name={self.name})"
-    
-    
+
     def __eq__(self, other) -> bool:
         if not isinstance(other, Round):
             return NotImplemented
@@ -1124,7 +1123,6 @@ class Category(Base):
         driver_map = defaultdict.fromkeys(drivers, 0.0)
         array.append(["Tappa"] + drivers)
         for number, championship_round in enumerate(self.rounds, start=1):
-
             if not championship_round.completed:
                 continue
 
@@ -1246,7 +1244,6 @@ class Round(Base):
         )
 
         for session in self.sessions:
-
             if session.duration:
                 race_length = (
                     f"<b>Durata:</b> <i>{session.duration.seconds // 60} min.</i>\n"
@@ -1518,7 +1515,8 @@ class RaceResult(Base):
     @property
     def points_earned(self) -> float:
         """Total amount of points earned by the driver in this race.
-        (Finishing position + fastest lap points) *Does not take into account penalty points."""
+        (Finishing position + fastest lap points) *Does not take into account penalty points.
+        """
 
         if not self.participated:
             return 0
@@ -1635,4 +1633,3 @@ class Circuit(Base):
         subdomain = os.environ.get("SUBDOMAIN")
         file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
- 

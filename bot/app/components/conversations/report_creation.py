@@ -192,7 +192,6 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ConversationHandler.END
 
     if not user_data["leader"].is_leader:
-
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
         reply_markup = InlineKeyboardMarkup(
             [
@@ -695,7 +694,6 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if (datetime.now(tz=ZoneInfo("Europe/Rome")) - report.report_time) < timedelta(
             minutes=45
         ):
-
             try:
                 await context.bot.delete_message(
                     chat_id=config.REPORT_CHANNEL,

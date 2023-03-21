@@ -14,7 +14,6 @@ Session = sessionmaker(engine)
 
 
 def get_categories(championship_id: int | str | None):
-
     session = Session()
 
     if championship_id == "latest":
@@ -112,7 +111,6 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
             penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
 
         else:
-
             info_gp = f"LR{race_result.round_id}"
             extra_points = race_result.fastest_lap
             penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
@@ -148,7 +146,6 @@ def get_standings_with_results(category_id: int):
 
     if not results:
         for driver in car_class.active_drivers():
-
             team = driver.driver.current_team()
 
             if not team:

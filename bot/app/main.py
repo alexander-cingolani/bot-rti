@@ -353,7 +353,6 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     standings = category.standings()
 
     for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
-
         if diff > 0:
             diff_text = f" ↓{abs(diff)}"
         elif diff < 0:
@@ -390,12 +389,10 @@ async def complete_championship_standings(
         return
 
     for category in championship.categories:
-
         standings = category.standings(-1)
         message += f"\n\n<b><i>CLASSIFICA PILOTI {category.name}</i></b>\n\n"
 
         for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
-
             if diff > 0:
                 diff_text = f" ↓{abs(diff)}"
             elif diff < 0:

@@ -40,7 +40,6 @@ async def rti(
     championship_id: str | int | None = Form(default="latest"),
     category_id: int | None = Form(default=None),
 ):
-
     match action:
         case "get_teams":
             if championship_id is None:
