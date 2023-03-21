@@ -558,7 +558,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Freezes the participation list sent earlier during the day."""
+    """Freezes the participants list sent earlier during the day."""
     chat_data = cast(dict, context.chat_data)
     message: Message | None = chat_data.get("participation_list_message")
     if message:
@@ -566,7 +566,7 @@ async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_data.clear()
 
 
-async def send_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
     sqla_session = DBSession()
@@ -649,7 +649,7 @@ async def update_participation_list(
     user_psn_id = None
 
     # Checks for non-registered users and queries the database to verify if
-    # the user has registered since the participation list was last sent
+    # the user has registered since the participants list was last sent
     for psn_id, (tg_id, status) in chat_data["participants"].items():
         if not tg_id:
             driver = get_driver(session, psn_id=psn_id)
@@ -724,8 +724,8 @@ def main() -> None:
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(
-        callback=send_participation_list,
-        time=time(hour=0, minute=15, second=35),
+        callback=send_participants_list,
+        time=time(hour=0, minute=0, second=0),
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
