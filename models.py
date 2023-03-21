@@ -391,10 +391,12 @@ class Driver(Base):
     _telegram_id: Mapped[str] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
-        "DriverAssignment", back_populates="driver"
+        "DriverAssignment",
+        back_populates="driver",
+        order_by="DriverAssignment.joined_on",
     )
     categories: Mapped[list[DriverCategory]] = relationship(
-        "DriverCategory", back_populates="driver"
+        "DriverCategory", back_populates="driver", order_by=("DriverCategory.joined_on")
     )
     race_results: Mapped[list[RaceResult]] = relationship(
         "RaceResult", back_populates="driver"
@@ -433,12 +435,11 @@ class Driver(Base):
         return None
 
     def current_category(self) -> Category | None:
-        """Returns the team the driver is currently competing in."""
-        for category in self.categories:
-            if not category.left_on:
-                return category.category
-        return None
-
+        """Returns the category the driver is currently competing in."""
+        if not self.categories:
+            return None
+        return self.categories[-1]
+    
     def current_class(self) -> CarClass | None:
         """Returns the car class the driver is currently competing in."""
         for category in self.categories:
@@ -449,12 +450,13 @@ class Driver(Base):
     @property
     def current_race_number(self) -> int | None:
         """The number currently being used by the Driver in races."""
-        current_category = self.current_category()
-        if current_category:
-            for driver_category in current_category.drivers:
-                if self.driver_id == driver_category.driver_id:
-                    return driver_category.race_number
-        return None
+        current_category = self.current_category().category
+        if not current_category:
+            return None
+
+        for driver_category in current_category.drivers:
+            if self.driver_id == driver_category.driver_id:
+                return driver_category.race_number
 
     @property
     def rating(self) -> float | None:
@@ -492,6 +494,16 @@ class Driver(Base):
             if not driver_category.left_on:
                 return driver_category.warnings
         return 0
+
+    @property
+    def is_active(self) -> bool:
+        """A driver is considered active if he is currently competing in a championship."""
+        return not self.categories[-1].left_on
+
+    @property
+    def is_leader(self) -> bool:
+        """True if the driver is a leader of a team and is currently active."""
+        return self.teams[-1].is_leader and self.is_active
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def consistency(self) -> str:
@@ -816,10 +828,15 @@ class Team(Base):
     @property
     def leader(self) -> Driver | None:
         """The leader of this team."""
-        for driver in self.drivers:
+        for driver in self.active_drivers:
             if driver.is_leader:
                 return driver.driver
         return None
+
+    @property
+    def active_drivers(self) -> list[Driver]:
+        """List of drivers who currently have a contract with the team."""
+        return [driver for driver in self.drivers if not driver.left_on]
 
     @property
     def logo(self) -> str:
@@ -905,7 +922,7 @@ class Game(Base):
 
     game_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
-    
+
     def __repr__(self) -> str:
         return f"Game(game_id={self.game_id}, name={self.name})"
 
@@ -963,6 +980,12 @@ class Category(Base):
 
     def __repr__(self) -> str:
         return f"Category(category_id={self.category_id},name={self.name})"
+    
+    
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Round):
+            return NotImplemented
+        return self.category_id == other.category_id
 
     def first_non_completed_round(self) -> Round | None:
         """Returns the first non completed Round."""
@@ -981,7 +1004,13 @@ class Category(Base):
     def next_round(self) -> Round | None:
         """Returns the next round on the calendar."""
         # Rounds in self.rounds are ordered by date
+        import logging
+
         for championship_round in self.rounds:
+            logging.info(f"{championship_round.date}")
+            logging.info(
+                f"{dt.combine(championship_round.date, time(hour=23)) >= dt.now()}"
+            )
             if dt.combine(championship_round.date, time(hour=23)) >= dt.now():
                 return championship_round
         return None
@@ -1184,16 +1213,18 @@ class Round(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
     )
-    circuit_id: Mapped[int] = mapped_column(ForeignKey("circuits.circuit_id"), nullable=False)
+    circuit_id: Mapped[int] = mapped_column(
+        ForeignKey("circuits.circuit_id"), nullable=False
+    )
 
     championship: Mapped[Championship] = relationship(
         "Championship", back_populates="rounds"
     )
-    
+
     category: Mapped[Category] = relationship("Category", back_populates="rounds")
     circuit: Mapped[Circuit] = relationship("Circuit", back_populates="rounds")
     sessions: Mapped[list[Session]] = relationship("Session", back_populates="round")
-    
+
     race_results: Mapped[list[RaceResult]] = relationship(
         "RaceResult", back_populates="round"
     )
@@ -1340,7 +1371,7 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return (
-            f"Session(session_id={self.session_id}, name={self.name}, circuit={self.circuit}, "
+            f"Session(session_id={self.session_id}, name={self.name}, "
             f"round_id={self.round_id}, tyres={self.tyre_degradation})"
         )
 
@@ -1586,12 +1617,12 @@ class Championship(Base):
 
 class Circuit(Base):
     """Represents a circuit within the game.
-    
+
     circuit_id (int): The circuit's unique ID. Different variations have different IDs.
     circuit_name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
     variation (str): Specifies the layout of the track.
-    
+
     rounds (list[Round]): The rounds that took place at this circuit.
     """
 
@@ -1601,7 +1632,7 @@ class Circuit(Base):
     circuit_name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
     variation: Mapped[str] = mapped_column(String(100))
-    
+
     rounds: Mapped[list[Round]] = relationship("Round", back_populates="circuit")
 
     @property
@@ -1610,4 +1641,3 @@ class Circuit(Base):
         subdomain = os.environ.get("SUBDOMAIN")
         file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return f"http://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
-    

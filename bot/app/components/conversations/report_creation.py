@@ -191,7 +191,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         user_data.clear()
         return ConversationHandler.END
 
-    if user_data["leader"].current_team().leader != user_data["leader"]:
+    if not user_data["leader"].is_leader:
+
         text = "Solamente i capi scuderia possono effettuare segnalazioni."
         reply_markup = InlineKeyboardMarkup(
             [
@@ -242,6 +243,9 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ConversationHandler.END
 
     category: Category = championship_round.category
+    import logging
+
+    logging.info(category)
     user_data["category"] = category
     user_data["round"] = championship_round
     text = (
@@ -279,58 +283,63 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         user_data["report"].session = user_data["sessions"][update.callback_query.data]
         user_data["drivers"] = {}
 
-    if not user_data["report"].session.is_quali:
-        text = "Chi è la vittima?"
-        buttons = []
-        for i, driver in enumerate(user_data["leader"].current_team().drivers):
-            driver = driver.driver
-            driver_alias = f"d{i}"
-            if driver.current_category() == user_data["category"]:
-                user_data["drivers"][driver_alias] = driver
-                buttons.append(
-                    InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
-                )
-        chunked_buttons = list(chunked(buttons, 2))
-
+    if user_data["report"].session.is_quali:
+        text = (
+            "Non essendo disponibili i replay delle qualifiche, è necessario "
+            "fornire un video dell'episodio. Incolla il link al video su YouTube qui sotto."
+        )
         callback_function = (
             str(SESSION) if chat_data.get("late_report") else "create_report"
         )
-        chunked_buttons.append(
+        chunked_buttons = [
             [
                 InlineKeyboardButton(
                     "« Modifica sessione", callback_data=callback_function
                 )
             ]
-        )
-        if user_data["report"].reporting_driver:
+        ]
+
+        if user_data["report"].video_link:
             chunked_buttons[-1].append(
-                InlineKeyboardButton("Link video »", callback_data=LINK)
+                InlineKeyboardButton("Pilota vittima »", callback_data=str(LINK))
             )
+
         await update.callback_query.edit_message_text(
             text=text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
         )
-        return REPORTING_DRIVER
+        return LINK
 
-    text = (
-        "Non essendo disponibili i replay delle qualifiche è necessario "
-        "fornire un video dell'episodio. Incolla il link al video YouTube qui sotto."
-    )
+    text = "Chi è la vittima?"
+    buttons = []
+    import logging
+
+    for i, driver in enumerate(user_data["leader"].current_team().active_drivers):
+        driver = driver.driver
+        driver_alias = f"d{i}"
+
+        if driver_category := driver.current_category():
+            if driver_category.category_id == user_data["category"].category_id:
+                user_data["drivers"][driver_alias] = driver
+                buttons.append(
+                    InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
+                )
+    chunked_buttons = list(chunked(buttons, 2))
     callback_function = (
         str(SESSION) if chat_data.get("late_report") else "create_report"
     )
-    chunked_buttons = [
+    chunked_buttons.append(
         [InlineKeyboardButton("« Modifica sessione", callback_data=callback_function)]
-    ]
+    )
 
-    if user_data["report"].video_link:
+    if user_data["report"].reporting_driver:
         chunked_buttons[-1].append(
-            InlineKeyboardButton("Pilota vittima »", callback_data=str(LINK))
+            InlineKeyboardButton("Link video »", callback_data=LINK)
         )
 
     await update.callback_query.edit_message_text(
         text=text, reply_markup=InlineKeyboardMarkup(chunked_buttons)
     )
-    return LINK
+    return REPORTING_DRIVER
 
 
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -394,7 +403,7 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     for i, driver in enumerate(user_data["category"].active_drivers()):
         driver = driver.driver
         driver_alias = f"d{i}"
-        if driver.current_team().leader.driver_id != user_data["leader"].driver_id:
+        if driver.current_team().leader != user_data["leader"]:
             user_data["drivers"][driver_alias] = driver
             buttons.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
@@ -541,10 +550,15 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     report = cast(Report, user_data["report"])
 
     if (
-        championship_round == category.championship.reporting_round()
+        championship_round != category.championship.reporting_round()
         and not chat_data.get("late_report")
     ):
-        text = "Troppo tardi! La mezzanotte è già scoccata."
+        text = (
+            "Troppo tardi! Le segnalazioni vanno inviate entro le 23:59.\n"
+            "Se hai necessità di effettuare questa segnalazione, chiedi prima il "
+            "permesso sul gruppo capi, una volta ottenuto, potrai fare la segnalazione "
+            "usando il comando /segnalazione_ritardataria."
+        )
         await update.callback_query.edit_message_text(text=text)
         sqla_session.close()
         user_data.clear()
@@ -585,7 +599,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.callback_query.edit_message_text(
             "Problemi, problemi, problemi! 😓\n"
             f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
-            "Non farti problemi ad insultarlo in chat."
+            "Non ci pensare due volte prima di insultarlo in chat."
         )
         sqla_session.close()
         user_data.clear()
