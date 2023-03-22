@@ -459,7 +459,7 @@ class Driver(Base):
                 return driver_category.race_number
 
     @property
-    def rating(self) -> float | None:
+    def rating(self) -> Decimal | None:
         """Current TrueSkill rating."""
         k = Decimal(25) / (Decimal(25) / Decimal(3))
         return self.mu - k * self.sigma
@@ -506,7 +506,7 @@ class Driver(Base):
         return self.teams[-1].is_leader and self.is_active
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def consistency(self) -> str:
+    def consistency(self) -> int:
         """Number 40-100 calculated based on the
         standard deviation of the set of relative finishing positions and the number
         of absences.
@@ -516,7 +516,7 @@ class Driver(Base):
             filter(lambda x: x.participated, self.race_results)
         )
         if len(completed_races) < 2:
-            return "dati insufficienti"
+            return 0
 
         positions = [race_result.relative_position for race_result in completed_races]
         participation_ratio = len(completed_races) / len(self.race_results)
@@ -525,7 +525,7 @@ class Driver(Base):
         return max(result, 40)
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def speed(self) -> str:
+    def speed(self) -> int:
         """Statistic calculated on the average gap between
         the driver's qualifying times and the poleman's.
 
@@ -533,7 +533,7 @@ class Driver(Base):
             driver (Driver): The Driver to calculate the speed rating of.
 
         Returns:
-            str: Speed rating. (40-100)
+            int: Speed rating. (40-100)
         """
 
         qualifying_results = list(
@@ -541,7 +541,7 @@ class Driver(Base):
         )
 
         if not qualifying_results:
-            return "dati insufficienti"
+            return 0
 
         total_gap_percentages = 0.0
         for quali_result in qualifying_results:
@@ -559,18 +559,18 @@ class Driver(Base):
         return max(speed_score, 40)  # Lower bound is 40
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def sportsmanship(self) -> str:
+    def sportsmanship(self) -> int:
         """This statistic is calculated based on the gravity and amount of reports received.
 
         Returns:
-            str: Sportsmanship rating. (0-100)
+            int: Sportsmanship rating. (0-100)
         """
 
         if len(self.race_results) < 2:
-            return "dati insufficienti"
+            return 0
 
         if not self.received_penalties:
-            return "100"
+            return 100
 
         penalties = (
             (rr.time_penalty / 1.5)
@@ -583,16 +583,18 @@ class Driver(Base):
         return round(100 - sum(penalties) * 3 / len(self.race_results))
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
-    def race_pace(self) -> str:
+    def race_pace(self) -> int:
         """This statistic is calculated based on the average gap from the race winner
         in all of the races completed by the driver.
 
         Return:
-            str: Race pace score. (40-100)
+            int: Race pace score. (40-100)
+                0 if there isn't enough data.
+            
         """
         completed_races = list(filter(lambda x: x.participated, self.race_results))
         if not completed_races:
-            return "dati insufficienti"
+            return 0
 
         total_gap_percentages = 0.0
         for race_res in completed_races:
@@ -622,7 +624,7 @@ class Driver(Base):
             "avg_quali_position",
         )
 
-        statistics = dict.fromkeys(keys, 0)
+        statistics: dict[str, int | float] = dict.fromkeys(keys, 0)
 
         if not self.race_results:
             return statistics
@@ -1196,7 +1198,6 @@ class Round(Base):
     round_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    circuit: Mapped[str] = mapped_column(String(40), nullable=False)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     category_id: Mapped[int] = mapped_column(
