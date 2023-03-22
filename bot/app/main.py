@@ -295,6 +295,11 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
+            consistency = driver.consistency()
+            speed = driver.speed()
+            sportsmanship = driver.sportsmanship()
+            race_pace = driver.race_pace()
+
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.psn_id,
@@ -302,10 +307,10 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
                         f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
-                        f"<b>Affidabilità</b>: <i>{driver.consistency()}</i>\n"
-                        f"<b>Sportività</b>: <i>{driver.sportsmanship()}</i>\n"
-                        f"<b>Qualifica</b>: <i>{driver.speed()}</i>\n"
-                        f"<b>Passo gara</b>: <i>{driver.race_pace()}</i>\n\n"
+                        f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
+                        f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
+                        f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
+                        f"<b>Passo gara</b>: <i>{race_pace if race_pace else 'Dati insufficienti.'}</i>\n\n"
                         f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
                         f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
                         f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
