@@ -438,7 +438,7 @@ class Driver(Base):
         """Returns the category the driver is currently competing in."""
         if not self.categories:
             return None
-        return self.categories[-1]
+        return self.categories[-1].category
 
     def current_class(self) -> CarClass | None:
         """Returns the car class the driver is currently competing in."""
