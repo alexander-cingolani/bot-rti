@@ -295,7 +295,6 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
-
             consistency = driver.consistency()
             speed = driver.speed()
             sportsmanship = driver.sportsmanship()

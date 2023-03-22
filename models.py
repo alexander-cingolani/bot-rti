@@ -590,7 +590,7 @@ class Driver(Base):
         Return:
             int: Race pace score. (40-100)
                 0 if there isn't enough data.
-            
+
         """
         completed_races = list(filter(lambda x: x.participated, self.race_results))
         if not completed_races:
