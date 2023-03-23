@@ -1257,7 +1257,7 @@ class Round(Base):
                 + race_length
                 + f"<b>Consumo benzina:</b> <i>{session.fuel_consumption}x</i>\n"
                 f"<b>Consumo gomme:</b> <i>{session.tyre_degradation}x</i>\n"
-                f"<b>Orario:</b> <i>{session.time_of_day.strftime('%H:%M')}</i>\n"
+                f"<b>Orario:</b> <i>{session.time_of_day}</i>\n"
             )
             if session.weather:
                 message += f"<b>Meteo:</b> <i>{session.weather}</i>\n"
@@ -1315,7 +1315,7 @@ class Session(Base):
         name (str): The name of the session.
         fuel_consumption (int): In-game fuel consumption setting.
         tyre_degradation (int): In-game tyre degradation setting.
-        time_of_day (int): In-game session time setting.
+        time_of_day (str): In-game session time setting.
         weather (str): In-game weather setting.
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
@@ -1338,7 +1338,7 @@ class Session(Base):
     )
     fuel_consumption: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     tyre_degradation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    time_of_day: Mapped[datetime.time] = mapped_column(Time, nullable=False)
+    time_of_day: Mapped[str] = mapped_column(String, nullable=False)
     weather: Mapped[str] = mapped_column(String(60))
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
