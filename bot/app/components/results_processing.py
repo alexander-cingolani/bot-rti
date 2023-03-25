@@ -92,7 +92,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
             driver_name = given_driver_name
 
         if driver_name:
-            driver_category = driver_map.pop(given_driver_name)
+            driver_category = driver_map.pop(driver_name)
             seconds = string_to_seconds(gap)
             result = Result(driver_category, seconds)
             results.append(result)
@@ -144,17 +144,15 @@ def image_to_results(
     bottom = BOTTOM_START
     results = []
     remaining_drivers = {driver.driver.psn_id: driver for driver in expected_drivers}
-    open("recognized_text.txt", "w").close()
+    
     for _ in range(len(expected_drivers)):
+
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
-        name_box.save(f"../debug/psnid{_}.png", format="png")
-        laptime_box.save(f"../debug/laptime{_}.png", format="png")
+
         driver_psn_id = image_to_string(name_box).strip()
+        
         seconds = image_to_string(laptime_box)
-        file = open("../debug/recognized_text.txt", "a")
-        file.write(f"\n{seconds.strip()} - {driver_psn_id}")
-        file.close()
         seconds = string_to_seconds(seconds)
         matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0.1)
 
