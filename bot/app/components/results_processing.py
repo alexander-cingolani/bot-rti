@@ -2,6 +2,8 @@
 Contains functions used to operate on results or parts of results.
 """
 
+from datetime import datetime
+
 import re
 from dataclasses import dataclass
 from decimal import Decimal
@@ -31,6 +33,9 @@ class Result:
     position: int | None
     fastest_lap: bool
 
+    def __str__(self) -> str:
+        return f"DriverCategory(driver_name={self.driver.driver.psn_id}, position={self.position})"
+
     def __init__(self, driver: DriverCategory | None, seconds: Decimal | None):
         self.seconds = seconds
         self.driver = driver
@@ -53,7 +58,6 @@ class Result:
         else:
             self.seconds = self.seconds + best_time
             self.position = position
-        return self
 
 
 def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[Result]:
@@ -144,14 +148,14 @@ def image_to_results(
     bottom = BOTTOM_START
     results = []
     remaining_drivers = {driver.driver.psn_id: driver for driver in expected_drivers}
-    
+
     for _ in range(len(expected_drivers)):
 
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
 
         driver_psn_id = image_to_string(name_box).strip()
-        
+
         seconds = image_to_string(laptime_box)
         seconds = string_to_seconds(seconds)
         matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0.1)
@@ -229,22 +233,20 @@ def string_to_seconds(string) -> Decimal | None:
     matched_string = match.group(0)
     matched_string = matched_string.replace(",", ".")
 
-    other = matched_string
-    milliseconds_str = "0"
-    if "." in other:
-        other, milliseconds_str = matched_string.split(".")
-
-    hours_str, minutes_str = "0", "0"
-    if other.count(":") == 2:
-        hours_str, minutes_str, seconds_str = other.split(":")
-    elif other.count(":") == 1:
-        minutes_str, seconds_str = other.split(":")
+    if matched_string.count(":") == 2 and "." in matched_string:
+        t = datetime.strptime(matched_string, "%H:%M:%S.%f").time()
+    elif matched_string.count(":") == 2:
+        t = datetime.strptime(matched_string, "%H:%M:%S")
+    elif ":" in matched_string and "." in matched_string:
+        t = datetime.strptime(matched_string, "%M:%S.%f")
+    elif ":" in matched_string:
+        t = datetime.strptime(matched_string, "%H:%M:%S")
+    elif "." in matched_string:
+        t = datetime.strptime(matched_string, "%S.%f")
     else:
-        if len(other) > 2:
-            seconds_str = other[-2:]
-        else:
-            seconds_str = other
+        return Decimal(matched_string)
 
-    return Decimal(
-        f"{int(hours_str) * 3600 + int(minutes_str) * 60 + int(seconds_str)}.{int(milliseconds_str)}"
-    )
+    seconds = Decimal((t.hour * 60 + t.minute) * 60 + t.second)
+    decimal_part = Decimal(t.microsecond) / Decimal(1_000_000)
+
+    return seconds + decimal_part
