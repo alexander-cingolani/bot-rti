@@ -352,7 +352,10 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             continue
 
         race_sessions_results[session] = []
-        best_time = results["results"][0].seconds
+        
+        best_time = 0
+        if results["results"]:
+            best_time = results["results"][0].seconds
         for pos, result in enumerate(results["results"], start=1):
             fastest_lap = False
 
