@@ -6,9 +6,8 @@ import json
 import logging
 import os
 import traceback
-from collections import defaultdict
 from datetime import time
-from typing import DefaultDict, cast
+from typing import cast
 from uuid import uuid4
 
 import pytz
@@ -16,7 +15,7 @@ from app.components import config
 from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
-from app.components.conversations.result_recognition import save_results
+from app.components.conversations.result_recognition import save_results_conv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from telegram import (
@@ -52,7 +51,10 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
 TOKEN = os.environ["BOT_TOKEN"]
+if not TOKEN:
+    raise RuntimeError("No bot token found in environment variables.")
 
 if os.environ.get("DB_URL"):
     engine = create_engine(os.environ["DB_URL"])
@@ -381,7 +383,6 @@ async def complete_championship_standings(
     the current championship standings for the category the user is in.
     """
     sqla_session = DBSession()
-    teams: DefaultDict[Team, float] = defaultdict(float)
     championship = get_championship(sqla_session)
     user_driver = get_driver(session=sqla_session, telegram_id=update.effective_user.id)
     if not championship:
@@ -418,21 +419,35 @@ async def complete_championship_standings(
 
             message += f"{pos} - {team_name} {driver_name} <i>{points}{diff_text}</i>\n"
 
-            if (
-                team_obj := driver.current_team()
-            ):  # Checks if the driver has left the team
-                teams[team_obj] += points
-
-    for team_obj, points in teams.items():
-        points += float(team_obj.current_championship().penalty_points)
-
     message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
-    for pos, (team_obj, points) in enumerate(
-        sorted(list(teams.items()), key=lambda x: x[1], reverse=True), start=1
+    for pos, team_obj in enumerate(
+        sorted(championship.teams, key=lambda t: t.points, reverse=True), start=1
     ):
-        message += f"{pos}- {team_obj.name} <i>{points}</i>\n"
+        message += f"{pos}- {team_obj.team.name} <i>{team_obj.points}</i>\n"
     await update.message.reply_text(message)
     sqla_session.close()
+
+
+async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message containing the constructors championship standings. The team of the driver
+    who called this function is highlighted in bold."""
+
+    sqla_session = DBSession()
+    championship = get_championship(sqla_session)
+
+    if not championship:
+        return
+
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    teams = sorted(championship.teams, key=lambda t: t.points, reverse=True)
+
+    message = f"<b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b>\n\n"
+    for pos, team in enumerate(teams, start=1):
+        if team.team_id == driver.current_team().team_id:
+            message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
+        message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
+
+    update.message.reply_text(message)
 
 
 async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -484,6 +499,7 @@ async def complete_last_race_results(
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
     message = ""
+
     if not championship:
         return
 
@@ -746,7 +762,7 @@ def main() -> None:
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)
-    application.add_handler(save_results)
+    application.add_handler(save_results_conv)
 
     application.add_handler(
         CallbackQueryHandler(
@@ -758,6 +774,9 @@ def main() -> None:
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica", championship_standings))
+    application.add_handler(
+        CommandHandler("classifica_costruttori", constructors_standings)
+    )
     application.add_handler(
         CommandHandler("classifica_completa", complete_championship_standings)
     )

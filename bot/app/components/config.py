@@ -19,6 +19,7 @@ OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 BASE_COMMANDS = (
     ("classifica", "Classifica della tua categoria."),
+    ("classifica_costruttori", "Classifica costruttori"),
     (
         "classifica_completa",
         "Classifiche piloti e costruttori del campionato in corso.",
