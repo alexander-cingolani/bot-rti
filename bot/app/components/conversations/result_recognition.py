@@ -352,7 +352,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             continue
 
         race_sessions_results[session] = []
-        
+
         best_time = 0
         if results["results"]:
             best_time = results["results"][0].seconds
