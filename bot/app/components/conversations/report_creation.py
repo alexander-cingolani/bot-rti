@@ -242,9 +242,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ConversationHandler.END
 
     category: Category = championship_round.category
-    import logging
 
-    logging.info(category)
     user_data["category"] = category
     user_data["round"] = championship_round
     text = (

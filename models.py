@@ -6,15 +6,15 @@ from __future__ import annotations
 
 import datetime
 import os
-from statistics import stdev
 import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
 from decimal import Decimal
+from statistics import stdev
 from typing import Any, DefaultDict, Optional
-from cachetools import TTLCache, cached
 
+from cachetools import TTLCache, cached
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -29,7 +29,6 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    Time,
     UniqueConstraint,
     func,
 )
@@ -362,6 +361,9 @@ class DriverCategory(Base):
     category: Mapped[Category] = relationship("Category", back_populates="drivers")
     car_class: Mapped[CarClass] = relationship("CarClass")
 
+    def __repr__(self) -> str:
+        return f"DriverCategory(driver_id={self.driver_id}, category_id={self.category_id})"
+
 
 class Driver(Base):
     """This object represents a driver.
@@ -450,7 +452,7 @@ class Driver(Base):
     @property
     def current_race_number(self) -> int | None:
         """The number currently being used by the Driver in races."""
-        current_category = self.current_category().category
+        current_category = self.current_category()
         if not current_category:
             return None
 
@@ -729,11 +731,12 @@ class QualifyingResult(Base):
         return f"QualifyingResult({self.driver_id}, {self.position}, {self.laptime})"
 
     @property
-    def points_earned(self) -> float:
+    def points_earned(self) -> Decimal:
         """Points earned by the driver in this qualifying session."""
-        if self.relative_position == 1:
-            return self.session.fastest_lap_points
-        return 0
+        if not self.participated:
+            return 0
+
+        return Decimal(self.session.point_system.scoring[self.position - 1])
 
 
 class CarClass(Base):
@@ -938,7 +941,12 @@ class Category(Base):
 
         championship_id (int): ID of the championship the category belongs to.
         game_id (int): ID of the game the category is based on.
-
+        split_point (int): If specified, is used to determine how many points are to be assigned
+            for the fastest lap based on the driver's finishing position.
+        fastest_lap_points (str): One or two numbers in a string split by a " ". The first number
+            tells how many points should be assigned for the first x drivers up to the split point,
+            while the second number tells how many points should be assigned for the drivers after
+            the split point.
         game (Game): Game the category is based on.
         rounds (list[Round]): Rounds in the category.
         race_results (list[RaceResult]): Registered race results.
@@ -952,7 +960,8 @@ class Category(Base):
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
+    split_point: Mapped[int] = mapped_column(SmallInteger)
+    fastest_lap_points: Mapped[int] = mapped_column(String(15))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
@@ -1306,7 +1315,8 @@ class Round(Base):
 
 
 class Session(Base):
-    """This object represents a session.
+    """This object represents a session in a round.
+
     Sessions can be either Race or Qualifying sessions, this is determined by the
     name attribute.
 
@@ -1509,12 +1519,19 @@ class RaceResult(Base):
     def fastest_lap_points(self) -> float:
         """The amount of points the driver earned for the fastest lap.
         (0 if he didn't score it)"""
-        if self.fastest_lap:
-            return self.session.fastest_lap_points
-        return 0
+
+        if not self.fastest_lap:
+            return 0
+
+        if not self.category.split_point:
+            return float(self.session.fastest_lap_points)
+
+        if self.finishing_position <= self.category.split_point:
+            return float(self.category.fastest_lap_points.split()[0])
+        return float(self.category.fastest_lap_points.split()[1])
 
     @property
-    def points_earned(self) -> float:
+    def points_earned(self) -> Decimal:
         """Total amount of points earned by the driver in this race.
         (Finishing position + fastest lap points) *Does not take into account penalty points.
         """
@@ -1522,7 +1539,7 @@ class RaceResult(Base):
         if not self.participated:
             return 0
 
-        return (
+        return Decimal(
             self.session.point_system.scoring[self.finishing_position - 1]
             + self.fastest_lap_points
         )
