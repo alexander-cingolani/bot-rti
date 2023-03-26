@@ -4,9 +4,7 @@ This conversation allows users (admins) to save race and qualifying results to t
 by sending screenshots captured from the game or live stream.
 """
 
-
 import os
-from collections import defaultdict
 from io import BytesIO
 from typing import cast
 
@@ -31,8 +29,15 @@ from telegram.ext import (
     filters,
 )
 
-from models import CarClass, Category, DriverCategory, Round, Session
-from queries import get_championship
+from models import (
+    Category,
+    DriverCategory,
+    QualifyingResult,
+    RaceResult,
+    Round,
+    Session,
+)
+from queries import get_championship, save_results
 
 engine = create_engine(os.environ["DB_URL"])
 DBSession = sessionmaker(bind=engine, autoflush=False)
@@ -44,8 +49,7 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
     SAVE_RESULTS,
     SAVE_CHANGES,
     SAVE_FASTEST_LAP,
-    PERSIST_RESULTS,
-) = range(6)
+) = range(5)
 
 
 async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -107,12 +111,9 @@ async def __ask_session(update: Update, round: Round, results: dict) -> None:
         if not results.get(session):
             results[session] = {
                 "results": [],
-                "fastest_lap_drivers": {
-                    car_class.car_class: None
-                    for car_class in round.category.car_classes
-                },
+                "fastest_lap_driver": None,
             }
-        else:
+        elif results[session]:
             completed_sessions += 1
 
     chunked_session_buttons = list(chunked(session_buttons, 3))
@@ -160,6 +161,10 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the session and asks the user for an image containing the qualifying or race results."""
 
+    if update.callback_query.data == "persist-results":
+        await __persist_results(update, context)
+        return
+
     user_data = cast(dict, context.user_data)
     round = cast(Round, user_data["round"])
     session_id = int(update.callback_query.data.removeprefix("S"))
@@ -167,9 +172,8 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     for session in round.sessions:
         if session.session_id == session_id:
             current_session = session
+            user_data["current_session"] = current_session
             break
-
-    user_data["current_session"] = current_session
 
     # Asks the user for the text/screenshot of the results from the selected session.
     text = f"Inviami il testo o lo screenshot contenente i risultati di <b>{current_session.name}</b>."
@@ -189,18 +193,27 @@ async def recognise_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if getattr(update.message, "document"):
         file = await update.message.document.get_file()
         image = BytesIO(await file.download_as_bytearray())
-
         results = image_to_results(image, expected_drivers)
+
     elif update.message.text:
         text = update.message.text
-        results = text_to_results(text, expected_drivers)
+
+        try:
+            results = text_to_results(text, expected_drivers)
+        except ValueError:
+            await update.message.reply_text(
+                "C'è un errore nella formattazione del messaggio, correggilo e riprova."
+            )
+            return
+
+    # Saves the results to the correct session
     user_data["results"][user_data["current_session"]]["results"] = results
 
-    # Sends the user the recognised results.
+    # Sends the recognised results.
     results_text = results_to_text(results)
     await update.message.reply_text(results_text)
 
-    # Asks the user if the recognized results are correct.
+    # Asks if the recognized results are correct.
     if "NON_RICONOSCIUTO" in results_text or "/" in results_text:
         check_results_text = (
             "Non sono riuscito a leggere tutto, correggi ciò che non va perfavore."
@@ -235,26 +248,20 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     # The fastest lap driver is not needed for qualifying sessions.
     if session.is_quali:
+
         await __ask_session(update, session.round, user_data["results"])
         return SAVE_SESSION
 
-    # Asks the fastest lap driver for each car class in the selected category.
-    drivers_by_carclass = defaultdict(list)
-    for result in results:
-        if result.seconds:
-            drivers_by_carclass[result.driver.car_class].append(result.driver)
+    await __ask_fastest_lap_driver(update, expected_drivers, session)
 
-    await __ask_fastest_lap_driver(
-        update, list(drivers_by_carclass[category.car_classes[0].car_class])
-    )
     return SAVE_FASTEST_LAP
 
 
 async def __ask_fastest_lap_driver(
-    update: Update, drivers: list[DriverCategory]
+    update: Update, drivers: list[DriverCategory], session: Session
 ) -> None:
     """This function updates the current message to ask which driver scored the fastest lap of the session."""
-    text = f"Inserisci il pilota che ha segnato il giro più veloce in {drivers[0].car_class.name}"
+    text = f"Inserisci il pilota che ha segnato il giro più veloce in {session.name}"
 
     driver_buttons = []
     for driver in drivers:
@@ -278,48 +285,113 @@ async def __ask_fastest_lap_driver(
 async def save_fastest_driver(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int | None:
-    """Saves one of the (or the only in case of a single-class category) fastest drivers."""
+    """Saves one of the (or the only in case of a single car-class category) fastest drivers."""
 
     user_data = cast(dict, context.user_data)
     category = cast(Category, user_data["category"])
     session = cast(Session, user_data["current_session"])
+
     expected_drivers = category.active_drivers()
-    fastest_lap_drivers = cast(
-        dict[CarClass, DriverCategory],
-        user_data["results"][session]["fastest_lap_drivers"],
-    )
 
     # Saves the given driver.
     driver_id = int(update.callback_query.data.removeprefix("FL"))
     for driver_category in expected_drivers:
         if driver_id == driver_category.driver_id:
-            fastest_lap_drivers[driver_category.car_class] = driver_category
+
+            context.user_data["results"][session][
+                "fastest_lap_driver"
+            ] = driver_category
             break
 
-    drivers_by_carclass = defaultdict(list)
-    for result in user_data["results"][session]["results"]:
-        if result.seconds:
-            drivers_by_carclass[result.driver.car_class].append(result.driver)
-
-    # Checks if all car classes have a fastest lap driver, if not,
-    # calls __ask_fastest_lap_driver on the first class without one.
-    for car_class, driver_category in fastest_lap_drivers.items():
-        if not driver_category:
-            breakpoint()
-            await __ask_fastest_lap_driver(update, list(drivers_by_carclass[car_class]))
-            return None
-    else:
-        await __ask_session(update, user_data["round"], user_data["results"])
-        return SAVE_CATEGORY
+    await __ask_session(update, user_data["round"], user_data["results"])
+    return SAVE_SESSION
 
 
-async def persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the results to the database."""
+
+    """
+    results =  {
+        Session1: {
+            'results': [Result1, ...],
+            'fastest_lap_driver': [Driver1, ...],
+            },
+        Session2: {
+            ...
+        },
+        ...    
+    """
+
+    session_results: dict[Session, dict[str, list[Result]]] = context.user_data[
+        "results"
+    ]
+
+    quali_results = None
+    race_sessions_results: dict[Session, list[RaceResult]] = {}
+
+    for session, results in session_results.items():
+        if session.is_quali:
+            quali_results = []
+            best_time = results["results"][0].seconds
+            for pos, result in enumerate(results["results"], start=1):
+                result.prepare_result(best_time=best_time, position=pos)
+
+                gap_to_first = result.seconds - best_time if result.seconds else None
+
+                quali_results.append(
+                    QualifyingResult(
+                        position=result.position,
+                        relative_position=result.position,
+                        category=context.user_data["category"],
+                        laptime=result.seconds,
+                        gap_to_first=gap_to_first,
+                        driver=result.driver.driver,
+                        participated=bool(result.seconds),
+                        round=session.round,
+                        session=session,
+                    )
+                )
+            continue
+
+        race_sessions_results[session] = []
+        best_time = results["results"][0].seconds
+        for pos, result in enumerate(results["results"], start=1):
+            fastest_lap = False
+
+            if (
+                results["fastest_lap_driver"].driver_id
+                == result.driver.driver.driver_id
+            ):
+                fastest_lap = True
+            result.prepare_result(best_time=best_time, position=pos)
+            gap_to_first = result.seconds - best_time if result.seconds else None
+            race_sessions_results[session].append(
+                RaceResult(
+                    finishing_position=result.position,
+                    category=context.user_data["category"],
+                    relative_position=result.position,
+                    total_racetime=result.seconds,
+                    gap_to_first=gap_to_first,
+                    driver=result.driver.driver,
+                    participated=bool(result.seconds),
+                    round=session.round,
+                    session=session,
+                    fastest_lap=fastest_lap,
+                )
+            )
+
+    context.user_data["round"].completed = True
+
+    save_results(
+        context.user_data["sqla_session"], quali_results, race_sessions_results
+    )
+
+    await update.callback_query.edit_message_text("Risultati salvati correttamente!")
 
     return SAVE_CATEGORY
 
 
-save_results = ConversationHandler(
+save_results_conv = ConversationHandler(
     entry_points=[
         CommandHandler(
             "salva_risultati",
@@ -330,7 +402,7 @@ save_results = ConversationHandler(
     states={
         SAVE_CATEGORY: [CallbackQueryHandler(save_category, r"^C[0-9]{1,}$")],
         SAVE_SESSION: [
-            CallbackQueryHandler(save_session, r"S[0-9]{1,}"),
+            CallbackQueryHandler(save_session, r"S[0-9]{1,}|persist-results"),
         ],
         SAVE_RESULTS: [
             CallbackQueryHandler(recognise_results, r"^confirm_quali_results$"),
@@ -342,7 +414,6 @@ save_results = ConversationHandler(
             MessageHandler(filters.Regex(r"[^/]{60,}"), save_changes),
         ],
         SAVE_FASTEST_LAP: [CallbackQueryHandler(save_fastest_driver, r"^FL[0-9]{1,}$")],
-        PERSIST_RESULTS: [CallbackQueryHandler(persist_results, "persist-results")],
     },
     fallbacks=[
         CommandHandler(

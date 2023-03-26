@@ -2,10 +2,9 @@
 Contains functions used to operate on results or parts of results.
 """
 
-from datetime import datetime
-
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from difflib import get_close_matches
 from pathlib import Path

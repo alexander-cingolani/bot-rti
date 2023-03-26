@@ -3,7 +3,16 @@ This module contains the necessary queries in order to retrieve specific objects
 such as Reports, Categories and Drivers.
 """
 
+from collections import defaultdict
+from decimal import Decimal
+
 import sqlalchemy as sa
+from cachetools import TTLCache, cached
+from sqlalchemy import delete, desc, select
+from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import joinedload
+
 from models import (
     Category,
     Championship,
@@ -13,20 +22,16 @@ from models import (
     QualifyingResult,
     RaceResult,
     Report,
+    Session,
     Team,
     TeamChampionship,
 )
-from cachetools import TTLCache, cached
-from sqlalchemy import delete, desc, select
-from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.orm import joinedload, Session as SQLASession
 
 
 def get_championship(
     session: SQLASession, championship_id: int | None = None
 ) -> Championship | None:
-    """If not given a specific championship_id, returns the last one in
-    chronological order.
+    """If not given a specific championship_id, returns the most recent one.
 
     Args:
         session (SQLASession): Session to execute the query with.
@@ -297,6 +302,41 @@ def _separate_race_results(results: list[RaceResult]):
         if car_class in separated_classes:
             separated_classes[car_class].append(result)
     return separated_classes
+
+
+def save_results(
+    session: SQLASession,
+    qualifying_results: list[QualifyingResult],
+    races: dict[Session, list[RaceResult]],
+) -> None:
+    """"""
+
+    driver_points: defaultdict[Driver, float] = defaultdict(Decimal)
+
+    # Calculates points earned in qualifying by each driver.
+    session.add_all(qualifying_results)
+    for quali_result in qualifying_results:
+        points_earned = quali_result.points_earned
+        driver_points[quali_result.driver] += points_earned
+
+        # Should never be None, since every driver who takes part in a race/qualifying session
+        # must also be part of a team. No wild cards are allowed.
+        team_championship = quali_result.driver.current_team().current_championship()
+        team_championship.points += points_earned
+
+    # Calculates points earned across all race sessions by each driver.
+    for race_session in races:
+        session.add_all(race_session.race_results)
+        for race_result in race_session.race_results:
+            points_earned = race_result.points_earned
+            driver_points[race_result.driver] += points_earned
+
+            current_team = race_result.driver.current_team()
+
+            team_championship = current_team.current_championship()
+            team_championship.points += points_earned
+
+    session.commit()
 
 
 def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
