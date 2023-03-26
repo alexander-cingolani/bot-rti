@@ -149,7 +149,6 @@ def image_to_results(
     remaining_drivers = {driver.driver.psn_id: driver for driver in expected_drivers}
 
     for _ in range(len(expected_drivers)):
-
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
 

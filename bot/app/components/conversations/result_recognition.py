@@ -248,7 +248,6 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     # The fastest lap driver is not needed for qualifying sessions.
     if session.is_quali:
-
         await __ask_session(update, session.round, user_data["results"])
         return SAVE_SESSION
 
@@ -297,7 +296,6 @@ async def save_fastest_driver(
     driver_id = int(update.callback_query.data.removeprefix("FL"))
     for driver_category in expected_drivers:
         if driver_id == driver_category.driver_id:
-
             context.user_data["results"][session][
                 "fastest_lap_driver"
             ] = driver_category
