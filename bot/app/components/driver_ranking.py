@@ -6,18 +6,42 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from trueskill import Rating, rate
+from trueskill import Rating, rate, TrueSkill
+from models import Driver, RaceResult
 
 from queries import get_championship
 
-MAX_INCREMENT = 32
+TrueSkillEnv = TrueSkill(
+    draw_probability=0,
+)
+
 engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
-# Only used to recalculate all of the championship's statistics when changes are made.
-def update_ratings():
+def update_ratings(results: list[RaceResult]) -> None:
+    """Updates the ratings in the driver objects contained in the RaceResults
+    based on their finishing position.
+    """
+    ranks = []
+    rating_groups = []
+    drivers: list[Driver] = []
+    for result in results:
+        driver = result.driver
+        if result.participated:
+            drivers.append(driver)
+            rating_groups.append((Rating(float(driver.mu), float(driver.sigma)),))
+            ranks.append(result.finishing_position)
+
+    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
+
+    for driver, rating_group in zip(drivers, rating_groups):
+        driver.mu, driver.sigma = rating_group[0]
+
+
+def recalculate_ratings():
+    """Only used to recalculate all the ratings in the last championship."""
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
     for category in championship.categories:
@@ -62,3 +86,7 @@ def update_ratings():
     drivers = championship.driver_list
 
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)
+
+
+if __name__ == "__main__":
+    recalculate_ratings()

@@ -341,7 +341,8 @@ def save_results(
 
 def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     """Saves a report and applies the penalties inside it (if any)
-    modifying the results of the session the penalty is referred to.
+    modifying the results of the session the penalty is referred to, while also
+    deducting lost points from the driver's team points tally.
 
     Args:
         session (SQLASession): Session to execute the query with.
@@ -369,14 +370,17 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         .order_by(RaceResult.finishing_position)
     ).all()
 
+    penalised_race_result = None
     race_results: list[RaceResult] = []
     for row in rows:
         race_result: RaceResult = row[0]
         if race_result.total_racetime:
-            if race_result.driver_id == penalty.driver.driver_id:
-                race_result.total_racetime += penalty.time_penalty
-
             race_results.append(race_result)
+
+            if race_result.driver_id == penalty.driver.driver_id:
+                previous_points = race_result.points_earned
+                race_result.total_racetime += penalty.time_penalty
+                penalised_race_result = race_result
 
     race_results.sort(key=lambda x: x.total_racetime)
 
@@ -389,7 +393,10 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             race_result.relative_position = relative_position
             race_result.gap_to_first = race_result.total_racetime - winners_racetime
 
-    # penalty.reported_driver_id = penalty.driver.driver_id
+    team = penalised_race_result.driver.current_team()
+    team_championship = team.current_championship()
+    team_championship.points -= previous_points - penalised_race_result.points_earned
+
     session.add(penalty)
     session.commit()
     return
