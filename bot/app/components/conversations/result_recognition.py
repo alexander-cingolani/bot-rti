@@ -331,7 +331,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     race_sessions_results: dict[Session, list[RaceResult]] = {}
 
     for session, results in session_results.items():
-
         result_objects: list[Result] = results["result_objects"]
 
         best_time = 0

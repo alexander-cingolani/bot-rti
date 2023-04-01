@@ -375,7 +375,6 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     for row in rows:
         race_result: RaceResult = row[0]
         if race_result.total_racetime:
-
             race_results.append(race_result)
 
             if race_result.driver_id == penalty.driver.driver_id:
