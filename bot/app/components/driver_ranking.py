@@ -1,7 +1,6 @@
 """
 This module contains the driver ranking function.
 """
-import os
 from decimal import Decimal
 
 from sqlalchemy import create_engine
@@ -15,7 +14,7 @@ TrueSkillEnv = TrueSkill(
     draw_probability=0,
 )
 
-engine = create_engine(os.environ["DB_URL"])
+engine = create_engine("postgresql://alexander:alexander@172.19.0.2/alexander")
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
@@ -49,28 +48,26 @@ def recalculate_ratings():
             for session in round.sessions:
                 if session.is_quali:
                     continue
-                for carclass in category.car_classes:
-                    initial_ratings = []
-                    finishing_positions = []
-                    race_results = []
-                    for result in session.race_results:
-                        if (
-                            result.driver.current_class() == carclass.car_class
-                            and result.relative_position
-                        ):
-                            initial_ratings.append(
-                                (
-                                    Rating(
-                                        mu=float(result.driver.mu),
-                                        sigma=float(result.driver.sigma),
-                                    ),
-                                )
-                            )
-                            finishing_positions.append(result.relative_position)
-                            race_results.append(result)
 
+                initial_ratings = []
+                finishing_positions = []
+                race_results = []
+                for result in session.race_results:
+                    if result.participated:
+                        initial_ratings.append(
+                            (
+                                Rating(
+                                    mu=float(result.driver.mu),
+                                    sigma=float(result.driver.sigma),
+                                ),
+                            ),
+                        )
+                        finishing_positions.append(result.relative_position)
+                        race_results.append(result)
+                print(initial_ratings)
+                print(finishing_positions)
+                if initial_ratings:
                     new_ratings = rate(initial_ratings, finishing_positions)
-
                     for i, result in enumerate(race_results):
                         result.driver.mu = Decimal.from_float(
                             new_ratings[i][0].mu
@@ -86,6 +83,9 @@ def recalculate_ratings():
     drivers = championship.driver_list
 
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)
+
+    for driver in drivers:
+        print(f"{driver.psn_id}: {driver.mu} - {driver.sigma}")
 
 
 if __name__ == "__main__":
