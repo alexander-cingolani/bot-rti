@@ -28,9 +28,11 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from app.components.driver_ranking import update_ratings
 
 from models import (
     Category,
+    Driver,
     DriverCategory,
     QualifyingResult,
     RaceResult,
@@ -110,7 +112,7 @@ async def __ask_session(update: Update, round: Round, results: dict) -> None:
         )
         if not results.get(session):
             results[session] = {
-                "results": [],
+                "result_objects": [],
                 "fastest_lap_driver": None,
             }
         elif results[session]:
@@ -207,7 +209,7 @@ async def recognise_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
 
     # Saves the results to the correct session
-    user_data["results"][user_data["current_session"]]["results"] = results
+    user_data["results"][user_data["current_session"]]["result_objects"] = results
 
     # Sends the recognised results.
     results_text = results_to_text(results)
@@ -238,13 +240,13 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     user_data = cast(dict, context.user_data)
     category = cast(Category, user_data["category"])
     session = cast(Session, user_data["current_session"])
-    results = cast(list[Result], user_data["results"][session]["results"])
+    results = cast(list[Result], user_data["results"][session]["result_objects"])
     expected_drivers = category.active_drivers()
 
     # Saves any corrections made to the results.
     if update.message:
         results = text_to_results(update.message.text, expected_drivers)
-        user_data["results"][session]["results"] = results
+        user_data["results"][session]["result_objects"] = results
 
     # The fastest lap driver is not needed for qualifying sessions.
     if session.is_quali:
@@ -311,7 +313,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """
     results =  {
         Session1: {
-            'results': [Result1, ...],
+            'result_objects': [Result1, ...],
             'fastest_lap_driver': [Driver1, ...],
             },
         Session2: {
@@ -320,18 +322,24 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         ...    
     """
 
+    category: Category = context.user_data["category"]
     session_results: dict[Session, dict[str, list[Result]]] = context.user_data[
         "results"
     ]
 
-    quali_results = None
+    quali_results = []
     race_sessions_results: dict[Session, list[RaceResult]] = {}
 
     for session, results in session_results.items():
+
+        result_objects: list[Result] = results["result_objects"]
+
+        best_time = 0
+        if result_objects:
+            best_time = result_objects[0].seconds
+
         if session.is_quali:
-            quali_results = []
-            best_time = results["results"][0].seconds
-            for pos, result in enumerate(results["results"], start=1):
+            for pos, result in enumerate(result_objects, start=1):
                 result.prepare_result(best_time=best_time, position=pos)
 
                 gap_to_first = result.seconds - best_time if result.seconds else None
@@ -340,7 +348,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     QualifyingResult(
                         position=result.position,
                         relative_position=result.position,
-                        category=context.user_data["category"],
+                        category=category,
                         laptime=result.seconds,
                         gap_to_first=gap_to_first,
                         driver=result.driver.driver,
@@ -352,24 +360,22 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             continue
 
         race_sessions_results[session] = []
+        fastest_lap_driver: Driver = results["fastest_lap_driver"]
 
-        best_time = 0
-        if results["results"]:
-            best_time = results["results"][0].seconds
-        for pos, result in enumerate(results["results"], start=1):
+        for pos, result in enumerate(result_objects, start=1):
             fastest_lap = False
 
-            if (
-                results["fastest_lap_driver"].driver_id
-                == result.driver.driver.driver_id
-            ):
+            if fastest_lap_driver == result.driver:
                 fastest_lap = True
+
             result.prepare_result(best_time=best_time, position=pos)
-            gap_to_first = result.seconds - best_time if result.seconds else None
+
+            gap_to_first = (result.seconds - best_time) if result.seconds else None
+
             race_sessions_results[session].append(
                 RaceResult(
                     finishing_position=result.position,
-                    category=context.user_data["category"],
+                    category=category,
                     relative_position=result.position,
                     total_racetime=result.seconds,
                     gap_to_first=gap_to_first,
@@ -382,6 +388,9 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
     context.user_data["round"].completed = True
+
+    for results in race_sessions_results.values():
+        update_ratings(results)
 
     save_results(
         context.user_data["sqla_session"], quali_results, race_sessions_results
