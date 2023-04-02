@@ -360,7 +360,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         return
 
     message = f"<b><i>CLASSIFICA {category.name}</i></b>\n\n"
-    standings = category.standings()
+    standings = category.standings(-1)
 
     for pos, (driver, (points, diff)) in enumerate(standings.items(), start=1):
         if diff > 0:
