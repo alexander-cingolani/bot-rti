@@ -18,26 +18,35 @@ OWNER_ID = int(os.environ["OWNER_ID"])
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 BASE_COMMANDS = (
-    ("classifica", "Classifica della tua categoria."),
-    ("classifica_costruttori", "Classifica costruttori"),
+    ("classifica_piloti", "Classifica piloti della tua categoria."),
     (
-        "classifica_completa",
-        "Classifiche piloti e costruttori del campionato in corso.",
+        "classifiche_piloti",
+        "Classifiche piloti del campionato in corso.",
     ),
+    ("classifica_costruttori", "Classifica costruttori del campionato in corso"),
     ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
-    ("ultime_gare", "Risultati delle gare delle ultime gare."),
-    ("info_stats", "Formule e scopo di ciascuna statistica."),
-    ("help", "Info sull'utilizzo del bot."),
+    ("ultime_gare", "Risultati delle ultime gare."),
+    ("info_stats", "Formula e scopo di ciascuna statistica."),
+    ("aiuto", "Ottieni assistenza sull'uso del bot."),
+    ("registrami", "Registrati al bot."),
 )
 
-LEADER_COMMANDS = BASE_COMMANDS + (("segnala", "Crea una nuova segnalazione."),)
+LEADER_ONLY_COMMANDS = (
+    ("segnala", "Crea una nuova segnalazione."),
+    (
+        "segnalazione_ritardataria",
+        "Segnala dopo il periodo consentito.",
+    ),
+)
+LEADER_COMMANDS = BASE_COMMANDS + LEADER_ONLY_COMMANDS
 
-ADMIN_COMMANDS = LEADER_COMMANDS + (
+ADMIN_ONLY_COMMANDS = (
     ("segnalazioni", "Giudica le segnalazioni in coda."),
     ("salva_risultati", "Salva i risultati delle ultime gare."),
     ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota."),
 )
+ADMIN_COMMANDS = LEADER_COMMANDS + ADMIN_ONLY_COMMANDS
 
 REASONS = (
     "{b} tampona {a} in curva facendolo uscire di pista.",
