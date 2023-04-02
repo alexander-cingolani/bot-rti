@@ -727,7 +727,6 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
     if matches := get_close_matches(
         command_given, possibilities=all_commands, cutoff=0.5
     ):
-
         closest_match = matches[0]
         text = f"""Quel comando non esiste. Forse intendevi /{closest_match}?"""
         telegram_id = update.effective_user.id
@@ -814,7 +813,9 @@ def main() -> None:
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
     application.add_handler(CommandHandler("info_stats", stats_info))
 
-    application.add_handler(MessageHandler(filters.Regex(r"^\/.*"), non_existant_command))
+    application.add_handler(
+        MessageHandler(filters.Regex(r"^\/.*"), non_existant_command)
+    )
 
     application.add_error_handler(error_handler)
 
