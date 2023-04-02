@@ -2,6 +2,7 @@
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
 
+from difflib import get_close_matches
 import json
 import logging
 import os
@@ -40,11 +41,13 @@ from telegram.ext import (
     ConversationHandler,
     Defaults,
     InlineQueryHandler,
+    MessageHandler,
     PersistenceInput,
     PicklePersistence,
+    filters,
 )
+from models import Driver
 
-from models import Team
 from queries import get_championship, get_driver, get_team_leaders
 
 logging.basicConfig(
@@ -419,11 +422,6 @@ async def complete_championship_standings(
 
             message += f"{pos} - {team_name} {driver_name} <i>{points}{diff_text}</i>\n"
 
-    message += "\n\n<i><b>CLASSIFICA COSTRUTTORI</b></i>\n\n"
-    for pos, team_obj in enumerate(
-        sorted(championship.teams, key=lambda t: t.points, reverse=True), start=1
-    ):
-        message += f"{pos}- {team_obj.team.name} <i>{team_obj.points}</i>\n"
     await update.message.reply_text(message)
     sqla_session.close()
 
@@ -447,7 +445,7 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
         message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
 
-    update.message.reply_text(message)
+    await update.message.reply_text(message)
 
 
 async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -718,6 +716,37 @@ async def update_participation_list(
     return
 
 
+async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tells the user that the given command does not exist and provides him with a complete
+    list of commands."""
+
+    command_given = update.message.text[1:]  # Remove the '/' in from the message.
+
+    team_leader_commands = [i[0] for i in config.LEADER_ONLY_COMMANDS]
+    all_commands = [i[0] for i in config.ADMIN_COMMANDS]
+    if matches := get_close_matches(
+        command_given, possibilities=all_commands, cutoff=0.5
+    ):
+        closest_match = matches[0]
+        text = f"""Quel comando non esiste. Forse intendevi /{closest_match}?"""
+        telegram_id = update.effective_user.id
+
+        if telegram_id not in config.ADMINS:
+            await update.message.reply_text(text)
+            return
+
+        session = DBSession()
+        driver: Driver = get_driver(session, telegram_id=telegram_id)
+
+        if not driver.is_leader and closest_match in team_leader_commands:
+            text += (
+                "\n\nTuttavia è inutile che te l'abbia detto, perché tanto non puoi usarlo "
+                "in quanto non sei né un admin né un capo scuderia, ma solo un semplice plebeo. 🙂"
+            )
+
+        await update.message.reply_text(text)
+
+
 def main() -> None:
     """Starts the bot."""
 
@@ -773,16 +802,20 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))  # type: ignore
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
-    application.add_handler(CommandHandler("classifica", championship_standings))
+    application.add_handler(CommandHandler("classifica_piloti", championship_standings))
     application.add_handler(
         CommandHandler("classifica_costruttori", constructors_standings)
     )
     application.add_handler(
-        CommandHandler("classifica_completa", complete_championship_standings)
+        CommandHandler("classifiche_piloti", complete_championship_standings)
     )
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
     application.add_handler(CommandHandler("info_stats", stats_info))
+
+    application.add_handler(
+        MessageHandler(filters.Regex(r"^\/.*"), non_existant_command)
+    )
 
     application.add_error_handler(error_handler)
 
