@@ -355,7 +355,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             driver_category.warnings += penalty.warnings
 
     if not penalty.time_penalty:
-        if not getattr(penalty, "reporting_driver"):
+        if not getattr(penalty, "reporting_driver", ""):
             session.add(penalty)
             session.commit()
         session.commit()
