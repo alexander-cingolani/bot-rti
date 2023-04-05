@@ -492,6 +492,9 @@ class Driver(Base):
 
     @property
     def warnings(self) -> int:
+        """Returns the warnings received by the driver in the category he is
+        currently competing in.
+        """
         for driver_category in self.categories:
             if not driver_category.left_on:
                 return driver_category.warnings
@@ -562,7 +565,8 @@ class Driver(Base):
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))
     def sportsmanship(self) -> int:
-        """This statistic is calculated based on the gravity and amount of reports received.
+        """This statistic is calculated based on the seriousness and
+        amount of reports received.
 
         Returns:
             int: Sportsmanship rating. (0-100)
@@ -575,11 +579,11 @@ class Driver(Base):
             return 100
 
         penalties = (
-            (rr.time_penalty / 1.5)
-            + rr.warnings
-            + (rr.licence_points * 4)
-            + float(rr.penalty_points)
-            for rr in self.received_penalties
+            (penalty.time_penalty / 1.5)
+            + penalty.warnings
+            + (penalty.licence_points * 4)
+            + float(penalty.penalty_points)
+            for penalty in self.received_penalties
         )
 
         return round(100 - sum(penalties) * 3 / len(self.race_results))
