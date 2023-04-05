@@ -192,7 +192,7 @@ async def recognise_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     expected_drivers = category.active_drivers()
 
     # Saves image or text depending on what the user decided to send.
-    if getattr(update.message, "document"):
+    if getattr(update.message, "document", ""):
         file = await update.message.document.get_file()
         image = BytesIO(await file.download_as_bytearray())
         results = image_to_results(image, expected_drivers)
@@ -371,6 +371,11 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             gap_to_first = (result.seconds - best_time) if result.seconds else None
 
+            participated = bool(result.seconds)
+
+            if not participated:
+                result.position = None
+
             race_sessions_results[session].append(
                 RaceResult(
                     finishing_position=result.position,
@@ -379,7 +384,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     total_racetime=result.seconds,
                     gap_to_first=gap_to_first,
                     driver=result.driver.driver,
-                    participated=bool(result.seconds),
+                    participated=participated,
                     round=session.round,
                     session=session,
                     fastest_lap=fastest_lap,
