@@ -168,7 +168,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "<i><a href='https://racingteamitalia.it/#user-registration-form-1115'>sito web</a></i>."
         )
     elif team := driver.current_team():
-        if getattr(team.leader, "telegram_id") == user.id:
+        if getattr(team.leader, "telegram_id", 0) == user.id:
             await context.bot.set_my_commands(
                 commands=config.LEADER_COMMANDS, scope=BotCommandScopeChat(user.id)
             )
