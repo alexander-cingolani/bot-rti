@@ -361,7 +361,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
             session.add(penalty)
         session.commit()
         return
-    
+
     # Penalties handed out in qualifying sessions need to be treated differently.
     if penalty.session.is_quali:
         save_qualifying_penalty(session, penalty)
