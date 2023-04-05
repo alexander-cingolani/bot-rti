@@ -601,15 +601,16 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves warnings given (if any) and asks for the penalty reason."""
 
+    penalty: Penalty = user_data["penalty"]
+
     user_data = cast(dict, context.user_data)
     if update.callback_query:
         if not update.callback_query.data.isnumeric():
             warnings = int(update.callback_query.data.removeprefix("w"))
-            user_data["penalty"].warnings = warnings
+            penalty.warnings = warnings
             if warnings > 0:
                 user_data["warnings_text"] = (
-                    f"{warnings} warning"
-                    f" ({warnings + user_data['penalty'].driver.warnings}/12)"
+                    f"{warnings} warning" f" ({warnings + penalty.driver.warnings}/12)"
                 )
             else:
                 user_data["warnings_text"] = ""

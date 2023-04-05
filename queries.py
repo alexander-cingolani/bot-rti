@@ -349,50 +349,56 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         penalty (Penalty): Penalty object to persist to the database.
     """
 
+    # Applies licence points and warnings to the penalised driver's record.
     for driver_category in penalty.driver.categories:
         if driver_category.category_id == penalty.category.category_id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
 
+    # If no time penalty was issued there aren't any changes left to do, so it saves and returns.
     if not penalty.time_penalty:
         if not getattr(penalty, "reporting_driver", ""):
             session.add(penalty)
-            session.commit()
         session.commit()
         return
+
+    # Penalties handed out in qualifying sessions need to be treated differently.
     if penalty.session.is_quali:
         save_qualifying_penalty(session, penalty)
         return
 
+    # Gets the race results from the relevant session ordered by finishing position.
     rows = session.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.session_id)
+        .where(RaceResult.participated == True)
         .order_by(RaceResult.finishing_position)
     ).all()
 
     penalised_race_result = None
     race_results: list[RaceResult] = []
+    # Finds the race result belonging to the penalised driver and applies the time penalty
     for row in rows:
         race_result: RaceResult = row[0]
-        if race_result.total_racetime:
-            race_results.append(race_result)
+        race_results.append(race_result)
 
-            if race_result.driver_id == penalty.driver.driver_id:
-                previous_points = race_result.points_earned
-                race_result.total_racetime += penalty.time_penalty
-                penalised_race_result = race_result
+        if race_result.driver_id == penalty.driver.driver_id:
+            # previous_points is always defined since this if statement is guaranteed to run.
+            previous_points = race_result.points_earned
+            race_result.total_racetime += penalty.time_penalty
+            penalised_race_result = race_result
 
+    # Sorts the race results after the time penalty has been applied
     race_results.sort(key=lambda x: x.total_racetime)
 
+    # Applies the correct finishing position, recalculates the gap_to_first.
+    best_time = race_results[0].total_racetime
     for position, result in enumerate(race_results, start=1):
+        result.gap_to_first = result.total_racetime - best_time
         result.finishing_position = position
 
-    for _, class_results in _separate_race_results(race_results).items():
-        winners_racetime = class_results[0].total_racetime
-        for relative_position, race_result in enumerate(class_results, start=1):
-            race_result.relative_position = relative_position
-            race_result.gap_to_first = race_result.total_racetime - winners_racetime
-
+    # Gets the penalised driver's team, then deducts any points lost due to the penalty
+    # from the team's points tally.
     team = penalised_race_result.driver.current_team()
     team_championship = team.current_championship()
     team_championship.points -= previous_points - penalised_race_result.points_earned
