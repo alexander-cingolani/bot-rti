@@ -372,10 +372,10 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             gap_to_first = (result.seconds - best_time) if result.seconds else None
 
             participated = bool(result.seconds)
-            
+
             if not participated:
                 result.position = None
-            
+
             race_sessions_results[session].append(
                 RaceResult(
                     finishing_position=result.position,
