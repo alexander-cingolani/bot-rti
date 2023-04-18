@@ -443,7 +443,8 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     for pos, team in enumerate(teams, start=1):
         if team.team_id == driver.current_team().team_id:
             message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
-        message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
+        else:
+            message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
 
     await update.message.reply_text(message)
 
