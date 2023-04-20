@@ -69,14 +69,19 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     driver = get_driver(sqla_session, telegram_id=cast(User, update.effective_user).id)
     if not driver:
-        await update.message.reply_text("Questa funzione è riservata ai capi scuderia.")
+        await update.message.reply_text(
+            "Come utente non registrato, non hai accesso a questa funzione."
+        )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
     driver_team = driver.current_team()
     if not driver_team:
-        await update.message.reply_text("Questa funzione è riservata ai capi scuderia.")
+        await update.message.reply_text(
+            "Questa funzione è riservata ai capi scuderia, "
+            "e al momento non fai parte di una scuderia."
+        )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
@@ -111,7 +116,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not buttons:
         text = (
-            "Troppo tardi per le segnalazioni ritardatarie..."
+            "Troppo tardi perfino per le segnalazioni ritardatarie..."
             "\nI risultati di gara sono già stati confermati."
         )
         await update.message.reply_text(text)
@@ -459,7 +464,7 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     text = (
         "<b>Seleziona una motivazione per la segnalazione:</b>\n"
-        "(alternativamente scrivine una qui sotto)"
+        "(se nessuna si addice, scrivine una tu)"
     )
 
     user_data = cast(dict, user_data)
@@ -506,9 +511,9 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         user_data["report"].report_reason = update.message.text
     report: Report = user_data["report"]
     text = (
-        f"Contolla che i dati inseriti siano corretti, poi premi "
+        f"Dopo aver controllato che i dati siano corretti, premi "
         '"conferma e invia" per inviare la segnalazione.\n'
-        "Dopo aver inviato la segnalazione avrai la possibilità di ritirarla entro 30 min."
+        "Se cambi idea o noti un errore, hai comunque la possibilità di ritirarla entro 45 min."
         f"\n\n<b>Sessione</b>: <i>{report.session.name}</i>"
         f"\n<b>Pilota Vittima</b>: <i>{report.reporting_driver.psn_id}</i>"
         f"\n<b>Pilota Colpevole</b>: <i>{report.reported_driver.psn_id}</i>"
@@ -550,10 +555,11 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         and not chat_data.get("late_report")
     ):
         text = (
-            "Troppo tardi! Le segnalazioni vanno inviate entro le 23:59.\n"
+            "Troppo tardi! Le segnalazioni vanno inviate prima delle 23:59.\n"
             "Se hai necessità di effettuare questa segnalazione, chiedi prima il "
             "permesso sul gruppo capi, una volta ottenuto, potrai fare la segnalazione "
-            "usando il comando /segnalazione_ritardataria."
+            "usando il comando /segnalazione_ritardataria. Successivamente un admin inoltrerà "
+            "la tua segnalazione sul canale pubblico."
         )
         await update.callback_query.edit_message_text(text=text)
         sqla_session.close()
@@ -617,7 +623,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     )
     text = (
         "Segnalazione inviata!"
-        "\nSe noti un errore hai 45 minuti di tempo per ritirarla."
+        "\nSe noti un errore, hai 45 minuti di tempo per ritirarla."
         "\nRicorda che creando una nuova segnalazione perderai "
         "la possibilità di ritirare quella precedente."
     )
@@ -707,7 +713,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             delete_report(sqla_session, report_id)
         else:
-            text = "Troppo tardi per ritirarla!"
+            text = "Non puoi più ritirare questa segnalazione."
         await update.callback_query.edit_message_text(text)
     cast(dict, context.chat_data).clear()
     return ConversationHandler.END

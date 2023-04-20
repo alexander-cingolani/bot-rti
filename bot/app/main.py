@@ -495,6 +495,7 @@ async def complete_last_race_results(
 ) -> None:
     """Sends a message containing the race and qualifying results of the last completed
     round in each category of the current championship."""
+
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
     message = ""
@@ -509,8 +510,7 @@ async def complete_last_race_results(
             continue
 
         message += (
-            f"<i><b>RISULTATI {championship_round.number}ª "
-            f"TAPPA #{championship.abbreviated_name}</b></i>\n\n"
+            f"{championship_round.number}ª TAPPA {category.name}\n\n"
         )
 
         for session in championship_round.sessions:
@@ -611,15 +611,16 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
-    chat_data["participants"] = {}  # dict[telegram_id, status]
+
+    participants: dict[str, list[int, bool | None]] = {}
     for driver in drivers:
         driver_obj = driver.driver
 
-        chat_data["participants"][driver_obj.psn_id] = [
-            driver_obj.telegram_id,
-            None,
-        ]
+        participants[driver_obj.psn_id] = [driver_obj.telegram_id, None]
+
         text += f"\n{driver_obj.psn_id}"
+
+    chat_data["participants"] = participants
 
     reply_markup = InlineKeyboardMarkup(
         [

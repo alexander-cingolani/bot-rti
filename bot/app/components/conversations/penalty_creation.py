@@ -602,9 +602,9 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Saves warnings given (if any) and asks for the penalty reason."""
 
     user_data = cast(dict, context.user_data)
-    
+
     penalty: Penalty = user_data["penalty"]
-    
+
     if update.callback_query:
         if not update.callback_query.data.isnumeric():
             warnings = int(update.callback_query.data.removeprefix("w"))

@@ -71,7 +71,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             driver: Driver = user_data["driver_obj"]
             driver.telegram_id = None
             sqla_session.commit()
-            text = "Scrivimi il tuo <i>PlayStation ID</i>:"
+            text = "Scrivimi il tuo <i>ID PSN</i>:"
             await update.callback_query.edit_message_text(text)
             return CHECK_ID
 
@@ -86,8 +86,8 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Checks that no other user is registered to the requested psn_id
         if driver_obj.telegram_id:
             text = (
-                "Oh oh. Sembra che qualcuno si sia già registrato a questo ID.\n"
-                "Se sei sicuro che questo si tratti del tuo ID PSN contatta "
+                "Oh oh. Sembra che qualcuno si sia già registrato con questo ID.\n"
+                f"Se sei sicuro che {update.message.text} si tratti del tuo ID, contatta "
                 f"{OWNER.mention_html(OWNER.full_name)} per risolvere il problema."
             )
         else:
@@ -146,8 +146,9 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         if driver.telegram_id:
             text = (
-                "Oh oh. Sembra che qualcuno si sia già registrato a questo ID."
-                f"Se questo è il tuo ID PSN contatta {OWNER.mention_html(OWNER.full_name)}"
+                "Oh oh. Sembra che qualcuno si sia già registrato con questo ID."
+                f"Se sei sicuro che {user_data['suggested_driver']} sia il tuo ID, "
+                f"contatta {OWNER.mention_html(OWNER.full_name)}"
             )
             sqla_session.close()
             user_data.clear()
@@ -156,8 +157,8 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         driver.telegram_id = cast(User, update.effective_user).id
         sqla_session.commit()
         text = (
-            "Bene!\n"
-            "Ora potrai usare i comandi /classifica e /ultima_gara durante i campionati.\n"
+            "Perfetto!\n"
+            "Ora hai accesso ai comandi /classifica, /ultima_gara e /my_stats.\n"
         )
         await update.callback_query.edit_message_text(text)
         sqla_session.close()
