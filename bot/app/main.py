@@ -509,9 +509,7 @@ async def complete_last_race_results(
         if not championship_round:
             continue
 
-        message += (
-            f"{championship_round.number}ª TAPPA {category.name}\n\n"
-        )
+        message += f"{championship_round.number}ª TAPPA {category.name}\n\n"
 
         for session in championship_round.sessions:
             message += session.results_message()
@@ -749,6 +747,51 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text)
 
 
+async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    sqla_session = DBSession()
+
+    if not (driver := get_driver(sqla_session, telegram_id=update.effective_user.id)):
+        await update.message.reply_text(
+            "Per usare questo comando occorre prima essersi registrati."
+        )
+        return
+
+    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+    current_team = driver.current_team()
+    if not current_team:
+        team_text = "/"
+    else:
+        team_text = current_team.name
+    unique_teams = unique_teams.replace(team_text, f"{team_text} [Attuale]")
+    if not unique_teams:
+        unique_teams = "/"
+
+    statistics = driver.stats()
+    consistency = driver.consistency()
+    speed = driver.speed()
+    sportsmanship = driver.sportsmanship()
+    race_pace = driver.race_pace()
+
+    await update.message.reply_text(
+        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+        f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
+        f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
+        f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
+        f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
+        f"<b>Passo gara</b>: <i>{race_pace if race_pace else 'Dati insufficienti.'}</i>\n\n"
+        f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
+        f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
+        f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
+        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']}</i>\n"
+        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
+        f"<b>Piazz. medio gara</b>: <i>{statistics['avg_race_position']}</i>\n"
+        f"<b>Piazz. medio quali</b>: <i>{statistics['avg_quali_position']}</i>\n"
+        f"<b>Punti licenza</b>: <i>{driver.licence_points}</i>\n"
+        f"<b>Warning</b>: <i>{driver.warnings}</i>\n"
+        f"<b>Team</b>: <i>{unique_teams}</i>"
+    )
+
+
 def main() -> None:
     """Starts the bot."""
 
@@ -814,7 +857,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
     application.add_handler(CommandHandler("info_stats", stats_info))
-
+    application.add_handler(CommandHandler("my_stats", user_stats))
     application.add_handler(
         MessageHandler(filters.Regex(r"^\/.*"), non_existant_command)
     )
