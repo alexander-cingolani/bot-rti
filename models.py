@@ -1179,9 +1179,7 @@ class PointSystem(Base):
 
     @property
     def scoring(self) -> list[float]:
-        """Dictionary which can be used to easily get the amount of points earned
-        by using the finishing position in the race or qualifying session as the key to
-        the dictionary."""
+        """List containing the number of points assigned """
         return list(map(float, self.point_system.split()))
 
 
