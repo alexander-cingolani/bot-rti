@@ -1179,7 +1179,7 @@ class PointSystem(Base):
 
     @property
     def scoring(self) -> list[float]:
-        """List containing the number of points assigned """
+        """List containing the number of points assigned"""
         return list(map(float, self.point_system.split()))
 
 
