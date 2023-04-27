@@ -610,13 +610,10 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
 
-    participants: dict[str, list[int, bool | None]] = {}
+    participants: dict[Driver, str | None] = {}
     for driver in drivers:
-        driver_obj = driver.driver
-
-        participants[driver_obj.psn_id] = [driver_obj.telegram_id, None]
-
-        text += f"\n{driver_obj.psn_id}"
+        participants[driver.driver] = None
+        text += f"\n{driver.driver.psn_id}"
 
     chat_data["participants"] = participants
 
@@ -651,7 +648,6 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
-
     chat_data = cast(dict, context.chat_data)
 
     if not chat_data.get("participants"):
@@ -661,46 +657,51 @@ async def update_participation_list(
     if not session:
         return
 
-    user = cast(User, update.effective_user)
-    user_psn_id = None
+    driver: Driver | None = get_driver(telegram_id=update.effective_user.id)
+    participants = cast(dict[Driver, str | None], context.chat_data["participants"])
 
-    # Checks for non-registered users and queries the database to verify if
-    # the user has registered since the participants list was last sent
-    for psn_id, (tg_id, status) in chat_data["participants"].items():
-        if not tg_id:
-            driver = get_driver(session, psn_id=psn_id)
-            if driver:
-                chat_data["participants"][psn_id] = [
-                    driver.telegram_id,
-                    status,
-                ]
-            tg_id = chat_data["participants"][psn_id][0]
-
-        if tg_id == user.id:
-            user_psn_id = psn_id
-
-    received_status = update.callback_query.data == "participating"
-    # Checks if the user is allowed to answer and if his answer is the same as the previous one.
-    if user_psn_id not in chat_data["participants"]:
-        return
-    if received_status == chat_data["participants"].get(user_psn_id, [0, 0])[1]:
+    if not driver:
+        await update.callback_query.answer(
+            "Non ti sei ancora registrato! Puoi farlo tramite il comando /registrami in privato.",
+            show_alert=True,
+        )
         return
 
-    chat_data["participants"][user_psn_id][1] = received_status
+    if driver not in participants:
+        await update.callback_query.answer(
+            "Non risulti come partecipante a questa categoria. Se si tratta di un errore, "
+            f"contatta {config.OWNER.mention_html()}",
+            show_alert=True,
+        )
+        return
+
+    received_status = update.callback_query.data
+
+    # If the user clicks the same answer again, do nothing.
+    if received_status == participants[driver]:
+        return
+
+    participants[driver] = received_status
 
     text: str = chat_data["participation_list_text"]
     text += "\n{confirmed}/{total}\n"
+
     confirmed = 0
     total_drivers = 0
-    for driver, (_, status) in chat_data["participants"].items():
+    for driver, status in chat_data["participants"].items():
         total_drivers += 1
-        if status is None:
-            text_status = ""
-        elif status:
-            text_status = "✅"
-            confirmed += 1
-        else:
-            text_status = "❌"
+
+        match status:
+            case None:
+                text_status = ""
+            case "participating":
+                text_status = "✅"
+                confirmed += 1
+            case "not_sure":
+                text_status = "❓"
+            case "not_participating":
+                text_status = "❌"
+
         text += f"\n{driver} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
@@ -709,11 +710,18 @@ async def update_participation_list(
             [
                 InlineKeyboardButton("Presente ✅", callback_data="participating"),
                 InlineKeyboardButton("Assente ❌", callback_data="not_participating"),
-            ]
+            ],
+            [InlineKeyboardButton("Incerto ❓", callback_data="not_sure")],
         ]
     )
     await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
     return
+
+
+async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends the list of rounds yet to be completed in the user's category.
+    If the user is not registered, a list containing all the events in the
+    current championship will be sent."""
 
 
 async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
