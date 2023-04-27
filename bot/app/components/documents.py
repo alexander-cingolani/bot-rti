@@ -51,7 +51,7 @@ class PenaltyDocument:
         self.canvas.drawCentredString(
             297,
             663,
-            f"{self.penalty.round.number}ª Tappa | {self.penalty.round.circuit.circuit_name}",
+            f"{self.penalty.round.number}° Round | {self.penalty.round.circuit.circuit_name}",
         )
 
         self.canvas.setFont("arialB", 11)
