@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import time
+from datetime import datetime, time
 from typing import cast
 from uuid import uuid4
 
@@ -46,7 +46,7 @@ from telegram.ext import (
     PicklePersistence,
     filters,
 )
-from models import Driver
+from models import Category, Driver
 
 from queries import get_championship, get_driver, get_team_leaders
 
@@ -218,10 +218,10 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif not (championship_round := current_category.next_round()):
+    elif not (rnd := current_category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
-        msg = championship_round.generate_info_message()
+        msg = rnd.generate_info_message()
 
     await update.message.reply_text(msg)
     session.close()
@@ -471,18 +471,18 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    championship_round = category.last_completed_round()
+    rnd = category.last_completed_round()
 
-    if not championship_round:
+    if not rnd:
         await update.message.reply_text(
             "I risultati non sono ancora stati caricati, solitamente "
             "diventano disponibili dopo che ogni categoria ha completato la sua gara."
         )
         return
 
-    message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
+    message = f"<i><b>RISULTATI {rnd.number}ª TAPPA</b></i>\n\n"
 
-    for session in championship_round.sessions:
+    for session in rnd.sessions:
         message += session.results_message()
 
     await update.message.reply_text(text=message)
@@ -504,14 +504,14 @@ async def complete_last_race_results(
         return
 
     for category in championship.categories:
-        championship_round = category.last_completed_round()
+        rnd = category.last_completed_round()
 
-        if not championship_round:
+        if not rnd:
             continue
 
-        message += f"{championship_round.number}ª TAPPA {category.name}\n\n"
+        message += f"{rnd.number}ª TAPPA {category.name}\n\n"
 
-        for session in championship_round.sessions:
+        for session in rnd.sessions:
             message += session.results_message()
 
     if not message:
@@ -535,12 +535,12 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if championship_round := championship.reporting_round():
+    if rnd := championship.reporting_round():
         text = (
-            f"<b>Segnalazioni Categoria {championship_round.category.name}</b>\n"
-            f"{championship_round.number}ª Tappa / {championship_round.circuit.abbreviated_name}\n"
-            f"#{championship.abbreviated_name}Tappa{championship_round.number}"
-            f" #{championship_round.category.name}"
+            f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
+            f"{rnd.number}ª Tappa / {rnd.circuit.abbreviated_name}\n"
+            f"#{championship.abbreviated_name}Tappa{rnd.number}"
+            f" #{rnd.category.name}"
         )
 
         await context.bot.send_message(
@@ -558,8 +558,8 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     championship = get_championship(sqla_session)
 
     if championship:
-        if championship_round := championship.reporting_round():
-            if not championship_round.reports:
+        if rnd := championship.reporting_round():
+            if not rnd.reports:
                 await context.bot.send_message(
                     chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
                 )
@@ -597,26 +597,23 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if not (championship_round := category.first_non_completed_round()):
+    if not (rnd := category.first_non_completed_round()):
         sqla_session.close()
         return
 
     drivers = category.active_drivers()
     text = (
-        f"<b>{championship_round.number}ᵃ Tappa {category.name}</b>\n"
-        f"Circuito: <b>{championship_round.circuit.abbreviated_name}</b>"
+        f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
+        f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
     )
 
     chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
 
-    participants: dict[str, list[int, bool | None]] = {}
+    participants: dict[Driver, str | None] = {}
     for driver in drivers:
-        driver_obj = driver.driver
-
-        participants[driver_obj.psn_id] = [driver_obj.telegram_id, None]
-
-        text += f"\n{driver_obj.psn_id}"
+        participants[driver.driver] = None
+        text += f"\n{driver.driver.psn_id}"
 
     chat_data["participants"] = participants
 
@@ -651,7 +648,6 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
-
     chat_data = cast(dict, context.chat_data)
 
     if not chat_data.get("participants"):
@@ -661,46 +657,51 @@ async def update_participation_list(
     if not session:
         return
 
-    user = cast(User, update.effective_user)
-    user_psn_id = None
+    driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
+    participants = cast(dict[Driver, str | None], context.chat_data["participants"])
 
-    # Checks for non-registered users and queries the database to verify if
-    # the user has registered since the participants list was last sent
-    for psn_id, (tg_id, status) in chat_data["participants"].items():
-        if not tg_id:
-            driver = get_driver(session, psn_id=psn_id)
-            if driver:
-                chat_data["participants"][psn_id] = [
-                    driver.telegram_id,
-                    status,
-                ]
-            tg_id = chat_data["participants"][psn_id][0]
-
-        if tg_id == user.id:
-            user_psn_id = psn_id
-
-    received_status = update.callback_query.data == "participating"
-    # Checks if the user is allowed to answer and if his answer is the same as the previous one.
-    if user_psn_id not in chat_data["participants"]:
-        return
-    if received_status == chat_data["participants"].get(user_psn_id, [0, 0])[1]:
+    if not driver:
+        await update.callback_query.answer(
+            "Non ti sei ancora registrato! Puoi farlo tramite il comando /registrami in privato.",
+            show_alert=True,
+        )
         return
 
-    chat_data["participants"][user_psn_id][1] = received_status
+    if driver not in participants:
+        await update.callback_query.answer(
+            "Non risulti come partecipante a questa categoria. Se si tratta di un errore, "
+            f"contatta {config.OWNER.mention_html()}",
+            show_alert=True,
+        )
+        return
+
+    received_status = update.callback_query.data
+
+    # If the user clicks the same answer again, do nothing.
+    if received_status == participants[driver]:
+        return
+
+    participants[driver] = received_status
 
     text: str = chat_data["participation_list_text"]
     text += "\n{confirmed}/{total}\n"
+
     confirmed = 0
     total_drivers = 0
-    for driver, (_, status) in chat_data["participants"].items():
+    for driver, status in chat_data["participants"].items():
         total_drivers += 1
-        if status is None:
-            text_status = ""
-        elif status:
-            text_status = "✅"
-            confirmed += 1
-        else:
-            text_status = "❌"
+
+        match status:
+            case None:
+                text_status = ""
+            case "participating":
+                text_status = "✅"
+                confirmed += 1
+            case "not_sure":
+                text_status = "❓"
+            case "not_participating":
+                text_status = "❌"
+
         text += f"\n{driver} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
@@ -709,10 +710,46 @@ async def update_participation_list(
             [
                 InlineKeyboardButton("Presente ✅", callback_data="participating"),
                 InlineKeyboardButton("Assente ❌", callback_data="not_participating"),
-            ]
+            ],
+            [InlineKeyboardButton("Incerto ❓", callback_data="not_sure")],
         ]
     )
     await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+    return
+
+
+async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends the list of rounds yet to be completed in the user's category.
+    This command is only available for registered and currently active users."""
+    session = DBSession()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
+
+    message = ""
+
+    if driver is None:
+        await update.message.reply_text(
+            "Solo i piloti registrati possono usare questo comando."
+        )
+        return
+
+    if not driver.is_active:
+        await update.message.reply_text(
+            "Solo i piloti che stanno partecipando ad un campionato possono usare questo comando."
+        )
+        return
+
+    category: Category = driver.current_category()
+
+    message += f"<b>Calendario {category.name}</b>\n\n"
+
+    for rnd in category.rounds:
+        if rnd.date > datetime.now().date():
+            message += f"{rnd.number} - {rnd.circuit.abbreviated_name}\n"
+        else:
+            message += f"{rnd.number} - <s>{rnd.circuit.abbreviated_name}</s>\n"
+
+    await update.message.reply_text(message)
+
     return
 
 
@@ -739,10 +776,7 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
         driver: Driver = get_driver(session, telegram_id=telegram_id)
 
         if not driver.is_leader and closest_match in team_leader_commands:
-            text += (
-                "\n\nTuttavia è inutile che te l'abbia detto, perché tanto non puoi usarlo "
-                "in quanto non sei né un admin né un capo scuderia, ma solo un semplice plebeo. 🙂"
-            )
+            text = "Quel comando non esiste."
 
         await update.message.reply_text(text)
 
@@ -848,6 +882,7 @@ def main() -> None:
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica_piloti", championship_standings))
+    application.add_handler(CommandHandler("calendario", calendar))
     application.add_handler(
         CommandHandler("classifica_costruttori", constructors_standings)
     )
