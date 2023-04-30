@@ -19,15 +19,15 @@ OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 BASE_COMMANDS = (
     ("my_stats", "Le tue statistiche."),
+   
     ("classifica_piloti", "Classifica piloti della tua categoria."),
     (
         "classifiche_piloti",
         "Classifiche piloti del campionato in corso.",
     ),
     ("classifica_costruttori", "Classifica costruttori del campionato in corso"),
-    ("calendario", "Calendario della categoria a cui partecipi.")(
-        "prossima_gara", "Info sulla tua prossima gara."
-    ),
+    ("calendario", "Calendario della categoria a cui partecipi."),
+    ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle ultime gare."),
     ("info_stats", "Formula e scopo di ciascuna statistica."),
