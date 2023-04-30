@@ -19,7 +19,6 @@ OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 BASE_COMMANDS = (
     ("my_stats", "Le tue statistiche."),
-   
     ("classifica_piloti", "Classifica piloti della tua categoria."),
     (
         "classifiche_piloti",
