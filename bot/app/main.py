@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import time
+from datetime import datetime, time
 from typing import cast
 from uuid import uuid4
 
@@ -46,7 +46,7 @@ from telegram.ext import (
     PicklePersistence,
     filters,
 )
-from models import Driver
+from models import Category, Driver
 
 from queries import get_championship, get_driver, get_team_leaders
 
@@ -218,10 +218,10 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif not (championship_round := current_category.next_round()):
+    elif not (rnd := current_category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
-        msg = championship_round.generate_info_message()
+        msg = rnd.generate_info_message()
 
     await update.message.reply_text(msg)
     session.close()
@@ -471,18 +471,18 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    championship_round = category.last_completed_round()
+    rnd = category.last_completed_round()
 
-    if not championship_round:
+    if not rnd:
         await update.message.reply_text(
             "I risultati non sono ancora stati caricati, solitamente "
             "diventano disponibili dopo che ogni categoria ha completato la sua gara."
         )
         return
 
-    message = f"<i><b>RISULTATI {championship_round.number}ª TAPPA</b></i>\n\n"
+    message = f"<i><b>RISULTATI {rnd.number}ª TAPPA</b></i>\n\n"
 
-    for session in championship_round.sessions:
+    for session in rnd.sessions:
         message += session.results_message()
 
     await update.message.reply_text(text=message)
@@ -504,14 +504,14 @@ async def complete_last_race_results(
         return
 
     for category in championship.categories:
-        championship_round = category.last_completed_round()
+        rnd = category.last_completed_round()
 
-        if not championship_round:
+        if not rnd:
             continue
 
-        message += f"{championship_round.number}ª TAPPA {category.name}\n\n"
+        message += f"{rnd.number}ª TAPPA {category.name}\n\n"
 
-        for session in championship_round.sessions:
+        for session in rnd.sessions:
             message += session.results_message()
 
     if not message:
@@ -535,12 +535,12 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if championship_round := championship.reporting_round():
+    if rnd := championship.reporting_round():
         text = (
-            f"<b>Segnalazioni Categoria {championship_round.category.name}</b>\n"
-            f"{championship_round.number}ª Tappa / {championship_round.circuit.abbreviated_name}\n"
-            f"#{championship.abbreviated_name}Tappa{championship_round.number}"
-            f" #{championship_round.category.name}"
+            f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
+            f"{rnd.number}ª Tappa / {rnd.circuit.abbreviated_name}\n"
+            f"#{championship.abbreviated_name}Tappa{rnd.number}"
+            f" #{rnd.category.name}"
         )
 
         await context.bot.send_message(
@@ -558,8 +558,8 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     championship = get_championship(sqla_session)
 
     if championship:
-        if championship_round := championship.reporting_round():
-            if not championship_round.reports:
+        if rnd := championship.reporting_round():
+            if not rnd.reports:
                 await context.bot.send_message(
                     chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
                 )
@@ -597,14 +597,14 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if not (championship_round := category.first_non_completed_round()):
+    if not (rnd := category.first_non_completed_round()):
         sqla_session.close()
         return
 
     drivers = category.active_drivers()
     text = (
-        f"<b>{championship_round.number}ᵃ Tappa {category.name}</b>\n"
-        f"Circuito: <b>{championship_round.circuit.abbreviated_name}</b>"
+        f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
+        f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
     )
 
     chat_data["participation_list_text"] = text
@@ -657,7 +657,7 @@ async def update_participation_list(
     if not session:
         return
 
-    driver: Driver | None = get_driver(telegram_id=update.effective_user.id)
+    driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
     participants = cast(dict[Driver, str | None], context.chat_data["participants"])
 
     if not driver:
@@ -720,8 +720,37 @@ async def update_participation_list(
 
 async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of rounds yet to be completed in the user's category.
-    If the user is not registered, a list containing all the events in the
-    current championship will be sent."""
+    This command is only available for registered and currently active users."""
+    session = DBSession()
+    driver = get_driver(session, telegram_id=update.effective_user.id)
+
+    message = ""
+
+    if driver is None:
+        await update.message.reply_text(
+            "Solo i piloti registrati possono usare questo comando."
+        )
+        return
+
+    if not driver.is_active:
+        await update.message.reply_text(
+            "Solo i piloti che stanno partecipando ad un campionato possono usare questo comando."
+        )
+        return
+
+    category: Category = driver.current_category()
+
+    message += f"<b>Calendario {category.name}</b>\n\n"
+
+    for rnd in category.rounds:
+        if rnd.date > datetime.now().date():
+            message += f"{rnd.number} - {rnd.circuit.abbreviated_name}\n"
+        else:
+            message += f"{rnd.number} - <s>{rnd.circuit.abbreviated_name}</s>\n"
+
+    await update.message.reply_text(message)
+
+    return
 
 
 async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -747,10 +776,7 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
         driver: Driver = get_driver(session, telegram_id=telegram_id)
 
         if not driver.is_leader and closest_match in team_leader_commands:
-            text += (
-                "\n\nTuttavia è inutile che te l'abbia detto, perché tanto non puoi usarlo "
-                "in quanto non sei né un admin né un capo scuderia, ma solo un semplice plebeo. 🙂"
-            )
+            text = "Quel comando non esiste."
 
         await update.message.reply_text(text)
 
@@ -856,6 +882,7 @@ def main() -> None:
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica_piloti", championship_standings))
+    application.add_handler(CommandHandler("calendario", calendar))
     application.add_handler(
         CommandHandler("classifica_costruttori", constructors_standings)
     )

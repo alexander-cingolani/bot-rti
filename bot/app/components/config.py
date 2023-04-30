@@ -25,6 +25,7 @@ BASE_COMMANDS = (
         "Classifiche piloti del campionato in corso.",
     ),
     ("classifica_costruttori", "Classifica costruttori del campionato in corso"),
+    ("calendario", "Calendario della categoria a cui partecipi.")
     ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle ultime gare."),
