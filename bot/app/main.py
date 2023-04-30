@@ -622,7 +622,8 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
             [
                 InlineKeyboardButton("Presente ✅", callback_data="participating"),
                 InlineKeyboardButton("Assente ❌", callback_data="not_participating"),
-            ]
+            ],
+            [InlineKeyboardButton("Incerto ❓", callback_data="not_sure")],
         ]
     )
 
@@ -702,7 +703,7 @@ async def update_participation_list(
             case "not_participating":
                 text_status = "❌"
 
-        text += f"\n{driver} {text_status}"
+        text += f"\n{driver.psn_id} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
@@ -851,7 +852,7 @@ def main() -> None:
     )
     application.job_queue.run_daily(
         callback=send_participants_list,
-        time=time(hour=0, minute=0, second=0),
+        time=time(hour=14, minute=9, second=30),
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
@@ -874,7 +875,7 @@ def main() -> None:
 
     application.add_handler(
         CallbackQueryHandler(
-            update_participation_list, r"participating|not_participating"
+            update_participation_list, r"participating|not_participating|not_sure"
         )
     )
 
