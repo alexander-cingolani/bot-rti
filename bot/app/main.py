@@ -671,7 +671,7 @@ async def update_participation_list(
     if driver not in participants:
         await update.callback_query.answer(
             "Non risulti come partecipante a questa categoria. Se si tratta di un errore, "
-            f"contatta {config.OWNER.mention_html()}",
+            f"contatta @gino_pincopallo",
             show_alert=True,
         )
         return
