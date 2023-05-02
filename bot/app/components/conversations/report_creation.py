@@ -577,8 +577,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     report.category = category
     report.round = championship_round
-    report.reported_team = report.reported_driver.current_team() # type: ignore
-    report.reporting_team = report.reporting_driver.current_team() # type: ignore
+    report.reported_team = report.reported_driver.current_team()  # type: ignore
+    report.reporting_team = report.reporting_driver.current_team()  # type: ignore
     report.number = (
         get_last_report_number(
             sqla_session, category.category_id, report.round.round_id

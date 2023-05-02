@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import trueskill as ts # type: ignore
+import trueskill as ts  # type: ignore
 from models import Driver, RaceResult
 
 from queries import get_championship
@@ -44,10 +44,10 @@ def recalculate_ratings():
     """Only used to recalculate all the ratings in the last championship."""
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
-    
+
     if not championship:
         return
-    
+
     for category in championship.categories:
         for round in category.rounds:
             for session in round.sessions:
@@ -56,7 +56,7 @@ def recalculate_ratings():
 
                 initial_ratings: list[tuple[ts.Rating]] = []
                 finishing_positions: list[int] = []
-                race_results:list[RaceResult] = []
+                race_results: list[RaceResult] = []
                 for result in session.race_results:
                     if result.participated:
                         initial_ratings.append(
@@ -85,10 +85,10 @@ def recalculate_ratings():
     sqla_session.expire_all()
 
     championship = get_championship(sqla_session)
-    
+
     if not championship:
         return
-    
+
     drivers = championship.driver_list
 
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)

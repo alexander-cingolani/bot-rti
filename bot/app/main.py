@@ -95,7 +95,7 @@ async def post_init(application: Application) -> None:
     # Set admin commands in group and private chats
     for admin_id in config.ADMINS:
         try:
-            await application.bot.set_my_commands( 
+            await application.bot.set_my_commands(
                 config.ADMIN_COMMANDS, BotCommandScopeChat(admin_id)
             )
         except BadRequest:
@@ -738,9 +738,9 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             "Solo i piloti registrati possono usare questo comando."
         )
         return
-    
+
     category = driver.current_category()
-    
+
     if not category:
         await update.message.reply_text(
             "Solo i piloti che stanno partecipando ad un campionato possono usare questo comando."
@@ -781,7 +781,7 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
 
         session = DBSession()
         driver = get_driver(session, telegram_id=telegram_id)
-        
+
         if not driver:
             text = "Quel comando non esiste"
         elif not driver.is_leader and closest_match in team_leader_commands:

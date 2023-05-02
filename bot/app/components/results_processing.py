@@ -159,7 +159,7 @@ def image_to_results(
 
         driver_psn_id: str = image_to_string(name_box).strip()  # type: ignore
 
-        seconds_str: str = image_to_string(laptime_box) # type: ignore
+        seconds_str: str = image_to_string(laptime_box)  # type: ignore
         seconds = string_to_seconds(seconds_str)
         matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0.1)
 
