@@ -80,9 +80,7 @@ def get_team_leaders(
         select(Driver)
         .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
         .join(Team, DriverAssignment.team_id == Team.team_id)
-        .where(
-            DriverAssignment.is_leader is True
-        )  # pylint: disable=singleton-comparison
+        .where(DriverAssignment.is_leader is True)  # type: ignore
         .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
         .where(TeamChampionship.championship_id == championship_id)
     )
@@ -115,7 +113,7 @@ def get_reports(
     return [res[0] for res in result]
 
 
-@cached(cache=TTLCache(maxsize=50, ttl=30))
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
 def get_driver(
     session: SQLASession,
     psn_id: str | None = None,
@@ -135,7 +133,7 @@ def get_driver(
     if psn_id:
         statement = statement.where(Driver.psn_id == psn_id)
     elif telegram_id:
-        statement = statement.where(Driver._telegram_id == str(telegram_id))
+        statement = statement.where(Driver._telegram_id == str(telegram_id))  # type: ignore
     else:
         raise ValueError("Neither psn_id or telegram_id were given.")
 
@@ -169,7 +167,7 @@ def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
     result = session.execute(statement).all()
     session.commit()
 
-    teams = []
+    teams: list[Team] = []
     if result:
         for row in result:
             teams.append(row[0].team)
@@ -290,20 +288,6 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     session.commit()
 
 
-def _separate_race_results(results: list[RaceResult]):
-    separated_classes: dict[int, list[RaceResult]] = {
-        car_class.car_class_id: [] for car_class in results[0].category.car_classes
-    }
-
-    for result in results:
-        # current_class() can't return None in this case since RaceResult drivers are
-        # always created from drivers in the Category.active_drivers() method.
-        car_class = result.driver.current_class().car_class_id  # type: ignore
-        if car_class in separated_classes:
-            separated_classes[car_class].append(result)
-    return separated_classes
-
-
 def save_results(
     session: SQLASession,
     qualifying_results: list[QualifyingResult],
@@ -311,7 +295,7 @@ def save_results(
 ) -> None:
     """"""
 
-    driver_points: defaultdict[Driver, float] = defaultdict(Decimal)
+    driver_points: defaultdict[Driver, Decimal] = defaultdict(Decimal)
 
     # Calculates points earned in qualifying by each driver.
     session.add_all(qualifying_results)
@@ -321,8 +305,8 @@ def save_results(
 
         # Should never be None, since every driver who takes part in a race/qualifying session
         # must also be part of a team. No wild cards are allowed.
-        team_championship = quali_result.driver.current_team().current_championship()
-        team_championship.points += points_earned
+        team_championship: TeamChampionship = quali_result.driver.current_team().current_championship()  # type: ignore
+        team_championship.points += float(points_earned)
 
     # Calculates points earned across all race sessions by each driver.
     for race_session in races:
@@ -333,8 +317,10 @@ def save_results(
 
             current_team = race_result.driver.current_team()
 
-            team_championship = current_team.current_championship()
-            team_championship.points += points_earned
+            team_championship: TeamChampionship = (
+                current_team.current_championship()  #  type: ignore
+            )
+            team_championship.points += float(points_earned)
 
     session.commit()
 
@@ -375,9 +361,10 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         .order_by(RaceResult.finishing_position)
     ).all()
 
-    penalised_race_result = None
+    penalised_race_result: RaceResult | None = None
     race_results: list[RaceResult] = []
     # Finds the race result belonging to the penalised driver and applies the time penalty
+    previous_points = 0
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
@@ -397,11 +384,18 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         result.gap_to_first = result.total_racetime - best_time
         result.finishing_position = position
 
+    if not penalised_race_result:
+        raise RuntimeError(
+            "No RaceResult corresponding to the given penalty was found."
+        )
+
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
     team = penalised_race_result.driver.current_team()
-    team_championship = team.current_championship()
-    team_championship.points -= previous_points - penalised_race_result.points_earned
+    team_championship: TeamChampionship = team.current_championship()  # type: ignore | Driver always has a team here.
+    team_championship.points -= float(previous_points) - float(
+        penalised_race_result.points_earned
+    )
 
     session.add(penalty)
     session.commit()
