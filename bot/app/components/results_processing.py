@@ -2,6 +2,7 @@
 Contains functions used to operate on results or parts of results.
 """
 
+from io import BytesIO
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,7 +34,11 @@ class Result:
     fastest_lap: bool
 
     def __str__(self) -> str:
-        return f"DriverCategory(driver_name={self.driver.driver.psn_id}, position={self.position})"
+        if self.driver:
+            return (
+                f"(driver_name={self.driver.driver.psn_id}, position={self.position})"
+            )
+        return f"(driver_name=None, position={self.position})"
 
     def __init__(self, driver: DriverCategory | None, seconds: Decimal | None):
         self.seconds = seconds
@@ -80,7 +85,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         driver.driver.psn_id: driver for driver in expected_drivers
     }
 
-    results = []
+    results: list[Result] = []
     for line in text.splitlines():
         given_driver_name, gap = line.split()
         if given_driver_name not in driver_map:
@@ -110,7 +115,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
 
 
 def image_to_results(
-    image: str | bytes | Path, expected_drivers: list[DriverCategory]
+    image: str | BytesIO | Path, expected_drivers: list[DriverCategory]
 ) -> list[Result]:
     """Transforms the results of a race or qualifying session from a screenshot
     of the results taken from the game or the live stream.
@@ -131,9 +136,9 @@ def image_to_results(
     image_file = Image.open(fp=image)
 
     image_file = image_file.convert("L").resize(
-        [3 * _ for _ in image_file.size], Image.BICUBIC
+        [3 * _ for _ in image_file.size], Image.BICUBIC  # type: ignore
     )
-    image_file = image_file.point(lambda p: p > 100 and p + 100)
+    image_file = image_file.point(lambda p: p > 100 and p + 100)  # type: ignore
     image_file = image_file.filter(ImageFilter.MinFilter(3))
     # image_file = image_file.convert("L")
     # image_file = Brightness(image_file).enhance(0.3)
@@ -145,17 +150,17 @@ def image_to_results(
     # image_file = image_file.convert('1')
     top = TOP_START
     bottom = BOTTOM_START
-    results = []
+    results: list[Result] = []
     remaining_drivers = {driver.driver.psn_id: driver for driver in expected_drivers}
 
     for _ in range(len(expected_drivers)):
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
 
-        driver_psn_id = image_to_string(name_box).strip()
+        driver_psn_id: str = image_to_string(name_box).strip()  # type: ignore
 
-        seconds = image_to_string(laptime_box)
-        seconds = string_to_seconds(seconds)
+        seconds_str: str = image_to_string(laptime_box) # type: ignore
+        seconds = string_to_seconds(seconds_str)
         matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0.1)
 
         if matches and len(driver_psn_id) >= 3:
@@ -205,7 +210,7 @@ def seconds_to_text(seconds: Decimal) -> str:
     return f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds_int:0>3}"
 
 
-def string_to_seconds(string) -> Decimal | None:
+def string_to_seconds(string: str) -> Decimal | None:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     None is returned when the driver did not finish the race
