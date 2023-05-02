@@ -2,7 +2,7 @@
 This module contains all the callbacks necessary to register drivers to the database.
 """
 import os
-from typing import cast
+from typing import Any, cast
 
 from app.components import config
 from sqlalchemy import create_engine
@@ -36,11 +36,11 @@ async def driver_registration_entry_point(
     """Asks the user for his PSN ID"""
 
     session = DBSession()
-    effective_user = cast(User, update.effective_user)
-    user_data = cast(dict, context.user_data)
+    user = update.effective_user
+    user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = session
 
-    driver = get_driver(session, telegram_id=effective_user.id)
+    driver = get_driver(session, telegram_id=user.id)
     if not driver:
         text = "Per registrarti scrivimi il tuo <i>PlayStation ID</i>:"
         await update.message.reply_text(text)
@@ -64,7 +64,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     match is found. If no exact match is found the bot provides the user with a similar
     ID and asks if that is the right one.
     """
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
     if getattr(update.callback_query, "data", ""):
         if update.callback_query.data == "change_id":
@@ -91,7 +91,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 f"{OWNER.mention_html(OWNER.full_name)} per risolvere il problema."
             )
         else:
-            driver_obj.telegram_id = cast(User, update.effective_user).id
+            driver_obj.telegram_id = update.effective_user.id
             sqla_session.commit()
             text = (
                 "Ok!\n"
@@ -119,7 +119,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             await update.message.reply_text(text=text, reply_markup=reply_markup)
             return ID
 
-        if suggested_driver.telegram_id == cast(User, update.effective_user).id:
+        if suggested_driver.telegram_id == update.effective_user.id:
             text = f"Sei già registrato con <code>{suggested_driver.psn_id}</code>.\n"
             await update.message.reply_text(text)
             sqla_session.close()
@@ -137,7 +137,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     a similar ID. This callback therefore handles the user's choice (if to accept the option
     or not)."""
 
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
 
     if update.callback_query.data == "y":
@@ -154,7 +154,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             user_data.clear()
             return ConversationHandler.END
 
-        driver.telegram_id = cast(User, update.effective_user).id
+        driver.telegram_id = update.effective_user.id
         sqla_session.commit()
         text = (
             "Perfetto!\n"
@@ -176,7 +176,7 @@ async def cancel_registration(
     """This callback is activated when the user decides to cancel the registration."""
 
     await update.message.reply_text("👌")
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     cast(SQLASession, user_data["sqla_session"]).close()
     user_data.clear()
     return ConversationHandler.END
@@ -196,7 +196,7 @@ async def wrong_chat(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         "Questo comando è disponibile solamente in chat privata. "
         "Clicca sulla mia immagine del profilo per accedervi."
     )
-    update.message.reply_text(text)
+    await update.message.reply_text(text)
     return ConversationHandler.END
 
 

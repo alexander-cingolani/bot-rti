@@ -5,12 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from trueskill import Rating, rate, TrueSkill
+import trueskill as ts  # type: ignore
 from models import Driver, RaceResult
 
 from queries import get_championship
 
-TrueSkillEnv = TrueSkill(
+TrueSkillEnv = ts.TrueSkill(
     draw_probability=0,
 )
 
@@ -23,40 +23,45 @@ def update_ratings(results: list[RaceResult]) -> None:
     """Updates the ratings in the driver objects contained in the RaceResults
     based on their finishing position.
     """
-    ranks = []
-    rating_groups = []
+    ranks: list[int] = []
+    rating_groups: list[tuple[ts.Rating]] = []
     drivers: list[Driver] = []
     for result in results:
-        driver = result.driver
+        driver: Driver = result.driver
         if result.participated:
             drivers.append(driver)
-            rating_groups.append((Rating(float(driver.mu), float(driver.sigma)),))
+            rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
             ranks.append(result.finishing_position)
 
     rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
 
     for driver, rating_group in zip(drivers, rating_groups):
-        driver.mu, driver.sigma = rating_group[0]
+        driver.mu = Decimal(str(rating_group[0].mu))
+        driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
 def recalculate_ratings():
     """Only used to recalculate all the ratings in the last championship."""
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
+
+    if not championship:
+        return
+
     for category in championship.categories:
         for round in category.rounds:
             for session in round.sessions:
                 if session.is_quali:
                     continue
 
-                initial_ratings = []
-                finishing_positions = []
-                race_results = []
+                initial_ratings: list[tuple[ts.Rating]] = []
+                finishing_positions: list[int] = []
+                race_results: list[RaceResult] = []
                 for result in session.race_results:
                     if result.participated:
                         initial_ratings.append(
                             (
-                                Rating(
+                                ts.Rating(
                                     mu=float(result.driver.mu),
                                     sigma=float(result.driver.sigma),
                                 ),
@@ -67,7 +72,7 @@ def recalculate_ratings():
                 print(initial_ratings)
                 print(finishing_positions)
                 if initial_ratings:
-                    new_ratings = rate(initial_ratings, finishing_positions)
+                    new_ratings = ts.rate(initial_ratings, finishing_positions)
                     for i, result in enumerate(race_results):
                         result.driver.mu = Decimal.from_float(
                             new_ratings[i][0].mu
@@ -80,6 +85,10 @@ def recalculate_ratings():
     sqla_session.expire_all()
 
     championship = get_championship(sqla_session)
+
+    if not championship:
+        return
+
     drivers = championship.driver_list
 
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)

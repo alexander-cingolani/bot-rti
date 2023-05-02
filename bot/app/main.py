@@ -8,7 +8,7 @@ import logging
 import os
 import traceback
 from datetime import datetime, time
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 import pytz
@@ -29,8 +29,8 @@ from telegram import (
     InputTextMessageContent,
     Message,
     Update,
-    User,
 )
+
 from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
@@ -46,7 +46,7 @@ from telegram.ext import (
     PicklePersistence,
     filters,
 )
-from models import Category, Driver
+from models import Driver
 
 from queries import get_championship, get_driver, get_team_leaders
 
@@ -55,7 +55,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = os.environ["BOT_TOKEN"]
+TOKEN: str = os.environ["BOT_TOKEN"]
 if not TOKEN:
     raise RuntimeError("No bot token found in environment variables.")
 
@@ -114,7 +114,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     try:
         if update.message.chat.type == ChatType.PRIVATE:
-            await cast(User, update.effective_user).send_message(
+            await update.effective_user.send_message(
                 text=(
                     "Problemi, problemi, problemi! 😓\n"
                     f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
@@ -128,7 +128,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         None, context.error, context.error.__traceback__  # type: ignore
     )
     traceback_string = "".join(traceback_list)
-    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    update_str = update.to_dict()
 
     message = (
         "An exception was raised while handling an update\n"
@@ -154,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
     session = DBSession()
-    user = cast(User, update.effective_user)
+    user = update.effective_user
     text = (
         f"Ciao {user.first_name}!\n\n"
         "Sono il bot di Racing Team Italia 🇮🇹 e mi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
@@ -192,7 +192,7 @@ async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clears user_data and ends the conversation"""
-    cast(dict, context.user_data).clear()
+    cast(dict[str, Any], context.user_data).clear()
     text = "Segnalazione annullata."
     if update.message:
         await update.message.reply_text(text)
@@ -205,7 +205,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
 
     session = DBSession()
-    user = cast(User, update.effective_user)
+    user = update.effective_user
     driver = get_driver(session, telegram_id=user.id)
 
     if not driver:
@@ -278,7 +278,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = update.inline_query.query
     session = DBSession()
-    results = []
+    results: list[InlineQueryResultArticle] = []
     championship = get_championship(session)
 
     if not championship:
@@ -339,7 +339,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     the current championship standings for the category the user is in.
     """
     session = DBSession()
-    user = cast(User, update.effective_user)
+    user = update.effective_user
     user_driver = get_driver(session, telegram_id=user.id)
     if not user_driver:
         await update.message.reply_text(
@@ -437,14 +437,18 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         return
 
     driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+
     teams = sorted(championship.teams, key=lambda t: t.points, reverse=True)
 
     message = f"<b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b>\n\n"
     for pos, team in enumerate(teams, start=1):
-        if team.team_id == driver.current_team().team_id:
-            message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
-        else:
-            message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
+        if driver:
+            current_team = driver.current_team()
+            if current_team and current_team.team_id == team.team_id:
+                message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
+                continue
+
+        message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
 
     await update.message.reply_text(message)
 
@@ -454,7 +458,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
     the results of the user's last race."""
 
     sqla_session = DBSession()
-    user = cast(User, update.effective_user)
+    user = update.effective_user
     driver = get_driver(sqla_session, telegram_id=user.id)
 
     if not driver:
@@ -574,7 +578,7 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Freezes the participants list sent earlier during the day."""
-    chat_data = cast(dict, context.chat_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
     message: Message | None = chat_data.get("participation_list_message")
     if message:
         await message.edit_reply_markup()  # Deletes the buttons.
@@ -586,7 +590,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
-    chat_data = cast(dict, context.chat_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
     chat_data["participation_list_sqlasession"] = sqla_session
 
     if not championship:
@@ -649,7 +653,7 @@ async def update_participation_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
-    chat_data = cast(dict, context.chat_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
 
     if not chat_data.get("participants"):
         return
@@ -659,7 +663,7 @@ async def update_participation_list(
         return
 
     driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
-    participants = cast(dict[Driver, str | None], context.chat_data["participants"])
+    participants = cast(dict[Driver, str | None], chat_data["participants"])
 
     if not driver:
         await update.callback_query.answer(
@@ -702,8 +706,10 @@ async def update_participation_list(
                 text_status = "❓"
             case "not_participating":
                 text_status = "❌"
+            case _:
+                pass
 
-        text += f"\n{driver.psn_id} {text_status}"
+        text += f"\n{driver.psn_id} {text_status}"  # type: ignore | Driver can't be None here.
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
@@ -727,19 +733,19 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     message = ""
 
-    if driver is None:
+    if not driver:
         await update.message.reply_text(
             "Solo i piloti registrati possono usare questo comando."
         )
         return
 
-    if not driver.is_active:
+    category = driver.current_category()
+
+    if not category:
         await update.message.reply_text(
             "Solo i piloti che stanno partecipando ad un campionato possono usare questo comando."
         )
         return
-
-    category: Category = driver.current_category()
 
     message += f"<b>Calendario {category.name}</b>\n\n"
 
@@ -774,9 +780,11 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
             return
 
         session = DBSession()
-        driver: Driver = get_driver(session, telegram_id=telegram_id)
+        driver = get_driver(session, telegram_id=telegram_id)
 
-        if not driver.is_leader and closest_match in team_leader_commands:
+        if not driver:
+            text = "Quel comando non esiste"
+        elif not driver.is_leader and closest_match in team_leader_commands:
             text = "Quel comando non esiste."
 
         await update.message.reply_text(text)

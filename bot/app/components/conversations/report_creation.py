@@ -4,7 +4,7 @@ This module contains all the callbacks necessary to allow users to create report
 
 import os
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from app.components import config
@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
@@ -56,7 +56,8 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user which category he wants to create a report in."""
 
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
     user_data.clear()
 
     sqla_session = DBSession()
@@ -65,9 +66,8 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
     user_data["categories"] = {}
-    buttons = []
 
-    driver = get_driver(sqla_session, telegram_id=cast(User, update.effective_user).id)
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             "Come utente non registrato, non hai accesso a questa funzione."
@@ -104,6 +104,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data.clear()
         return ConversationHandler.END
 
+    buttons: list[InlineKeyboardButton] = []
     for i, category in enumerate(championship.categories):
         championship_round = category.first_non_completed_round()
         if championship_round:
@@ -131,14 +132,14 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
-    cast(dict, context.chat_data)["late_report"] = True
+    chat_data["late_report"] = True
     return CATEGORY
 
 
 async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the category and asks what session the accident happened in."""
 
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
 
     if not update.callback_query.data.isdigit():
         user_data["category"] = user_data["categories"][update.callback_query.data]
@@ -149,7 +150,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     championship_round = category.first_non_completed_round()
     user_data["round"] = championship_round
-    buttons = []
+    buttons: list[InlineKeyboardButton] = []
     for i, session in enumerate(championship_round.sessions):  # type: ignore
         session_alias = f"s{i}"
         user_data["sessions"][session_alias] = session
@@ -181,8 +182,8 @@ Scegli la sessione dove è avvenuto l'incidente:"""
 
 async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user the session in which the accident happened."""
-    user = cast(User, update.effective_user)
-    user_data = cast(dict, context.user_data)
+    user = update.effective_user
+    user_data = cast(dict[str, Any], context.user_data)
     user_data.clear()
     sqla_session = DBSession()
     user_data["leader"] = get_driver(sqla_session, telegram_id=user.id)
@@ -256,7 +257,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     )
 
     user_data["sessions"] = {}
-    buttons = []
+    buttons: list[InlineKeyboardButton] = []
     for i, session in enumerate(championship_round.sessions):
         session_alias = f"s{i}"
         user_data["sessions"][session_alias] = session
@@ -278,8 +279,8 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the session and asks for the reporting driver."""
 
-    chat_data = cast(dict, context.chat_data)
-    user_data = cast(dict, context.user_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
+    user_data = cast(dict[str, Any], context.user_data)
     if not update.callback_query.data.isdigit():
         user_data["report"] = Report()
         user_data["report"].session = user_data["sessions"][update.callback_query.data]
@@ -312,8 +313,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return LINK
 
     text = "Chi è la vittima?"
-    buttons = []
-
+    buttons: list[InlineKeyboardButton] = []
     for i, driver in enumerate(user_data["leader"].current_team().active_drivers):
         driver = driver.driver
         driver_alias = f"d{i}"
@@ -345,8 +345,8 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the link provided by the user and asks who is considered to be the victim."""
-    chat_data = cast(dict, context.chat_data)
-    user_data = cast(dict, context.user_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
+    user_data = cast(dict[str, Any], context.user_data)
 
     if (
         not getattr(update.callback_query, "data", "").isdigit()
@@ -355,7 +355,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         user_data["report"].video_link = update.message.text
 
     text = "Chi è la vittima?"
-    buttons = []
+    buttons: list[InlineKeyboardButton] = []
     for i, driver in enumerate(user_data["category"].active_drivers()):
         driver = driver.driver
         driver_alias = f"d{i}"
@@ -393,13 +393,15 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the victim and asks for the reported driver."""
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
+
     if not update.callback_query.data.isdigit():
         user_data["report"].reporting_driver = user_data["drivers"][
             update.callback_query.data
         ]
+
     text = "Chi ritieni essere il colpevole?"
-    buttons = []
+    buttons: list[InlineKeyboardButton] = []
     user_data["drivers"] = {}
     for i, driver in enumerate(user_data["category"].active_drivers()):
         driver = driver.driver
@@ -409,10 +411,12 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             buttons.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
             )
+
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
         [InlineKeyboardButton("« Pilota Vittima", callback_data=str(LINK))]
     )
+
     if user_data["report"].reported_driver:
         chunked_buttons[-1].append(
             InlineKeyboardButton(
@@ -429,7 +433,7 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the reported driver and asks for the minute."""
 
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     if not update.callback_query.data.isdigit():
         user_data["report"].reported_driver = user_data["drivers"][
             update.callback_query.data
@@ -458,7 +462,7 @@ async def reported_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the minute and asks for the reason."""
 
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     if not update.callback_query:
         user_data["report"].incident_time = update.message.text
 
@@ -467,7 +471,6 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         "(se nessuna si addice, scrivine una tu)"
     )
 
-    user_data = cast(dict, user_data)
     buttons: list[list[InlineKeyboardButton]] = [[]]
     for i, reason in enumerate(config.REASONS):
         i += 1
@@ -498,7 +501,7 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the reason and asks if to send the report or not."""
-    user_data = cast(dict, context.user_data)
+    user_data = cast(dict[str, Any], context.user_data)
     if update.callback_query:
         if not update.callback_query.data.isdigit():
             user_data["report"].report_reason = config.REASONS[
@@ -543,8 +546,8 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Sends the report to the report channel and saves it to the database."""
 
-    chat_data = cast(dict, context.chat_data)
-    user_data = cast(dict, context.user_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
+    user_data = cast(dict[str, Any], context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
     category = cast(Category, user_data["category"])
     championship_round = cast(Round, user_data["round"])
@@ -574,8 +577,8 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     report.category = category
     report.round = championship_round
-    report.reported_team = report.reported_driver.current_team()
-    report.reporting_team = report.reporting_driver.current_team()
+    report.reported_team = report.reported_driver.current_team()  # type: ignore
+    report.reporting_team = report.reporting_driver.current_team()  # type: ignore
     report.number = (
         get_last_report_number(
             sqla_session, category.category_id, report.round.round_id
@@ -592,6 +595,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         chat_id=channel, document=open(report_document_name, "rb")
     )
     report.channel_message_id = message.message_id
+
     try:
         sqla_session.add(report)
         sqla_session.commit()
@@ -645,7 +649,7 @@ async def change_state_rep_creation(
     executing it returns the step in callbackquery.data + 1 in order to allow the
     conversation to continue.
     """
-    chat_data = cast(dict, context.chat_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
     category_handler = (
         create_late_report if chat_data.get("late_report") else create_report
     )
@@ -664,11 +668,7 @@ async def change_state_rep_creation(
 
     await callbacks[state](update, context)
 
-    return (
-        state
-        if chat_data.get("late_report") and (state == 7 or state is None)
-        else state + 1
-    )
+    return state if chat_data.get("late_report") and state == 7 else state + 1
 
 
 async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -676,16 +676,19 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = "Segnalazione annullata."
     await send_or_edit_message(update, text)
-    user_data = cast(dict, context.user_data)
+
+    user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"].close()
     user_data.clear()
+
     return ConversationHandler.END
 
 
 async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Withdraws the last report made by the user if made less than 30 minutes ago."""
 
-    sqla_session: SQLASession = cast(dict, context.user_data)["sqla_session"]
+    user_data = cast(dict[str, Any], context.user_data)
+    sqla_session: SQLASession = cast(SQLASession, user_data["sqla_session"])
 
     if "late" in update.callback_query.data:
         report_id = update.callback_query.data.removeprefix("withdraw_late_report_")
@@ -715,7 +718,7 @@ async def withdraw_report(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             text = "Non puoi più ritirare questa segnalazione."
         await update.callback_query.edit_message_text(text)
-    cast(dict, context.chat_data).clear()
+    cast(dict[str, Any], context.chat_data).clear()
     return ConversationHandler.END
 
 
