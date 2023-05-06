@@ -432,3 +432,17 @@ def delete_report(session: SQLASession, report_id: str) -> None:
     session.execute(delete(Report).where(Report.report_id == report_id))
     session.commit()
     session.expire_all()
+
+
+def get_all_drivers(session: SQLASession) -> list[Driver]:
+    """Returns a list containing all the drivers currently saved in the database.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+    """
+
+    result = session.execute(select(Driver)).all()
+        
+    drivers = [r[0] for r in result]
+    
+    return drivers

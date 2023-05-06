@@ -48,7 +48,7 @@ from telegram.ext import (
 )
 from models import Driver
 
-from queries import get_championship, get_driver, get_team_leaders
+from queries import get_championship, get_driver, get_team_leaders, get_all_drivers
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -834,7 +834,24 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         f"<b>Team</b>: <i>{unique_teams}</i>"
     )
 
-
+async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a list containing the top 10 drivers by rating."""
+    session = DBSession()
+    drivers = get_all_drivers(session)
+    
+    drivers.sort(key=lambda d: d.rating, reverse=True)
+    
+    n = 10    
+    if len(drivers) < n:
+        n = len(drivers)
+    
+    message = "Top 10 Piloti per Driver Rating:\n\n"
+    for driver in drivers[:n]:
+        message += f"<b>{driver.psn_id}</b> <i>{driver.rating:.2f}</i>\n"
+    
+    await update.message.reply_text(message)       
+    
+    
 def main() -> None:
     """Starts the bot."""
 
@@ -902,9 +919,12 @@ def main() -> None:
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
     application.add_handler(CommandHandler("info_stats", stats_info))
     application.add_handler(CommandHandler("my_stats", user_stats))
+    application.add_handler(CommandHandler("top_ten", top_ten))
+    
     application.add_handler(
         MessageHandler(filters.Regex(r"^\/.*"), non_existant_command)
     )
+    
 
     application.add_error_handler(error_handler)
 
