@@ -511,7 +511,7 @@ class Driver(Base):
         """True if the driver is a leader of a team and is currently active."""
         return self.teams[-1].is_leader and self.is_active
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240)) # type: ignore
+    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def consistency(self) -> int:
         """Number 40-100 calculated based on the
         standard deviation of the set of relative finishing positions and the number
@@ -1419,19 +1419,23 @@ class Session(Base):
         message = f"<i>{self.name}</i>\n"
 
         # Sorts results, drivers who didn't participate are put to the back of the list.
-        results: list[RaceResult | QualifyingResult] = [] # type: ignore
+        results: list[RaceResult | QualifyingResult] = []  # type: ignore
         if self.is_quali:
-            results.extend(sorted(
-                self.qualifying_results,
-                key=lambda x: x.laptime if x.laptime is not None else float("inf"), # type: ignore
-            ))
+            results.extend(
+                sorted(
+                    self.qualifying_results,
+                    key=lambda x: x.laptime if x.laptime is not None else float("inf"),  # type: ignore
+                )
+            )
         else:
-            results.extend(sorted(
-                self.race_results,
-                key=lambda x: x.total_racetime # type: ignore
-                if x.total_racetime is not None
-                else float("inf"),
-            ))
+            results.extend(
+                sorted(
+                    self.race_results,
+                    key=lambda x: x.total_racetime  # type: ignore
+                    if x.total_racetime is not None
+                    else float("inf"),
+                )
+            )
 
         for result in results:
             if result.participated:
