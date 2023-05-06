@@ -91,19 +91,19 @@ class Penalty(Base):
         ForeignKey("categories.category_id"), nullable=False
     )
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    session_id: Mapped[str] = mapped_column(
+    session_id: Mapped[int] = mapped_column(
         ForeignKey("sessions.session_id"), nullable=False
     )
-    driver_id: Mapped[str] = mapped_column(
+    driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
 
     driver: Mapped[Driver] = relationship(
-        back_populates="received_penalties", foreign_keys=[driver_id]  # type: ignore
+        back_populates="received_penalties", foreign_keys=[driver_id]
     )
     team: Mapped[Team] = relationship(
-        back_populates="received_penalties", foreign_keys=[team_id]  # type: ignore
+        back_populates="received_penalties", foreign_keys=[team_id]
     )
 
     @classmethod
@@ -132,7 +132,7 @@ class Penalty(Base):
             Penalty: The new object initialized with the given arguments.
         """
 
-        if not isinstance(report, Report):
+        if not report:
             raise TypeError(f"Cannot initialize Penalty object from {type(report)}.")
 
         c = cls(
@@ -222,14 +222,14 @@ class Report(Base):
         ForeignKey("categories.category_id"), nullable=False
     )
     round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    session_id: Mapped[str] = mapped_column(
+    session_id: Mapped[int] = mapped_column(
         ForeignKey("sessions.session_id"), nullable=False
     )
-    reported_driver_id: Mapped[str] = mapped_column(
+    reported_session_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
 
-    reporting_driver_id: Mapped[str] = mapped_column(
+    reporting_session_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
     reported_team_id: Mapped[int] = mapped_column(
@@ -346,7 +346,8 @@ class DriverCategory(Base):
     licence_points: Mapped[int] = mapped_column(
         SmallInteger, default=10, nullable=False
     )
-
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), primary_key=True
     )
@@ -390,7 +391,7 @@ class Driver(Base):
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
-    _telegram_id: Mapped[str] = mapped_column("telegram_id", Text, unique=True)
+    _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
         "DriverAssignment",
@@ -423,7 +424,7 @@ class Driver(Base):
             return NotImplemented
         return self.driver_id == other.driver_id
 
-    def __key(self) -> tuple:
+    def __key(self) -> tuple[int, str]:
         return self.driver_id, self.psn_id
 
     def __hash__(self) -> int:
@@ -474,7 +475,7 @@ class Driver(Base):
         return None
 
     @telegram_id.setter
-    def telegram_id(self, telegram_id: int):
+    def telegram_id(self, telegram_id: int | None):
         if telegram_id is None:
             self._telegram_id = None
         elif str(telegram_id).isnumeric():
@@ -510,7 +511,7 @@ class Driver(Base):
         """True if the driver is a leader of a team and is currently active."""
         return self.teams[-1].is_leader and self.is_active
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240)) # type: ignore
     def consistency(self) -> int:
         """Number 40-100 calculated based on the
         standard deviation of the set of relative finishing positions and the number
@@ -529,7 +530,7 @@ class Driver(Base):
         result = round(100 * participation_ratio - 3 * stdev(positions))
         return max(result, 40)
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def speed(self) -> int:
         """Statistic calculated on the average gap between
         the driver's qualifying times and the poleman's.
@@ -563,7 +564,7 @@ class Driver(Base):
         speed_score = round(100 - average_gap_percentage)
         return max(speed_score, 40)  # Lower bound is 40
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def sportsmanship(self) -> int:
         """This statistic is calculated based on the seriousness and
         amount of reports received.
@@ -588,7 +589,7 @@ class Driver(Base):
 
         return round(100 - sum(penalties) * 3 / len(self.race_results))
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def race_pace(self) -> int:
         """This statistic is calculated based on the average gap from the race winner
         in all of the races completed by the driver.
@@ -616,7 +617,7 @@ class Driver(Base):
         average_gap_percentage = min(average_gap_percentage, 60)
         return round(100 - average_gap_percentage)
 
-    @cached(cache=TTLCache(maxsize=50, ttl=240))
+    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def stats(self) -> dict[str, int | float]:
         """Calculates the number of wins, podiums and poles achieved by the driver."""
 
@@ -709,8 +710,8 @@ class QualifyingResult(Base):
     qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     position: Mapped[int] = mapped_column(SmallInteger)
     relative_position: Mapped[int] = mapped_column(SmallInteger)
-    laptime: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
-    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=8, scale=3))
+    laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     driver_id: Mapped[int] = mapped_column(
@@ -738,7 +739,7 @@ class QualifyingResult(Base):
     def points_earned(self) -> Decimal:
         """Points earned by the driver in this qualifying session."""
         if not self.participated:
-            return 0
+            return Decimal(0)
 
         return Decimal(self.session.point_system.scoring[self.position - 1])
 
@@ -843,7 +844,7 @@ class Team(Base):
         return None
 
     @property
-    def active_drivers(self) -> list[Driver]:
+    def active_drivers(self) -> list[DriverAssignment]:
         """List of drivers who currently have a contract with the team."""
         return [driver for driver in self.drivers if not driver.left_on]
 
@@ -965,7 +966,7 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[int] = mapped_column(String(15))
+    fastest_lap_points: Mapped[str] = mapped_column(String(15))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
@@ -996,7 +997,7 @@ class Category(Base):
     def __repr__(self) -> str:
         return f"Category(category_id={self.category_id},name={self.name})"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, Round):
             return NotImplemented
         return self.category_id == other.category_id
@@ -1032,7 +1033,17 @@ class Category(Base):
         """True if this Category has multiple car classes competing together."""
         return len(self.car_classes) > 1
 
-    def standings(self, n=0) -> dict[Driver, list[float]]:
+    def _sort_drivers(
+        self, standings: dict[Driver, tuple[Decimal, int, int]]
+    ) -> dict[Driver, Decimal]:
+        sorted_standings = sorted(
+            standings.items(),
+            key=lambda x: (x[1][0], -x[1][1] / x[1][2], -x[1][2]),
+        )
+
+        return {driver: values[0] for driver, values in sorted_standings}
+
+    def standings(self, n: int = 0) -> dict[Driver, list[float]]:
         """Calculates the current standings in this category.
 
         Args:
@@ -1059,7 +1070,9 @@ class Category(Base):
         if n == 0:
             n = len(completed_rounds)
 
-        results_up_to_n: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
+        results_up_to_n: DefaultDict[Driver, list[Decimal]] = defaultdict(
+            lambda: [Decimal(0), Decimal(0)]
+        )
 
         for championship_round in completed_rounds[:n]:
             for race_result in championship_round.race_results:
@@ -1133,15 +1146,15 @@ class Category(Base):
         """Creates a list containing a list for each round which contains the total amount
         of points each driver had after that round.
         """
-        array: list[list] = []
+        result: list[list[Decimal | int]] = []
         drivers = [driver.driver.psn_id for driver in self.drivers]
-        driver_map = defaultdict.fromkeys(drivers, 0.0)
-        array.append(["Tappa"] + drivers)
+        driver_map = defaultdict.fromkeys(drivers, Decimal(0.0))
+        result.append(["Tappa"] + drivers)
         for number, championship_round in enumerate(self.rounds, start=1):
             if not championship_round.completed:
                 continue
 
-            array.append([number])
+            result.append([number])
 
             for race_result in championship_round.race_results:
                 driver_map[race_result.driver.psn_id] += race_result.points_earned
@@ -1150,9 +1163,9 @@ class Category(Base):
                     qualifying_result.driver.psn_id
                 ] += qualifying_result.points_earned
 
-            array[number].extend(driver_map.values())
+            result[number].extend(driver_map.values())
 
-        return array
+        return result
 
 
 class PointSystem(Base):
@@ -1381,7 +1394,7 @@ class Session(Base):
 
     def participating_drivers(self) -> list[Driver]:
         """Returns a list of drivers who have participated to this session."""
-        drivers = []
+        drivers: list[Driver] = []
         if self.is_quali:
             for quali_result in self.qualifying_results:
                 if quali_result.participated:
@@ -1406,18 +1419,19 @@ class Session(Base):
         message = f"<i>{self.name}</i>\n"
 
         # Sorts results, drivers who didn't participate are put to the back of the list.
+        results: list[RaceResult | QualifyingResult] = [] # type: ignore
         if self.is_quali:
-            results: list[QualifyingResult] = sorted(
+            results.extend(sorted(
                 self.qualifying_results,
-                key=lambda x: x.laptime if x.laptime is not None else float("inf"),
-            )
+                key=lambda x: x.laptime if x.laptime is not None else float("inf"), # type: ignore
+            ))
         else:
-            results: list[RaceResult] = sorted(  # type: ignore
+            results.extend(sorted(
                 self.race_results,
-                key=lambda x: x.total_racetime
+                key=lambda x: x.total_racetime # type: ignore
                 if x.total_racetime is not None
                 else float("inf"),
-            )
+            ))
 
         for result in results:
             if result.participated:
@@ -1490,8 +1504,8 @@ class RaceResult(Base):
     relative_position: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gap_to_first: Mapped[Decimal] = mapped_column(Numeric(precision=3))
-    total_racetime: Mapped[Decimal] = mapped_column(Numeric(precision=3))
+    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=3))
+    total_racetime: Mapped[Decimal | None] = mapped_column(Numeric(precision=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1539,7 +1553,7 @@ class RaceResult(Base):
         """
 
         if not self.participated:
-            return 0
+            return Decimal(0)
 
         return Decimal(
             self.session.point_system.scoring[self.finishing_position - 1]
@@ -1603,7 +1617,7 @@ class Championship(Base):
 
     def non_disputed_rounds(self) -> list[Round]:
         """Returns all the rounds which have not been disputed yet."""
-        rounds = []
+        rounds: list[Round] = []
         for rnd in self.rounds:
             if not rnd.completed:
                 rounds.append(rnd)
@@ -1620,7 +1634,7 @@ class Championship(Base):
     @property
     def driver_list(self) -> list[Driver]:
         """List of drivers participating to this championship."""
-        drivers = []
+        drivers: list[Driver] = []
         for category in self.categories:
             for driver in category.drivers:
                 drivers.append(driver.driver)
