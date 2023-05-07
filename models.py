@@ -225,11 +225,11 @@ class Report(Base):
     session_id: Mapped[int] = mapped_column(
         ForeignKey("sessions.session_id"), nullable=False
     )
-    reported_session_id: Mapped[int] = mapped_column(
+    reported_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
 
-    reporting_session_id: Mapped[int] = mapped_column(
+    reporting_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
     reported_team_id: Mapped[int] = mapped_column(
@@ -242,13 +242,13 @@ class Report(Base):
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="reports")
     session: Mapped[Session] = relationship()
-    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])  # type: ignore
+    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id]) 
     reporting_driver: Mapped[Driver] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_driver_id]  # type: ignore
+        back_populates="reports_made", foreign_keys=[reporting_driver_id]
     )
-    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])  # type: ignore
+    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])  
     reporting_team: Mapped[Team] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_team_id]  # type: ignore
+        back_populates="reports_made", foreign_keys=[reporting_team_id]
     )
 
     def __str__(self) -> str:
