@@ -442,7 +442,7 @@ def get_all_drivers(session: SQLASession) -> list[Driver]:
     """
 
     result = session.execute(select(Driver)).all()
-        
+
     drivers = [r[0] for r in result]
-    
+
     return drivers
