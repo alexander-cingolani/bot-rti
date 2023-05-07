@@ -22,6 +22,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     Interval,
@@ -45,7 +46,7 @@ class Penalty(Base):
 
     Attributes:
         time_penalty (int): Seconds to add to the driver's total race time.
-        penalty_points (int): Points to be subtracted from the driver's
+        penalty_points (float): Points to be subtracted from the driver's
             points tally.
         licence_points (int): Points to be subtracted from the driver's licence.
         warnings (int): Number of warnings received.
@@ -78,8 +79,8 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    penalty_points: Mapped[Decimal] = mapped_column(
-        Numeric(precision=1), default=0, nullable=False
+    penalty_points: Mapped[float] = mapped_column(
+        Float(precision=1), default=0, nullable=False
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -242,11 +243,11 @@ class Report(Base):
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="reports")
     session: Mapped[Session] = relationship()
-    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id]) 
+    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])
     reporting_driver: Mapped[Driver] = relationship(
         back_populates="reports_made", foreign_keys=[reporting_driver_id]
     )
-    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])  
+    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])
     reporting_team: Mapped[Team] = relationship(
         back_populates="reports_made", foreign_keys=[reporting_team_id]
     )
@@ -347,7 +348,7 @@ class DriverCategory(Base):
         SmallInteger, default=10, nullable=False
     )
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
+    points: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), primary_key=True
     )
@@ -551,11 +552,15 @@ class Driver(Base):
 
         total_gap_percentages = 0.0
         for quali_result in qualifying_results:
-            total_gap_percentages += float(
-                quali_result.gap_to_first
-                / (quali_result.laptime - quali_result.gap_to_first)
-                * 1000
-            )
+            if (
+                quali_result.gap_to_first is not None
+                and quali_result.laptime is not None
+            ):
+                total_gap_percentages += float(
+                    quali_result.gap_to_first
+                    / (quali_result.laptime - quali_result.gap_to_first)
+                    * 1000
+                )
 
         average_gap_percentage = pow(
             total_gap_percentages / len(qualifying_results), 1.18
@@ -605,13 +610,17 @@ class Driver(Base):
 
         total_gap_percentages = 0.0
         for race_res in completed_races:
-            total_gap_percentages += (
-                float(
-                    race_res.gap_to_first
-                    / (race_res.total_racetime - race_res.gap_to_first)
+            if (
+                race_res.gap_to_first is not None
+                and race_res.total_racetime is not None
+            ):
+                total_gap_percentages += (
+                    float(
+                        race_res.gap_to_first
+                        / (race_res.total_racetime - race_res.gap_to_first)
+                    )
+                    * 1000
                 )
-                * 1000
-            )
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
@@ -736,12 +745,12 @@ class QualifyingResult(Base):
         return f"QualifyingResult({self.driver_id}, {self.position}, {self.laptime})"
 
     @property
-    def points_earned(self) -> Decimal:
+    def points_earned(self) -> float:
         """Points earned by the driver in this qualifying session."""
         if not self.participated:
-            return Decimal(0)
+            return 0
 
-        return Decimal(self.session.point_system.scoring[self.position - 1])
+        return self.session.point_system.scoring[self.position - 1]
 
 
 class CarClass(Base):
@@ -885,7 +894,7 @@ class TeamChampionship(Base):
     )
     joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
-    points: Mapped[float] = mapped_column(Numeric, nullable=False, default=0)
+    points: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
     team: Mapped[Team] = relationship("Team", back_populates="championships")
     championship: Mapped[Championship] = relationship(
@@ -1070,9 +1079,7 @@ class Category(Base):
         if n == 0:
             n = len(completed_rounds)
 
-        results_up_to_n: DefaultDict[Driver, list[Decimal]] = defaultdict(
-            lambda: [Decimal(0), Decimal(0)]
-        )
+        results_up_to_n: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
 
         for championship_round in completed_rounds[:n]:
             for race_result in championship_round.race_results:
@@ -1146,10 +1153,10 @@ class Category(Base):
         """Creates a list containing a list for each round which contains the total amount
         of points each driver had after that round.
         """
-        result: list[list[Decimal | int]] = []
+        result: list[list[float]] = []
         drivers = [driver.driver.psn_id for driver in self.drivers]
-        driver_map = defaultdict.fromkeys(drivers, Decimal(0.0))
-        result.append(["Tappa"] + drivers)
+        driver_map = defaultdict.fromkeys(drivers, float(0))
+        result.append(["Tappa"] + drivers)  # type: ignore
         for number, championship_round in enumerate(self.rounds, start=1):
             if not championship_round.completed:
                 continue
@@ -1432,13 +1439,13 @@ class Session(Base):
                 sorted(
                     self.race_results,
                     key=lambda x: x.total_racetime  # type: ignore
-                    if x.total_racetime is not None
+                    if x.total_racetime is not None  # type: ignore
                     else float("inf"),
                 )
             )
 
         for result in results:
-            if result.participated:
+            if result.gap_to_first:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
@@ -1551,15 +1558,15 @@ class RaceResult(Base):
         return float(self.category.fastest_lap_points.split()[1])
 
     @property
-    def points_earned(self) -> Decimal:
+    def points_earned(self) -> float:
         """Total amount of points earned by the driver in this race.
         (Finishing position + fastest lap points) *Does not take into account penalty points.
         """
 
         if not self.participated:
-            return Decimal(0)
+            return 0
 
-        return Decimal(
+        return (
             self.session.point_system.scoring[self.finishing_position - 1]
             + self.fastest_lap_points
         )
