@@ -335,13 +335,15 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     user_data = cast(dict[str, Any], context.user_data)
     sqla_session = cast(SQLASession, user_data["sqla_session"])
     reports = cast(list[Report], user_data["unreviewed_reports"])
-    selected_category = cast(Category, user_data["selected_category"])
     championship = cast(Championship, user_data["championship"])
 
     if not update.callback_query.data.isnumeric():
         user_data["selected_category"] = championship.categories[
             int(update.callback_query.data.removeprefix("C"))
         ]
+
+    selected_category = cast(Category, user_data["selected_category"])
+
     text = "Non risultano esserci segnalazioni "
     reply_markup = []
     for report in reports:
