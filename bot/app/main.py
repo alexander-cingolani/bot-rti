@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import datetime, time
+from datetime import datetime
 from typing import Any, cast
 from uuid import uuid4
 
@@ -873,22 +873,22 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=announce_reports,
-        time=time(0),
+        time=config.REPORT_WINDOW_OPENING,
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(
         callback=send_participants_list,
-        time=time(hour=0, minute=0, second=0),
+        time=config.PARTICIPANT_LIST_OPENING,
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
         callback=close_report_window,
-        time=time(hour=23, minute=59, second=59),
+        time=config.REPORT_WINDOW_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(
         callback=freeze_participation_list,
-        time=time(hour=21, minute=45),
+        time=config.PARTICIPANTS_LIST_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
 

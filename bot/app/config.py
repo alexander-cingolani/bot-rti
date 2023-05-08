@@ -2,10 +2,18 @@
 This module contains configuration options for the bot, such as commands available
 to different groups of users.
 """
+from datetime import time
 import json
 import os
 
 from telegram import User
+
+PARTICIPANT_LIST_OPENING = time(0)
+REPORT_WINDOW_OPENING = time(0)
+PARTICIPANTS_LIST_CLOSURE = time(hour=21, minute=45)
+REPORT_WINDOW_CLOSURE = time(hour=23, minute=59, second=59)
+
+
 
 REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
 TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
