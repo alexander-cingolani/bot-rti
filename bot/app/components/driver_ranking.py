@@ -3,11 +3,11 @@ This module contains the driver ranking function.
 """
 from decimal import Decimal
 
+import trueskill as ts  # type: ignore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import trueskill as ts  # type: ignore
-from models import Driver, RaceResult
 
+from models import Driver, RaceResult
 from queries import get_championship
 
 TrueSkillEnv = ts.TrueSkill(

@@ -4,12 +4,13 @@ This conversation allows users (admins) to save race and qualifying results to t
 by sending screenshots captured from the game or live stream.
 """
 
-from decimal import Decimal
 import os
+from decimal import Decimal
 from io import BytesIO
 from typing import Any, cast
 
-import app.components.config as config
+from app import config
+from app.components.driver_ranking import update_ratings
 from app.components.results_processing import (
     Result,
     image_to_results,
@@ -29,7 +30,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from app.components.driver_ranking import update_ratings
 
 from models import (
     Category,

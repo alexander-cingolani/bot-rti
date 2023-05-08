@@ -2,17 +2,17 @@
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
 
-from difflib import get_close_matches
 import json
 import logging
 import os
 import traceback
-from datetime import datetime, time
+from datetime import datetime
+from difflib import get_close_matches
 from typing import Any, cast
 from uuid import uuid4
 
 import pytz
-from app.components import config
+from app import config
 from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
@@ -30,7 +30,6 @@ from telegram import (
     Message,
     Update,
 )
-
 from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
@@ -46,9 +45,9 @@ from telegram.ext import (
     PicklePersistence,
     filters,
 )
-from models import Driver
 
-from queries import get_championship, get_driver, get_team_leaders, get_all_drivers
+from models import Driver
+from queries import get_all_drivers, get_championship, get_driver, get_team_leaders
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -873,22 +872,22 @@ def main() -> None:
 
     application.job_queue.run_daily(
         callback=announce_reports,
-        time=time(0),
+        time=config.REPORT_WINDOW_OPENING,
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(
         callback=send_participants_list,
-        time=time(hour=0, minute=0, second=0),
+        time=config.PARTICIPANT_LIST_OPENING,
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(
         callback=close_report_window,
-        time=time(hour=23, minute=59, second=59),
+        time=config.REPORT_WINDOW_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(
         callback=freeze_participation_list,
-        time=time(hour=21, minute=45),
+        time=config.PARTICIPANTS_LIST_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
 
