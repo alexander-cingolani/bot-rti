@@ -2,9 +2,9 @@
 This module contains configuration options for the bot, such as commands available
 to different groups of users.
 """
-from datetime import time
 import json
 import os
+from datetime import time
 
 from telegram import User
 

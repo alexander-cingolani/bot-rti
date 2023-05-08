@@ -2,12 +2,12 @@
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
 
-from difflib import get_close_matches
 import json
 import logging
 import os
 import traceback
 from datetime import datetime
+from difflib import get_close_matches
 from typing import Any, cast
 from uuid import uuid4
 
@@ -30,7 +30,6 @@ from telegram import (
     Message,
     Update,
 )
-
 from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
@@ -46,9 +45,9 @@ from telegram.ext import (
     PicklePersistence,
     filters,
 )
-from models import Driver
 
-from queries import get_championship, get_driver, get_team_leaders, get_all_drivers
+from models import Driver
+from queries import get_all_drivers, get_championship, get_driver, get_team_leaders
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO

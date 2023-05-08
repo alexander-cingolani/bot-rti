@@ -2,12 +2,12 @@
 Contains functions used to operate on results or parts of results.
 """
 
-from io import BytesIO
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from difflib import get_close_matches
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageFilter

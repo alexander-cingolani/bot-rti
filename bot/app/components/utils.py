@@ -1,7 +1,7 @@
 """
 Helper stuff.
 """
-from telegram import Update, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup, Update
 
 
 async def send_or_edit_message(

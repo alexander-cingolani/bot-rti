@@ -24,7 +24,6 @@ from queries import get_driver, get_similar_driver
 CHECK_ID, ID = range(2)
 OWNER = User(id=config.OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
-
 engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
