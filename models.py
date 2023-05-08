@@ -1087,13 +1087,12 @@ class Category(Base):
         driver_positions_up_to_last_round = sorted(
             driver_points_in_last_round.keys(),
             key=lambda d: driver_points_in_last_round[d],
-            reverse=True
+            reverse=True,
         )
         results: dict[Driver, tuple[float, int]] = {}
         for driver in self.drivers:
-            delta = (
-                driver.position
-                - (driver_positions_up_to_last_round.index(driver.driver) +1)
+            delta = driver.position - (
+                driver_positions_up_to_last_round.index(driver.driver) + 1
             )
             results[driver.driver] = (driver.points, delta)
 
