@@ -14,7 +14,6 @@ PARTICIPANTS_LIST_CLOSURE = time(hour=21, minute=45)
 REPORT_WINDOW_CLOSURE = time(hour=23, minute=59, second=59)
 
 
-
 REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
 TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
 LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])
