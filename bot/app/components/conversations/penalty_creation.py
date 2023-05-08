@@ -341,9 +341,9 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         user_data["selected_category"] = championship.categories[
             int(update.callback_query.data.removeprefix("C"))
         ]
-    
+
     selected_category = cast(Category, user_data["selected_category"])
-        
+
     text = "Non risultano esserci segnalazioni "
     reply_markup = []
     for report in reports:
