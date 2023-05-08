@@ -991,7 +991,7 @@ class Category(Base):
         "QualifyingResult", back_populates="category"
     )
     drivers: Mapped[list[DriverCategory]] = relationship(
-        "DriverCategory", back_populates="category", order_by="DriverCategory.driver_id"
+        "DriverCategory", back_populates="category", order_by="DriverCategory.position"
     )
     game: Mapped[Game] = relationship("Game")
     championship: Mapped[Championship] = relationship(
@@ -1052,81 +1052,52 @@ class Category(Base):
 
         return {driver: values[0] for driver, values in sorted_standings}
 
-    def standings(self, n: int = 0) -> dict[Driver, list[float]]:
+    def standings(self, n: int = 0) -> dict[Driver, tuple[float, int]]:
         """Calculates the current standings in this category.
 
         Args:
             n (Optional[int]): Number of races to go back. (Must be 0 or negative)
 
         Returns:
-            DefaultDict[Driver, [int, int]]: DefaultDict containing Drivers as keys
+            DefaultDict[Driver, [float]]: DefaultDict containing Drivers as keys
                 and a list containing the total points and the number of positions
                 gained by the driver in the championship standings in the last
-                completed_rounds - n races.
+                completed_rounds.
         """
 
-        if n > 0:
-            raise ValueError("n must be less or equals to 0")
+        driver_points_in_last_round: DefaultDict[Driver, float] = defaultdict(lambda: 0)
 
-        completed_rounds: list[Round] = []
-        for championship_round in self.rounds:
-            if championship_round.completed:
-                completed_rounds.append(championship_round)
+        last_completed_round = self.last_completed_round()
+        if not last_completed_round:
+            return {driver.driver: (0, 0) for driver in self.drivers}
 
-        if not completed_rounds:
-            return {dc.driver: [0, 0] for dc in self.drivers}
+        # Sum points earned in races
+        for race_result in self.race_results:
+            if race_result.round_id == last_completed_round.round_id:
+                break
+            driver_points_in_last_round[race_result.driver] += race_result.points_earned
+        # Sum points earned in qualifying sessions
+        for quali_result in self.qualifying_results:
+            if quali_result.round_id == last_completed_round.round_id:
+                break
+            driver_points_in_last_round[
+                quali_result.driver
+            ] += quali_result.points_earned
 
-        if n == 0:
-            n = len(completed_rounds)
-
-        results_up_to_n: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
-
-        for championship_round in completed_rounds[:n]:
-            for race_result in championship_round.race_results:
-                results_up_to_n[race_result.driver][0] += race_result.points_earned
-
-            for qualifying_result in championship_round.qualifying_results:
-                results_up_to_n[qualifying_result.driver][
-                    0
-                ] += qualifying_result.points_earned
-
-        sorted_results_up_to_n = dict(
-            sorted(results_up_to_n.items(), key=lambda x: x[1], reverse=True)
+        driver_positions_up_to_last_round = sorted(
+            driver_points_in_last_round.keys(),
+            key=lambda d: driver_points_in_last_round[d],
+            reverse=True
         )
+        results: dict[Driver, tuple[float, int]] = {}
+        for driver in self.drivers:
+            delta = (
+                driver.position
+                - (driver_positions_up_to_last_round.index(driver.driver) +1)
+            )
+            results[driver.driver] = (driver.points, delta)
 
-        if n == len(self.race_results):
-            return sorted_results_up_to_n
-
-        # Calculates the points earned in the last n races
-        results_after_n: DefaultDict[Driver, float] = defaultdict(lambda: 0)
-        for championship_round in completed_rounds[n:]:
-            for race_result in championship_round.race_results:
-                results_after_n[race_result.driver] += race_result.points_earned
-            for qualifying_result in championship_round.qualifying_results:
-                results_after_n[
-                    qualifying_result.driver
-                ] += qualifying_result.points_earned
-
-        complete_results: DefaultDict[Driver, list[float]] = defaultdict(lambda: [0, 0])
-        for driver, (points, _) in sorted_results_up_to_n.items():
-            complete_results[driver][0] += points + results_after_n[driver]
-
-        # Adds the drivers who may have joined the championship within those n races
-        # in complete_results as well.
-        for driver, points in results_after_n.items():
-            if driver not in complete_results:
-                complete_results[driver] = [points, 0]
-
-        complete_sorted_results = dict(
-            sorted(complete_results.items(), key=lambda x: x[1], reverse=True)
-        )
-        for i, driver in enumerate(complete_sorted_results):
-            for i2, driver2 in enumerate(sorted_results_up_to_n):
-                if driver2 == driver:
-                    complete_sorted_results[driver][1] = i - i2
-                    break
-
-        return complete_sorted_results
+        return results
 
     def standings_with_results(self):
         """Calculates the current standings in this category.
@@ -1445,7 +1416,7 @@ class Session(Base):
             )
 
         for result in results:
-            if result.gap_to_first:
+            if result.participated:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000

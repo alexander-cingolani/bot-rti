@@ -17,7 +17,6 @@ from models import (
     Championship,
     Driver,
     DriverAssignment,
-    DriverCategory,
     Penalty,
     QualifyingResult,
     RaceResult,
@@ -302,13 +301,11 @@ def save_results(
     for quali_result in qualifying_results:
         points_earned = quali_result.points_earned
         driver_points[quali_result.driver] += points_earned
-        
+
         # Should never be None, since every driver who takes part in a race/qualifying session
         # must also be part of a team. No wild cards are allowed.
         team_championship: TeamChampionship = quali_result.driver.current_team().current_championship()  # type: ignore
         team_championship.points += points_earned
-        driver_category: DriverCategory = quali_result.driver.categories[-1]
-        driver_category.points += float(points_earned)
 
     # Calculates points earned across all race sessions by each driver.
     for race_session in races:
@@ -323,6 +320,16 @@ def save_results(
                 current_team.current_championship()  #  type: ignore
             )
             team_championship.points += float(points_earned)
+
+    drivers = qualifying_results[0].category.drivers
+
+    for driver in drivers:
+        driver.points += driver_points[driver.driver]
+
+    drivers.sort(key=lambda d: d.points, reverse=True)
+
+    for p, driver in enumerate(drivers, 1):
+        driver.position = p
 
     session.commit()
 
@@ -372,16 +379,16 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         race_results.append(race_result)
         if race_result.driver_id == penalty.driver.driver_id:
             previous_points = race_result.points_earned
-            race_result.total_racetime += penalty.time_penalty # type: ignore
+            race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
 
     # Sorts the race results after the time penalty has been applied
-    race_results.sort(key=lambda x: x.total_racetime) # type: ignore
+    race_results.sort(key=lambda x: x.total_racetime)  # type: ignore
 
     # Applies the correct finishing position, recalculates the gap_to_first.
     best_time = race_results[0].total_racetime
     for position, result in enumerate(race_results, start=1):
-        result.gap_to_first = result.total_racetime - best_time # type: ignore
+        result.gap_to_first = result.total_racetime - best_time  # type: ignore
         result.finishing_position = position
 
     if not penalised_race_result:
