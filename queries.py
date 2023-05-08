@@ -4,7 +4,6 @@ such as Reports, Categories and Drivers.
 """
 
 from collections import defaultdict
-from decimal import Decimal
 
 import sqlalchemy as sa
 from cachetools import TTLCache, cached
@@ -295,7 +294,7 @@ def save_results(
 ) -> None:
     """"""
 
-    driver_points: defaultdict[Driver, Decimal] = defaultdict(Decimal)
+    driver_points: defaultdict[Driver, float] = defaultdict(float)
 
     # Calculates points earned in qualifying by each driver.
     session.add_all(qualifying_results)
@@ -306,7 +305,7 @@ def save_results(
         # Should never be None, since every driver who takes part in a race/qualifying session
         # must also be part of a team. No wild cards are allowed.
         team_championship: TeamChampionship = quali_result.driver.current_team().current_championship()  # type: ignore
-        team_championship.points += float(points_earned)
+        team_championship.points += points_earned
 
     # Calculates points earned across all race sessions by each driver.
     for race_session in races:
@@ -321,6 +320,16 @@ def save_results(
                 current_team.current_championship()  #  type: ignore
             )
             team_championship.points += float(points_earned)
+
+    drivers = qualifying_results[0].category.drivers
+
+    for driver in drivers:
+        driver.points += driver_points[driver.driver]
+
+    drivers.sort(key=lambda d: d.points, reverse=True)
+
+    for p, driver in enumerate(drivers, 1):
+        driver.position = p
 
     session.commit()
 
@@ -368,20 +377,18 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
-
         if race_result.driver_id == penalty.driver.driver_id:
-            # previous_points is always defined since this if statement is guaranteed to run.
             previous_points = race_result.points_earned
-            race_result.total_racetime += penalty.time_penalty
+            race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
 
     # Sorts the race results after the time penalty has been applied
-    race_results.sort(key=lambda x: x.total_racetime)
+    race_results.sort(key=lambda x: x.total_racetime)  # type: ignore
 
     # Applies the correct finishing position, recalculates the gap_to_first.
     best_time = race_results[0].total_racetime
     for position, result in enumerate(race_results, start=1):
-        result.gap_to_first = result.total_racetime - best_time
+        result.gap_to_first = result.total_racetime - best_time  # type: ignore
         result.finishing_position = position
 
     if not penalised_race_result:
@@ -442,7 +449,7 @@ def get_all_drivers(session: SQLASession) -> list[Driver]:
     """
 
     result = session.execute(select(Driver)).all()
-        
+
     drivers = [r[0] for r in result]
-    
+
     return drivers
