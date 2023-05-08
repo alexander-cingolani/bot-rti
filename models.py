@@ -243,11 +243,13 @@ class Report(Base):
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="reports")
     session: Mapped[Session] = relationship()
-    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])
+
+    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id]) 
     reporting_driver: Mapped[Driver] = relationship(
         back_populates="reports_made", foreign_keys=[reporting_driver_id]
     )
-    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])
+    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])  
+    
     reporting_team: Mapped[Team] = relationship(
         back_populates="reports_made", foreign_keys=[reporting_team_id]
     )
