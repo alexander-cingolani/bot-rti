@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from app.components import config
+from app import config
 from app.components.documents import ReportDocument
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked

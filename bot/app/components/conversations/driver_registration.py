@@ -4,7 +4,7 @@ This module contains all the callbacks necessary to register drivers to the data
 import os
 from typing import Any, cast
 
-from app.components import config
+from app import config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker

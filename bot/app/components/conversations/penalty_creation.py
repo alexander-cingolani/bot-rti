@@ -7,7 +7,7 @@ import os
 from collections import defaultdict
 from typing import Any, DefaultDict, cast
 
-from app.components import config
+from app import config
 from app.components.documents import PenaltyDocument
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked

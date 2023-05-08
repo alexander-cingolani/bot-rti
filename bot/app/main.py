@@ -12,7 +12,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 import pytz
-from app.components import config
+from app import config
 from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation

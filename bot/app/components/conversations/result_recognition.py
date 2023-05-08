@@ -9,7 +9,7 @@ import os
 from io import BytesIO
 from typing import Any, cast
 
-import app.components.config as config
+from app import config
 from app.components.results_processing import (
     Result,
     image_to_results,
