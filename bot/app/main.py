@@ -619,13 +619,13 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
 
-    participants: dict[Driver, RoundParticipant] = {}
+    participants: list[RoundParticipant] = []
     for driver in drivers:
         participant = RoundParticipant(
             round_id=rnd.round_id,
             driver_id=driver.driver_id,
         )
-        participants[driver.driver] = participant
+        participants.append(participant)
         sqla_session.add(participant)
 
         text += f"\n{driver.driver.psn_id}"
