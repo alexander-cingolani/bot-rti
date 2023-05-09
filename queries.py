@@ -21,6 +21,7 @@ from models import (
     QualifyingResult,
     RaceResult,
     Report,
+    RoundParticipant,
     Session,
     Team,
     TeamChampionship,
@@ -452,3 +453,20 @@ def get_all_drivers(session: SQLASession) -> list[Driver]:
     drivers = [r[0] for r in result]
 
     return drivers
+
+
+def get_participants_from_round(
+    session: SQLASession, round_id: int
+) -> list[RoundParticipant]:
+    """Returns a list containing the participants to a particular round.
+
+    Args:
+        session (SQLASession): Session to execute the query with.
+    """
+    result = session.execute(
+        select(RoundParticipant).where(RoundParticipant.round_id == round_id)
+    ).all()
+
+    participants = [r[0] for r in result]
+
+    return participants

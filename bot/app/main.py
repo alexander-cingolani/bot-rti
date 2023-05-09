@@ -18,7 +18,7 @@ from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results_conv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session as SQLASession
 from telegram import (
     BotCommandScopeAllPrivateChats,
     BotCommandScopeChat,
@@ -46,8 +46,14 @@ from telegram.ext import (
     filters,
 )
 
-from models import Driver
-from queries import get_all_drivers, get_championship, get_driver, get_team_leaders
+from models import Driver, Participation, RoundParticipant
+from queries import (
+    get_all_drivers,
+    get_championship,
+    get_driver,
+    get_participants_from_round,
+    get_team_leaders,
+)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -613,10 +619,18 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_data["participation_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
 
-    participants: dict[Driver, str | None] = {}
+    participants: dict[Driver, RoundParticipant] = {}
     for driver in drivers:
-        participants[driver.driver] = None
+        participant = RoundParticipant(
+            round_id=rnd.round_id,
+            driver_id=driver.driver_id,
+        )
+        participants[driver.driver] = participant
+        sqla_session.add(participant)
+
         text += f"\n{driver.driver.psn_id}"
+
+    sqla_session.commit()
 
     chat_data["participants"] = participants
 
@@ -630,13 +644,8 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         ]
     )
 
-    if context.bot_data.get("called_manually_by"):
-        chat_id = context.bot_data.pop("called_manually_by")
-    else:
-        chat_id = config.GROUP_CHAT
-
     message = await context.bot.send_message(
-        chat_id=chat_id, text=text, reply_markup=reply_markup
+        chat_id=config.GROUP_CHAT, text=text, reply_markup=reply_markup
     )
 
     chat_data["participation_list_message"] = message
@@ -654,15 +663,46 @@ async def update_participation_list(
     """Manages updates to the list of drivers supposed to participate to a race."""
     chat_data = cast(dict[str, Any], context.chat_data)
 
-    if not chat_data.get("participants"):
-        return
-
-    session = chat_data.get("participation_list_sqlasession")
+    session: SQLASession | None = chat_data.get("participation_list_sqlasession")
     if not session:
-        return
+        session = DBSession()
+
+    if not chat_data.get("participants"):
+        championship = get_championship(session)
+
+        if not championship:
+            await update.callback_query.answer(
+                "Il campionato a cui è legata questa lista è terminato.",
+                show_alert=True,
+            )
+            return
+
+        category = championship.current_racing_category()
+
+        if not category:
+            await update.callback_query.answer(
+                "Questa lista è vecchia. La gara a cui si riferiva è gia passata.",
+                show_alert=True,
+            )
+            return
+
+        rnd = category.next_round()
+        if not rnd:
+            return
+
+        chat_data["participants"] = get_participants_from_round(
+                session, rnd.round_id
+            )
+
+        text = (
+            f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
+            f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
+        )
+        chat_data["participation_list_text"] = text
+        chat_data["participation_list_message"] = update.message
 
     driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
-    participants = cast(dict[Driver, str | None], chat_data["participants"])
+    participants = cast(list[RoundParticipant], chat_data["participants"])
 
     if not driver:
         await update.callback_query.answer(
@@ -671,7 +711,10 @@ async def update_participation_list(
         )
         return
 
-    if driver not in participants:
+    for i, participant in enumerate(participants):
+        if driver.driver_id == participant.driver_id:
+            break
+    else:
         await update.callback_query.answer(
             "Non risulti come partecipante a questa categoria. Se si tratta di un errore, "
             f"contatta @gino_pincopallo",
@@ -682,33 +725,43 @@ async def update_participation_list(
     received_status = update.callback_query.data
 
     # If the user clicks the same answer again, do nothing.
-    if received_status == participants[driver]:
+    if received_status == participant.participating:
         return
 
-    participants[driver] = received_status
+    match received_status:
+        case "participating":
+            participant.participating = Participation.YES
+        case "not_participating":
+            participant.participating = Participation.NO
+        case "not_sure":
+            participant.participating = Participation.UNCERTAIN
+        case _:
+            pass
+
+    session.commit()
+
+    participants[i] = participant
 
     text: str = chat_data["participation_list_text"]
     text += "\n{confirmed}/{total}\n"
 
     confirmed = 0
     total_drivers = 0
-    for driver, status in chat_data["participants"].items():
-        total_drivers += 1
 
-        match status:
-            case None:
+    for participant in participants:
+        total_drivers += 1
+        match participant.participating:
+            case Participation.NO_REPLY:
                 text_status = ""
-            case "participating":
+            case Participation.YES:
                 text_status = "✅"
                 confirmed += 1
-            case "not_sure":
+            case Participation.UNCERTAIN:
                 text_status = "❓"
-            case "not_participating":
+            case Participation.NO:
                 text_status = "❌"
-            case _:
-                pass
 
-        text += f"\n{driver.psn_id} {text_status}"  # type: ignore | Driver can't be None here.
+        text += f"\n{participant.driver.psn_id} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
