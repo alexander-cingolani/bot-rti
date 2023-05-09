@@ -5,6 +5,7 @@ RacingTeamItalia's championships and drivers.
 from __future__ import annotations
 
 import datetime
+import enum
 import os
 import uuid
 from collections import defaultdict
@@ -1230,6 +1231,7 @@ class Round(Base):
         "QualifyingResult",
         back_populates="round",
     )
+    participants: Mapped[list[RoundParticipant]] = relationship("RoundParticipant", back_populates="round")
 
     def __repr__(self) -> str:
         return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, completed={self.completed})"
@@ -1650,3 +1652,26 @@ class Circuit(Base):
         subdomain = os.environ.get("SUBDOMAIN")
         file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
+
+
+class Participation(enum.Enum):
+    YES = "YES"
+    NO = "NO"
+    UNCERTAIN = "UNCERTAIN"
+    NO_REPLY = "NO_REPLY"
+
+
+class RoundParticipant(Base):
+    """This object is used to keep track of what"""
+
+    __tablename__ = "round_participants"
+
+    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), primary_key=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.driver_id"), primary_key=True)
+
+    participating: Mapped[Participation] = mapped_column(
+        Enum(Participation, name="participation"), nullable=False, default=Participation.NO_REPLY.value
+    )
+
+    round: Mapped[Round] = relationship("Round", back_populates="participants")
+    driver: Mapped[Driver] = relationship("Driver")

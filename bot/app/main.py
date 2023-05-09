@@ -892,7 +892,7 @@ def main() -> None:
     )
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("aiuto", help_command))
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)
