@@ -1231,7 +1231,9 @@ class Round(Base):
         "QualifyingResult",
         back_populates="round",
     )
-    participants: Mapped[list[RoundParticipant]] = relationship("RoundParticipant", back_populates="round")
+    participants: Mapped[list[RoundParticipant]] = relationship(
+        "RoundParticipant", back_populates="round"
+    )
 
     def __repr__(self) -> str:
         return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, completed={self.completed})"
@@ -1666,11 +1668,17 @@ class RoundParticipant(Base):
 
     __tablename__ = "round_participants"
 
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), primary_key=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.driver_id"), primary_key=True)
+    round_id: Mapped[int] = mapped_column(
+        ForeignKey("rounds.round_id"), primary_key=True
+    )
+    driver_id: Mapped[int] = mapped_column(
+        ForeignKey("drivers.driver_id"), primary_key=True
+    )
 
     participating: Mapped[Participation] = mapped_column(
-        Enum(Participation, name="participation"), nullable=False, default=Participation.NO_REPLY.value
+        Enum(Participation, name="participation"),
+        nullable=False,
+        default=Participation.NO_REPLY.value,
     )
 
     round: Mapped[Round] = relationship("Round", back_populates="participants")

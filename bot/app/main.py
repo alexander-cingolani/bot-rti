@@ -690,9 +690,7 @@ async def update_participation_list(
         if not rnd:
             return
 
-        chat_data["participants"] = get_participants_from_round(
-                session, rnd.round_id
-            )
+        chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
 
         text = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
