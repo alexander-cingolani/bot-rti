@@ -1409,7 +1409,7 @@ class Session(Base):
             )
 
         for result in results:
-            if result.participated:
+            if result.gap_to_first:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
