@@ -22,13 +22,13 @@ class PenaltyDocument:
         penalty: Penalty,
     ) -> None:
         if not penalty.time_penalty and not penalty.penalty_points:
-            filename = f"{penalty.number} - Decisione {penalty.driver.psn_id}.pdf"
+            self.filename = f"{penalty.number} - Decisione {penalty.driver.psn_id}.pdf"
         else:
-            filename = f"{penalty.number} - Penalità {penalty.driver.psn_id}.pdf"
+            self.filename = f"{penalty.number} - Penalità {penalty.driver.psn_id}.pdf"
 
         self.penalty: Penalty = penalty
-        self.canvas = canvas.Canvas(filename=filename)
-        self.canvas.setTitle(filename)
+        self.canvas = canvas.Canvas(filename=self.filename)
+        self.canvas.setTitle(self.filename)
 
     def __header(self):
         self.canvas.drawImage(
@@ -134,7 +134,7 @@ class PenaltyDocument:
 
         self.canvas.save()
 
-        return self.canvas._filename
+        return self.filename
 
 
 class ReportDocument:
