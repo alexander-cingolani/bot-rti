@@ -16,7 +16,7 @@ WORKDIR /bot
 COPY ./bot/app /bot/app
 
 ADD ./bot/requirements.txt /bot/requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-cache
 
 # DEBUGGER ############################
 FROM base as debugger

@@ -16,7 +16,7 @@ WORKDIR /api
 COPY ./api/app /api/app
 
 ADD ./api/requirements.txt /api/requirements.txt
-RUN pip install --upgrade -r /api/requirements.txt
+RUN pip install --upgrade -r /api/requirements.txt --no-cache
 
 
 CMD ["hypercorn", "--bind", "0.0.0.0:80", "app.main:app"]
