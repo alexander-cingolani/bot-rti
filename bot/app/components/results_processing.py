@@ -28,11 +28,6 @@ class Result:
     or QualifyingResult objects.
     """
 
-    driver: DriverCategory | None
-    seconds: Decimal | None
-    position: int | None
-    fastest_lap: bool
-
     def __str__(self) -> str:
         if self.driver:
             return (
@@ -40,9 +35,9 @@ class Result:
             )
         return f"(driver_name=None, position={self.position})"
 
-    def __init__(self, driver: DriverCategory | None, seconds: Decimal | None):
-        self.seconds = seconds
+    def __init__(self, driver: DriverCategory, seconds: Decimal | None):
         self.driver = driver
+        self.seconds = seconds
         self.position = 0
         self.fastest_lap = False
 
@@ -157,19 +152,17 @@ def image_to_results(
         name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
         laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
 
-        driver_psn_id: str = image_to_string(name_box).strip()  # type: ignore
+        driver_psn_id: str = image_to_string(name_box).strip()
 
-        seconds_str: str = image_to_string(laptime_box)  # type: ignore
+        seconds_str: str = image_to_string(laptime_box)
         seconds = string_to_seconds(seconds_str)
-        matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0.1)
+        matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0)
 
         if matches and len(driver_psn_id) >= 3:
             driver_category = remaining_drivers.pop(matches[0])
             race_res = Result(driver_category, seconds)
             results.append(race_res)
 
-        elif seconds:
-            results.append(Result(None, seconds))
         top += INCREMENT
         bottom += INCREMENT
 

@@ -447,13 +447,6 @@ class Driver(Base):
             return None
         return self.categories[-1].category
 
-    def current_class(self) -> CarClass | None:
-        """Returns the car class the driver is currently competing in."""
-        for category in self.categories:
-            if not category.left_on:
-                return category.car_class
-        return None
-
     @property
     def current_race_number(self) -> int | None:
         """The number currently being used by the Driver in races."""
@@ -1040,11 +1033,6 @@ class Category(Base):
         """Returns list of drivers who are currently competing in this category."""
         return [driver for driver in self.drivers if not driver.left_on]
 
-    @property
-    def multi_class(self) -> bool:
-        """True if this Category has multiple car classes competing together."""
-        return len(self.car_classes) > 1
-
     def _sort_drivers(
         self, standings: dict[Driver, tuple[Decimal, int, int]]
     ) -> dict[Driver, Decimal]:
@@ -1421,7 +1409,7 @@ class Session(Base):
             )
 
         for result in results:
-            if result.participated:
+            if result.gap_to_first:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000

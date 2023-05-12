@@ -185,11 +185,13 @@ async def save_session(
             current_session = session
             user_data["current_session"] = current_session
             break
+    else:
+        return ConversationHandler.END
 
     # Asks the user for the text/screenshot of the results from the selected session.
     text = (
         "Inviami il testo o lo screenshot contenente"
-        f" i risultati di <b>{current_session.name}</b>."  # type: ignore
+        f" i risultati di <b>{current_session.name}</b>."
     )
     await update.callback_query.edit_message_text(text)
     return SAVE_RESULTS
@@ -371,7 +373,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         category=category,
                         laptime=result.seconds,
                         gap_to_first=gap_to_first,
-                        driver=result.driver.driver,  # type: ignore
+                        driver=result.driver.driver,
                         participated=bool(result.seconds),
                         round=session.round,
                         session=session,

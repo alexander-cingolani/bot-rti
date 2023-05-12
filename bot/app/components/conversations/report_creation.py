@@ -149,9 +149,16 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     category: Category = user_data["category"]
 
     championship_round = category.first_non_completed_round()
+
+    if not championship_round:
+        await update.callback_query.message.reply_text(
+            "Non sono stati salvati i risultati per il round di questa tappa."
+        )
+        return ConversationHandler.END
+
     user_data["round"] = championship_round
     buttons: list[InlineKeyboardButton] = []
-    for i, session in enumerate(championship_round.sessions):  # type: ignore
+    for i, session in enumerate(championship_round.sessions):
         session_alias = f"s{i}"
         user_data["sessions"][session_alias] = session
         buttons.append(InlineKeyboardButton(session.name, callback_data=session_alias))
@@ -164,7 +171,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
     )
 
-    round_number = championship_round.number  # type: ignore
+    round_number = championship_round.number
     text = f"""
 <b>{user_data["category"].name}</b> - Tappa {round_number} 
 Scegli la sessione dove è avvenuto l'incidente:"""
