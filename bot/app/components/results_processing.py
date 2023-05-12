@@ -131,9 +131,9 @@ def image_to_results(
     image_file = Image.open(fp=image)
 
     image_file = image_file.convert("L").resize(
-        [3 * _ for _ in image_file.size], Image.BICUBIC # type: ignore
+        [3 * _ for _ in image_file.size], Image.BICUBIC  # type: ignore
     )
-    image_file = image_file.point(lambda p: p > 100 and p + 100) # type: ignore
+    image_file = image_file.point(lambda p: p > 100 and p + 100)  # type: ignore
     image_file = image_file.filter(ImageFilter.MinFilter(3))
     # image_file = image_file.convert("L")
     # image_file = Brightness(image_file).enhance(0.3)
@@ -162,7 +162,7 @@ def image_to_results(
             driver_category = remaining_drivers.pop(matches[0])
             race_res = Result(driver_category, seconds)
             results.append(race_res)
-            
+
         top += INCREMENT
         bottom += INCREMENT
 
