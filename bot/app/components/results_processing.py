@@ -232,13 +232,13 @@ def string_to_seconds(string: str) -> Decimal | None:
     if matched_string.count(":") == 2 and "." in matched_string:
         t = datetime.strptime(matched_string, "%H:%M:%S.%f").time()
     elif matched_string.count(":") == 2:
-        t = datetime.strptime(matched_string, "%H:%M:%S")
+        t = datetime.strptime(matched_string, "%H:%M:%S").time()
     elif ":" in matched_string and "." in matched_string:
-        t = datetime.strptime(matched_string, "%M:%S.%f")
+        t = datetime.strptime(matched_string, "%M:%S.%f").time()
     elif ":" in matched_string:
-        t = datetime.strptime(matched_string, "%H:%M:%S")
+        t = datetime.strptime(matched_string, "%H:%M:%S").time()
     elif "." in matched_string:
-        t = datetime.strptime(matched_string, "%S.%f")
+        t = datetime.strptime(matched_string, "%S.%f").time()
     else:
         return Decimal(matched_string)
 

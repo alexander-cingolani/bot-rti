@@ -457,9 +457,11 @@ class Driver(Base):
         for driver_category in current_category.drivers:
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
+        
+        return None
 
     @property
-    def rating(self) -> Decimal | None:
+    def rating(self) -> Decimal:
         """Current TrueSkill rating."""
         k = Decimal(25) / (Decimal(25) / Decimal(3))
         return self.mu - k * self.sigma

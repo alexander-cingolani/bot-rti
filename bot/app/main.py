@@ -691,12 +691,10 @@ async def update_participation_list(
             return
 
         chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
-
-        text = (
+        chat_data["participation_list_text"] = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
             f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
         )
-        chat_data["participation_list_text"] = text
         chat_data["participation_list_message"] = update.message
 
     driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
@@ -921,22 +919,22 @@ def main() -> None:
         .build()
     )
 
-    application.job_queue.run_daily(
+    application.job_queue.run_daily(  # type: ignore
         callback=announce_reports,
         time=config.REPORT_WINDOW_OPENING,
         chat_id=config.REPORT_CHANNEL,
     )
-    application.job_queue.run_daily(
+    application.job_queue.run_daily(  # type: ignore
         callback=send_participants_list,
         time=config.PARTICIPANT_LIST_OPENING,
         chat_id=config.GROUP_CHAT,
     )
-    application.job_queue.run_daily(
+    application.job_queue.run_daily(  # type: ignore
         callback=close_report_window,
         time=config.REPORT_WINDOW_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
-    application.job_queue.run_daily(
+    application.job_queue.run_daily(  # type: ignore
         callback=freeze_participation_list,
         time=config.PARTICIPANTS_LIST_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
