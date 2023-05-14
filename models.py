@@ -38,6 +38,14 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
+DOMAIN = os.environ.get("ZONE")
+SUBDOMAIN = os.environ.get("SUBDOMAIN")
+IMAGE_DIR_URL = f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/"
+CIRCUIT_LOGO_DIR_URL = (
+    f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/circuit_logos/"
+)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -458,8 +466,10 @@ class Driver(Base):
             if self.driver_id == driver_category.driver_id:
                 return driver_category.race_number
 
+        return None
+
     @property
-    def rating(self) -> Decimal | None:
+    def rating(self) -> Decimal:
         """Current TrueSkill rating."""
         k = Decimal(25) / (Decimal(25) / Decimal(3))
         return self.mu - k * self.sigma
@@ -854,12 +864,10 @@ class Team(Base):
         return [driver for driver in self.drivers if not driver.left_on]
 
     @property
-    def logo(self) -> str:
+    def logo_url(self) -> str:
         """The path to the team's logo."""
-        domain = os.environ.get("ZONE")
-        subdomain = os.environ.get("SUBDOMAIN")
-        file = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
-        return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/{file}"
+        filename = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
+        return IMAGE_DIR_URL + filename
 
     def current_championship(self) -> TeamChampionship | None:
         """Returns the championship which is still underway."""
@@ -1637,11 +1645,9 @@ class Circuit(Base):
     rounds: Mapped[list[Round]] = relationship("Round", back_populates="circuit")
 
     @property
-    def logo(self) -> str:
-        domain = os.environ.get("ZONE")
-        subdomain = os.environ.get("SUBDOMAIN")
-        file = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
-        return f"https://{subdomain + '.' if subdomain else ''}{domain}/images/circuit_logos/{file}"
+    def logo_url(self) -> str:
+        filename = f"{self.circuit_name.lower().replace(' ', '-')}.png"
+        return CIRCUIT_LOGO_DIR_URL + filename
 
 
 class Participation(enum.Enum):

@@ -76,7 +76,7 @@ def get_calendar(category_id: int):
 
         calendar.append(
             {
-                "circuit_logo": championship_round.circuit.logo,
+                "circuit_logo": championship_round.circuit.logo_url,
                 "circuit": championship_round.circuit.abbreviated_name,
                 "info": info,
             }
@@ -207,6 +207,8 @@ def get_teams_list(championship_id: int):
 
     teams = []
     for team in team_objs:
-        teams.append({"points": team.current_championship().points, "logo": team.logo})
+        teams.append(
+            {"points": team.current_championship().points, "logo": team.logo_url}
+        )
 
     return teams

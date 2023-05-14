@@ -373,7 +373,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     penalised_race_result: RaceResult | None = None
     race_results: list[RaceResult] = []
     # Finds the race result belonging to the penalised driver and applies the time penalty
-    previous_points = 0
+    previous_points = 0.0
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
@@ -399,7 +399,8 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
     team = penalised_race_result.driver.current_team()
-    team_championship: TeamChampionship = team.current_championship()  # type: ignore | Driver always has a team here.
+    # Driver always has a team here.
+    team_championship: TeamChampionship = team.current_championship()  # type: ignore
     team_championship.points -= float(previous_points) - float(
         penalised_race_result.points_earned
     )

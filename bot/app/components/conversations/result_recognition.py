@@ -173,7 +173,7 @@ async def save_session(
 
     if update.callback_query.data == "persist-results":
         await __persist_results(update, context)
-        return
+        return None
 
     user_data = cast(dict[str, Any], context.user_data)
     round = cast(Round, user_data["round"])
@@ -222,12 +222,12 @@ async def recognise_results(
             await update.message.reply_text(
                 "C'è un errore nella formattazione del messaggio, correggilo e riprova."
             )
-            return
+            return None
     else:
         await update.message.reply_text(
             "Si è verificato un errore inaspettato, riprova."
         )
-        return
+        return None
 
     # Saves the results to the correct session
     user_data["results"][user_data["current_session"]]["result_objects"] = results

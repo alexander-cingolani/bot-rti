@@ -235,7 +235,8 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         driver: Driver = penalty.session.participating_drivers()[
             int(update.callback_query.data.removeprefix("D"))
         ]
-        penalty.team = driver.current_team()  # type: ignore | Driver always has a team here.
+        # Driver always has a team here.
+        penalty.team = driver.current_team()  # type: ignore
         penalty.driver = driver
 
     buttons: list[list[InlineKeyboardButton]] = []
@@ -345,36 +346,37 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     selected_category = cast(Category, user_data["selected_category"])
 
     text = "Non risultano esserci segnalazioni "
-    reply_markup = []
-    for report in reports:
-        if report.category.category_id == selected_category.category_id:
-            text = (
-                f"<b>{report.category.name}</b> - Segnalazione no.{report.number}\n\n"
-                f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
-                f"{report.reporting_driver.psn_id}\n"
-                f"<b>Sessione</b>: {report.session.name}\n"
-                f"<b>Minuto incidente</b>: {report.incident_time}\n"
-                f"<b>Motivo segnalazione</b>: {report.report_reason}"
-            )
-            penalty = Penalty.from_report(report)
-            penalty.number = (
-                get_last_penalty_number(
-                    sqla_session,
-                    round_id=penalty.round.round_id,
-                )
-                + 1
-            )
-            user_data["penalty"] = penalty
-            user_data["current_report"] = report
-            reply_markup: list[InlineKeyboardButton] = [
-                InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
-                InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
-            ]
-            break
 
-    await update.callback_query.edit_message_text(
-        text, reply_markup=InlineKeyboardMarkup([reply_markup])
-    )
+    for report in reports:
+        if not report.category.category_id == selected_category.category_id:
+            continue
+
+        text = (
+            f"<b>{report.category.name}</b> - Segnalazione no.{report.number}\n\n"
+            f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
+            f"{report.reporting_driver.psn_id}\n"
+            f"<b>Sessione</b>: {report.session.name}\n"
+            f"<b>Minuto incidente</b>: {report.incident_time}\n"
+            f"<b>Motivo segnalazione</b>: {report.report_reason}"
+        )
+        penalty = Penalty.from_report(report)
+        penalty.number = (
+            get_last_penalty_number(
+                sqla_session,
+                round_id=penalty.round.round_id,
+            )
+            + 1
+        )
+        user_data["penalty"] = penalty
+        user_data["current_report"] = report
+        reply_markup: list[InlineKeyboardButton] = [
+            InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
+            InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
+        ]
+
+        await update.callback_query.edit_message_text(
+            text, reply_markup=InlineKeyboardMarkup([reply_markup])
+        )
 
     return ASK_FACT
 
@@ -650,7 +652,8 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         user_data["penalty"].penalty_reason = update.message.text
 
     penalty: Penalty = user_data["penalty"]
-    penalty.team = penalty.driver.current_team()  # type: ignore | Driver always has a team here.
+    # Driver always has a team here.
+    penalty.team = penalty.driver.current_team()  # type: ignore
     penalty.decision = ", ".join(
         filter(
             None,
