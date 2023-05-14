@@ -236,7 +236,7 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             int(update.callback_query.data.removeprefix("D"))
         ]
         # Driver always has a team here.
-        penalty.team = driver.current_team()  # type: ignore 
+        penalty.team = driver.current_team()  # type: ignore
         penalty.driver = driver
 
     buttons: list[list[InlineKeyboardButton]] = []
@@ -350,7 +350,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     for report in reports:
         if not report.category.category_id == selected_category.category_id:
             continue
-        
+
         text = (
             f"<b>{report.category.name}</b> - Segnalazione no.{report.number}\n\n"
             f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
@@ -373,7 +373,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
             InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
         ]
-        
+
         await update.callback_query.edit_message_text(
             text, reply_markup=InlineKeyboardMarkup([reply_markup])
         )

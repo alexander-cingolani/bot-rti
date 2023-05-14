@@ -41,7 +41,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 DOMAIN = os.environ.get("ZONE")
 SUBDOMAIN = os.environ.get("SUBDOMAIN")
 IMAGE_DIR_URL = f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/"
-CIRCUIT_LOGO_DIR_URL = f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/circuit_logos/"
+CIRCUIT_LOGO_DIR_URL = (
+    f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/circuit_logos/"
+)
 
 
 class Base(DeclarativeBase):

@@ -318,8 +318,8 @@ def save_results(
             current_team = race_result.driver.current_team()
 
             team_championship: TeamChampionship = (
-                current_team.current_championship() #  type: ignore
-            )  
+                current_team.current_championship()  #  type: ignore
+            )
             team_championship.points += float(points_earned)
 
     drivers = qualifying_results[0].category.drivers
