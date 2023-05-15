@@ -2,6 +2,7 @@
 This module contains the driver ranking function.
 """
 from decimal import Decimal
+import os
 
 import trueskill as ts  # type: ignore
 from sqlalchemy import create_engine
@@ -13,8 +14,11 @@ from queries import get_championship
 TrueSkillEnv = ts.TrueSkill(
     draw_probability=0,
 )
+DB_URL = os.environ.get("DB_URL")
+if not DB_URL:
+    raise RuntimeError("DB_URL not found.")
 
-engine = create_engine("postgresql://alexander:alexander@172.19.0.2/alexander")
+engine = create_engine(DB_URL)
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
