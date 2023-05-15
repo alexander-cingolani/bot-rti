@@ -207,6 +207,8 @@ def get_teams_list(championship_id: int):
 
     teams = []
     for team in team_objs:
-        teams.append({"points": team.current_championship().points, "logo": team.logo_url})
+        teams.append(
+            {"points": team.current_championship().points, "logo": team.logo_url}
+        )
 
     return teams
