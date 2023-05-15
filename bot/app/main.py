@@ -19,6 +19,7 @@ from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results_conv
 from app.components.conversations.add_watermark import add_watermark_conv
+from app.components.conversations.penalty_deletion import penalty_deletion
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker
@@ -106,7 +107,7 @@ async def set_commands(application: Application) -> None:
             if not driver.telegram_id:
                 continue
             try:
-                await application.bot.set_my_commands(
+                await application.bot.set_my_commands(  # type: ignore
                     config.LEADER_COMMANDS, BotCommandScopeChat(driver.telegram_id)
                 )
             except BadRequest:
@@ -1052,6 +1053,7 @@ def main() -> None:
     application.add_handler(report_creation)
     application.add_handler(save_results_conv)
     application.add_handler(add_watermark_conv)
+    application.add_handler(penalty_deletion)
 
     application.add_handler(
         CallbackQueryHandler(

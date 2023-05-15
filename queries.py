@@ -327,6 +327,25 @@ def _update_ratings(results: list[RaceResult]) -> None:
         result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
+def reverse_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
+    """Reverses a qualifying penalty."""
+    result = session.execute(
+        select(QualifyingResult)
+        .where(QualifyingResult.driver_id == penalty.driver_id)
+        .where(QualifyingResult.session_id == penalty.session_id)
+    ).one_or_none()
+
+    if not result:
+        raise ValueError("QualifyingResult not in database.")
+
+    for driver_category in penalty.driver.categories:
+        if driver_category.category_id == penalty.category.category_id:
+            driver_category.licence_points += penalty.licence_points
+            driver_category.warnings -= penalty.warnings
+
+    session.commit()
+
+
 def save_results(
     sqla_session: SQLASession,
     qualifying_results: list[QualifyingResult],
@@ -598,3 +617,96 @@ def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
     result = session.execute(select(Reprimand)).all()
 
     return [r[0] for r in result]
+
+
+def delete_penalty(session: SQLASession, penalty: Penalty):
+    """Reverses and deletes the given penalty."""
+
+    delete_penalty_stmt = delete(Penalty).where(
+        Penalty.penalty_id == penalty.penalty_id
+    )
+    category = penalty.category
+    drivers = category.active_drivers()
+
+    # Applies licence points and warnings to the penalised driver's record.
+    for driver_category in penalty.driver.categories:
+        if driver_category.category_id == penalty.category.category_id:
+            driver_category.licence_points += penalty.licence_points
+            driver_category.warnings -= penalty.warnings
+            break
+    else:
+        raise RuntimeError()
+
+    # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
+    if not penalty.time_penalty:
+        session.execute(delete_penalty_stmt)
+        session.commit()
+        return
+
+    # Penalties handed out in qualifying sessions need to be treated differently.
+    if penalty.session.is_quali:
+        reverse_qualifying_penalty(session, penalty)
+        session.execute(delete_penalty_stmt)
+        session.commit()
+        return
+
+    # Gets the race results from the relevant session ordered by finishing position.
+    rows = session.execute(
+        select(RaceResult)
+        .where(RaceResult.session_id == penalty.session.session_id)
+        .where(RaceResult.participated == True)
+        .order_by(RaceResult.finishing_position)
+    ).all()
+
+    race_results: list[RaceResult] = []
+    # Finds the no longer penalised driver's race result and removes the time penalty from it.
+    driver_points_before_penalty_deletion: dict[Driver, float] = {}
+    for i, row in enumerate(rows):
+        race_result: RaceResult = row[0]
+        race_results.append(race_result)
+        driver_points_before_penalty_deletion[
+            race_result.driver
+        ] = race_result.points_earned
+
+        # Remove the penalty from the driver's result
+        if race_result.driver_id == penalty.driver.driver_id:
+            race_result.total_racetime -= penalty.time_penalty  # type: ignore
+            race_result.gap_to_first -= penalty.time_penalty  # type: ignore
+
+            if (
+                len(row) < i + 1
+                and rows[i - 1][0].gap_to_first < race_result.gap_to_first
+            ):
+                session.execute(delete_penalty_stmt)
+                session.commit()
+                return
+
+    race_results.sort(key=lambda x: x.total_racetime)  # type: ignore
+
+    # Applies the correct finishing position, recalculates the gap_to_first and points.
+    best_time = race_results[0].total_racetime
+    driver_points_after_penalty_deletion: dict[Driver, float] = {}
+    for position, result in enumerate(race_results, start=1):
+        result.gap_to_first = result.total_racetime - best_time  # type: ignore
+        result.finishing_position = position
+        driver_points_after_penalty_deletion[result.driver] = result.points_earned
+
+    # Apply championships standings changes
+    for driver_category in drivers:
+        driver = driver_category.driver
+        if driver in driver_points_after_penalty_deletion:
+            delta = (
+                driver_points_before_penalty_deletion[driver]
+                - driver_points_after_penalty_deletion[driver]
+            )
+            driver_category.points -= delta
+            driver.current_team().current_championship().points -= delta  # type: ignore
+
+    drivers.sort(key=lambda d: d.points, reverse=True)
+
+    for position, driver_category in enumerate(drivers):
+        driver_category.position = position
+
+    session.execute(delete_penalty_stmt)
+    session.commit()
+    return
