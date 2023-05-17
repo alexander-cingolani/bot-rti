@@ -694,7 +694,7 @@ async def update_participation_list(
 
     if not chat_data.get("participants"):
         participants = get_participants_from_round(session, rnd.round_id)
-        participants.sort(key=lambda p: p.driver.psn_id)
+        participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
 
     if not chat_data.get("participation_list_text"):
