@@ -614,6 +614,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     drivers = category.active_drivers()
+    drivers.sort(key=lambda d: d.driver.psn_id)
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
         f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
@@ -692,7 +693,10 @@ async def update_participation_list(
         return
 
     if not chat_data.get("participants"):
-        chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
+        participants = get_participants_from_round(session, rnd.round_id).sort(
+            key=lambda p: p.driver.psn_id
+        )
+        chat_data["participants"] = participants
 
     if not chat_data.get("participation_list_text"):
         chat_data["participation_list_text"] = (
@@ -704,8 +708,6 @@ async def update_participation_list(
         chat_data["participation_list_message"] = update.message
 
     driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
-    participants = cast(list[RoundParticipant], chat_data["participants"])
-
     if not driver:
         await update.callback_query.answer(
             "Non ti sei ancora registrato! Puoi farlo tramite il comando /registrami in privato.",
@@ -713,6 +715,7 @@ async def update_participation_list(
         )
         return
 
+    participants = cast(list[RoundParticipant], chat_data["participants"])
     for i, participant in enumerate(participants):
         if driver.driver_id == participant.driver_id:
             break
@@ -792,8 +795,10 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         rnd = category.next_round()
         if not rnd:
             return
-
-        chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
+        participants = get_participants_from_round(session, rnd.round_id).sort(
+            key=lambda p: p.driver.psn_id
+        )
+        chat_data["participants"] = participants
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
     mentions: list[str] = []
@@ -802,10 +807,6 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
             Participation.NO_REPLY,
             Participation.UNCERTAIN,
         ):
-            # member = await context.bot.get_chat_member(
-            #     config.GROUP_CHAT, participant.driver.telegram_id
-            # )
-
             if not participant.driver.telegram_id:
                 continue
 
@@ -815,9 +816,9 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
 
     text = ""
     if len(mentions) == 1:
-        text = f"Ehi {mentions[0]}! Manchi solo tu a rispondere alla lista dei partecipanti."
+        text = f"Ehi {mentions[0]}! Manchi solo tu a confermare la presenza sulla lista dei partecipanti."
     else:
-        text = f"{', '.join(mentions)}\n\nRicordatevi di rispondere alla lista dei partecipanti."
+        text = f"{', '.join(mentions)}\n\nRicordatevi di confermare la vostra presenza nella lista dei partecipanti."
 
     await context.bot.send_message(chat_id=config.GROUP_CHAT, text=text)
 
