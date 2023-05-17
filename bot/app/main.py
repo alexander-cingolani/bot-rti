@@ -29,6 +29,7 @@ from telegram import (
     InputTextMessageContent,
     Message,
     Update,
+    User,
 )
 from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest, NetworkError
@@ -53,6 +54,7 @@ from queries import (
     get_driver,
     get_participants_from_round,
     get_team_leaders,
+    update_participant_status,
 )
 
 logging.basicConfig(
@@ -203,12 +205,13 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
     else:
         await update.callback_query.edit_message_text(text)
+        
     return ConversationHandler.END
 
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-
+    
     session = DBSession()
     user = update.effective_user
     driver = get_driver(session, telegram_id=user.id)
@@ -720,10 +723,6 @@ async def update_participation_list(
 
     received_status = update.callback_query.data
 
-    # If the user clicks the same answer again, do nothing.
-    if received_status == participant.participating:
-        return
-
     match received_status:
         case "participating":
             participant.participating = Participation.YES
@@ -733,8 +732,8 @@ async def update_participation_list(
             participant.participating = Participation.UNCERTAIN
         case _:
             pass
-
-    session.commit()
+        
+    update_participant_status(session, participant)
 
     participants[i] = participant
 
