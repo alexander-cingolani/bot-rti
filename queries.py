@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import sqlalchemy as sa
 from cachetools import TTLCache, cached
-from sqlalchemy import delete, desc, select
+from sqlalchemy import delete, desc, select, update
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import joinedload
@@ -471,3 +471,17 @@ def get_participants_from_round(
     participants = [r[0] for r in result]
 
     return participants
+
+
+def update_participant_status(session: SQLASession, participant: RoundParticipant):
+    stmt = (
+        update(RoundParticipant)
+        .where(
+            RoundParticipant.driver_id == participant.driver_id,
+            RoundParticipant.round_id == participant.round_id,
+        )
+        .values(participating=participant.participating)
+    )
+
+    session.execute(stmt)
+    session.commit()
