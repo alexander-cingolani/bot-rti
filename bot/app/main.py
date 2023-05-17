@@ -614,7 +614,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     drivers = category.active_drivers()
-    drivers.sort(key=lambda d: d.driver.psn_id)
+    drivers.sort(key=lambda d: d.driver.psn_id.lower())
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
         f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
@@ -694,9 +694,7 @@ async def update_participation_list(
 
     if not chat_data.get("participants"):
         participants = get_participants_from_round(session, rnd.round_id)
-        participants.sort(
-            key=lambda p: p.driver.psn_id
-        )
+        participants.sort(key=lambda p: p.driver.psn_id)
         chat_data["participants"] = participants
 
     if not chat_data.get("participation_list_text"):
@@ -797,9 +795,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         if not rnd:
             return
         participants = get_participants_from_round(session, rnd.round_id)
-        participants.sort(
-            key=lambda p: p.driver.psn_id
-        )
+        participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
