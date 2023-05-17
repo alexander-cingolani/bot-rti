@@ -205,13 +205,13 @@ async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
     else:
         await update.callback_query.edit_message_text(text)
-        
+
     return ConversationHandler.END
 
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
-    
+
     session = DBSession()
     user = update.effective_user
     driver = get_driver(session, telegram_id=user.id)
@@ -732,7 +732,7 @@ async def update_participation_list(
             participant.participating = Participation.UNCERTAIN
         case _:
             pass
-        
+
     update_participant_status(session, participant)
 
     participants[i] = participant
