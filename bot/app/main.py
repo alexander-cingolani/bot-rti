@@ -693,7 +693,8 @@ async def update_participation_list(
         return
 
     if not chat_data.get("participants"):
-        participants = get_participants_from_round(session, rnd.round_id).sort(
+        participants = get_participants_from_round(session, rnd.round_id)
+        participants.sort(
             key=lambda p: p.driver.psn_id
         )
         chat_data["participants"] = participants
@@ -795,7 +796,8 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         rnd = category.next_round()
         if not rnd:
             return
-        participants = get_participants_from_round(session, rnd.round_id).sort(
+        participants = get_participants_from_round(session, rnd.round_id)
+        participants.sort(
             key=lambda p: p.driver.psn_id
         )
         chat_data["participants"] = participants
