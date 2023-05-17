@@ -667,10 +667,10 @@ async def update_participation_list(
     chat_data = cast(dict[str, Any], context.chat_data)
 
     session: SQLASession | None = chat_data.get("participation_list_sqlasession")
-    
+
     if not session:
         session = DBSession()
-    
+
     championship = get_championship(session)
     if not championship:
         await update.callback_query.answer(
@@ -678,7 +678,7 @@ async def update_participation_list(
             show_alert=True,
         )
         return
-    
+
     category = championship.current_racing_category()
     if not category:
         await update.callback_query.answer(
@@ -686,14 +686,14 @@ async def update_participation_list(
             show_alert=True,
         )
         return
-    
+
     rnd = category.next_round()
     if not rnd:
         return
-    
+
     if not chat_data.get("participants"):
         chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
-        
+
     if not chat_data.get("participation_list_text"):
         chat_data["participation_list_text"] = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
@@ -794,8 +794,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
             return
 
         chat_data["participants"] = get_participants_from_round(session, rnd.round_id)
-    
-    
+
     participants = cast(list[RoundParticipant], chat_data["participants"])
     mentions: list[str] = []
     for participant in participants:
@@ -806,20 +805,22 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
             # member = await context.bot.get_chat_member(
             #     config.GROUP_CHAT, participant.driver.telegram_id
             # )
-            
+
             if not participant.driver.telegram_id:
                 continue
-            
-            mentions.append(f"{User(participant.driver.telegram_id, participant.driver.psn_id, is_bot=False).mention_html()}")
-        
-    text = ""    
+
+            mentions.append(
+                f"{User(participant.driver.telegram_id, participant.driver.psn_id, is_bot=False).mention_html()}"
+            )
+
+    text = ""
     if len(mentions) == 1:
         text = f"Ehi {mentions[0]}! Manchi solo tu a rispondere alla lista dei partecipanti."
     else:
         text = f"{', '.join(mentions)}\n\nRicordatevi di rispondere alla lista dei partecipanti."
-        
+
     await context.bot.send_message(chat_id=config.GROUP_CHAT, text=text)
-    
+
     return
 
 
