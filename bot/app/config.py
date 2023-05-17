@@ -8,7 +8,7 @@ from datetime import time
 
 from telegram import User
 
-PARTICIPANT_LIST_OPENING = time(15, 45)
+PARTICIPANT_LIST_OPENING = time(0)
 PARTICIPATION_LIST_REMINDER = time(19)
 REPORT_WINDOW_OPENING = time(0)
 PARTICIPANTS_LIST_CLOSURE = time(hour=21, minute=45)
