@@ -38,7 +38,6 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
-    ConversationHandler,
     Defaults,
     InlineQueryHandler,
     MessageHandler,
@@ -47,7 +46,7 @@ from telegram.ext import (
     filters,
 )
 
-from models import Category, Driver, Participation, Round, RoundParticipant
+from models import Driver, Participation, RoundParticipant
 from queries import (
     get_all_drivers,
     get_championship,
@@ -197,18 +196,6 @@ async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(text)
 
 
-async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Clears user_data and ends the conversation"""
-    cast(dict[str, Any], context.user_data).clear()
-    text = "Segnalazione annullata."
-    if update.message:
-        await update.message.reply_text(text)
-    else:
-        await update.callback_query.edit_message_text(text)
-
-    return ConversationHandler.END
-
-
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Command which sends the event info for the next round."""
 
@@ -234,49 +221,6 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(msg)
     session.close()
     return
-
-
-async def stats_info(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-    """Tells the user how the statistics are calculated."""
-
-    text = (
-        "Di seguito sono riportate le formule utilizzate per il calcolo delle statistiche:\n\n"
-        "- <b>Driver Rating</b>:\n"
-        "Il driver rating è calcolato utilizzando l'algoritmo "
-        "<a href='https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/'>TrueSkill™</a> "
-        "sviluppato da Microsoft, si basa sulle posizioni di arrivo in gara, tenendo anche conto "
-        "del livello di abilità degli avversari.\n"
-        "Non coinvolgendo altri fattori come il tempo totale di gara o il tempo di qualificazione, "
-        "che possono variare a seconda delle impostazioni del campionato, permette di confrontare "
-        "tutti i piloti di RTI indipendentemente dalla categoria di cui fanno parte.\n\n"
-        "- <b>Affidabilità</b>:\n"
-        "L'affidabilità misura la tendenza di un pilota a guadagnare lo stesso numero di punti "
-        "in ogni gara, viene quindi in primis preso in considerazione il rapporto tra le"
-        "<i>gare effettivamente completate dal pilota (gc)</i> e le <i>gare a cui avrebbe dovuto partecipare (g)</i>."
-        "Questo rapporto assume sempre un valore compreso tra 0 (nessuna gara completata) e 1 (tutte le gare completate). "
-        "In secondo luogo si considera lo <i>scarto quadratico medio dei piazzamenti in gara (σ)</i>. "
-        "La formula risulta quindi: \n"
-        "<code>A = 100(gc/g) - 3σ</code>\n\n"
-        "- <b>Sportività</b>:\n"
-        "La sportività misura la tendenza di un pilota a non ricevere penalità in gara. Vengono "
-        "quindi considerati i <i>secondi (s), punti di penalità (p), warning (w)</i> ricevuti e "
-        "<i>punti licenza (pl)</i> detratti lungo l'arco delle gare (g) del campionato. "
-        "Per calcolare il valore viene quindi utilizzata la seguente formula:\n"
-        "<code>S = 100-(3(s/1.5+p+w+4(pl))/g) </code>\n\n"
-        "- <b>Qualifica</b>:\n"
-        "Misura la velocità in qualifica del pilota. Per questa "
-        "statistica vengono presi in considerazione solamente i distacchi in percentuale "
-        "rispetto al poleman. La formula viene un po' un casino su telegram, se sei curioso "
-        "puoi vedere l'implementazione "
-        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L521'>qui</a>\n\n"
-        "- <b>Passo Gara</b>:\n"
-        "Come per la qualifica, solo che prende come riferimento il tempo di gara del vincitore. "
-        "L'implementazione di questa statistica invece è "
-        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L586'>qui</a>. "
-    )
-    await update.message.reply_text(text, disable_web_page_preview=True)
-    return
-
 
 async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the inline query. This callback provides the user with a complete
@@ -1021,7 +965,6 @@ def main() -> None:
     )
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
-    application.add_handler(CommandHandler("info_stats", stats_info))
     application.add_handler(CommandHandler("my_stats", user_stats))
     application.add_handler(CommandHandler("top_ten", top_ten))
 

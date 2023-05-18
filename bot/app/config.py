@@ -37,7 +37,6 @@ BASE_COMMANDS = (
     ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle ultime gare."),
-    ("info_stats", "Formula e scopo di ciascuna statistica."),
     ("aiuto", "Ottieni assistenza sull'uso del bot."),
     ("registrami", "Registrati al bot."),
 )
