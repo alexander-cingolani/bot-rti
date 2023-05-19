@@ -492,4 +492,3 @@ def delete_chat(session: SQLASession, chat_id: int):
     stmt = delete(Chat).where(Chat.chat_id == chat_id)
     session.execute(stmt)
     session.commit()
-    

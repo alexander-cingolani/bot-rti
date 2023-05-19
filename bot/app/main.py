@@ -252,18 +252,17 @@ async def greet_new_chat_members(
     chat = update.effective_chat
     user = update.effective_user
     was_member, is_member = result
-    
 
     if was_member and not is_member:
         text = f"{user.mention_html()} ci ha lasciati 😔"
     elif not was_member and is_member:
         if not chat.id == config.GROUP_CHAT:
             return
-        
+
         session = DBSession()
         driver = get_driver(session, telegram_id=user.id)
         session.close()
-        
+
         if not driver:
             text = (
                 f"Benvenuto {user.mention_html()}!\n\n"
@@ -878,12 +877,12 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         participants = get_participants_from_round(session, rnd.round_id)
         participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
-    
+
     participants = cast(list[RoundParticipant], chat_data["participants"])
-    
+
     if participants[0].round.date != datetime.now().date():
         return
-    
+
     mentions: list[str] = []
     for participant in participants:
         if participant.participating in (

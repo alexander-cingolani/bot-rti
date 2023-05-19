@@ -1683,5 +1683,3 @@ class Chat(Base):
     __tablename__ = "chats"
     chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    
-    
