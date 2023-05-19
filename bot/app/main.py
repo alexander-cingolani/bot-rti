@@ -878,8 +878,12 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         participants = get_participants_from_round(session, rnd.round_id)
         participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
-
+    
     participants = cast(list[RoundParticipant], chat_data["participants"])
+    
+    if participants[0].round.date != datetime.now().date():
+        return
+    
     mentions: list[str] = []
     for participant in participants:
         if participant.participating in (
