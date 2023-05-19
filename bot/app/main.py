@@ -18,10 +18,13 @@ from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results_conv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
+from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
+from telegram import Chat as TGChat
 from telegram import (
-    BotCommandScopeAllPrivateChats,
-    BotCommandScopeChat,
+    ChatMember,
+    ChatMemberUpdated,
     ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -36,6 +39,7 @@ from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     ContextTypes,
     Defaults,
@@ -46,8 +50,9 @@ from telegram.ext import (
     filters,
 )
 
-from models import Driver, Participation, RoundParticipant
+from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
+    delete_chat,
     get_all_drivers,
     get_championship,
     get_driver,
@@ -156,6 +161,87 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     os.remove("traceback.txt")
 
 
+def extract_status_change(
+    chat_member_update: ChatMemberUpdated,
+) -> tuple[bool, bool] | None:
+    """Takes a ChatMemberUpdated instance and extracts whether the 'old_chat_member' was a member
+
+    of the chat and whether the 'new_chat_member' is a member of the chat. Returns None, if
+
+    the status didn't change.
+
+    """
+
+    status_change = chat_member_update.difference().get("status")
+
+    old_is_member, new_is_member = chat_member_update.difference().get(
+        "is_member", (None, None)
+    )
+
+    if status_change is None:
+        return None
+
+    old_status, new_status = status_change
+
+    was_member = old_status in (
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ) or (old_status == ChatMember.RESTRICTED and old_is_member is True)
+
+    is_member = new_status in (
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ) or (new_status == ChatMember.RESTRICTED and new_is_member is True)
+
+    return was_member, is_member
+
+
+async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tracks the chats the bot is in."""
+
+    result = extract_status_change(update.my_chat_member)
+
+    if result is None:
+        return
+
+    chat = update.effective_chat
+    was_member, is_member = result
+    session = DBSession()
+
+    if was_member and not is_member:
+        delete_chat(session, chat.id)
+        return
+
+    if chat.type == TGChat.CHANNEL and chat.id not in (
+        config.TEST_CHANNEL,
+        config.REPORT_CHANNEL,
+    ):
+        await chat.leave()
+        return
+
+    user = update.effective_user
+    driver = get_driver(session, telegram_id=user.id)
+    if not driver:
+        website_link = "<a href='https://racingteamitalia.it/'>Racing Team Italia</a>"
+        await chat.send_message(
+            f"Questo bot è riservato esclusivamente ai gruppi di {website_link}.\n\n"
+            f"L'utente che mi ha aggiunto, {user.mention_html()}, non risulta "
+            f"essere un membro registrato del team, pertanto procederò a rimuovermi dal gruppo.\n"
+        )
+        await chat.leave()
+        return
+
+    await context.bot.set_my_commands(
+        config.GROUP_COMMANDS, BotCommandScopeChat(chat.id)
+    )
+
+    is_group = True if chat.type in (TGChat.SUPERGROUP, TGChat.GROUP) else False
+    session.add(Chat(chat_id=chat.id, is_group=is_group))
+    session.commit()
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
 
@@ -221,6 +307,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(msg)
     session.close()
     return
+
 
 async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the inline query. This callback provides the user with a complete
@@ -941,6 +1028,9 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("aiuto", help_command))
+    application.add_handler(
+        ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER)
+    )
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)

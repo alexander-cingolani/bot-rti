@@ -15,6 +15,7 @@ from sqlalchemy.orm import joinedload
 from models import (
     Category,
     Championship,
+    Chat,
     Driver,
     DriverAssignment,
     Penalty,
@@ -485,3 +486,10 @@ def update_participant_status(session: SQLASession, participant: RoundParticipan
 
     session.execute(stmt)
     session.commit()
+
+
+def delete_chat(session: SQLASession, chat_id: int):
+    stmt = delete(Chat).where(Chat.chat_id == chat_id)
+    session.execute(stmt)
+    session.commit()
+    
