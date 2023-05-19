@@ -242,22 +242,72 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     session.commit()
 
 
+async def greet_new_chat_members(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    result = extract_status_change(update.my_chat_member)
+    if result is None:
+        return
+
+    chat = update.effective_chat
+    user = update.effective_user
+    was_member, is_member = result
+    
+
+    if was_member and not is_member:
+        text = f"{user.mention_html()} ci ha lasciati 😔"
+    elif not was_member and is_member:
+        if not chat.id == config.GROUP_CHAT:
+            return
+        
+        session = DBSession()
+        driver = get_driver(session, telegram_id=user.id)
+        session.close()
+        
+        if not driver:
+            text = (
+                f"Benvenuto {user.mention_html()}!\n\n"
+                "Sono il bot di Racing Team Italia, per sfruttare a pieno le mie funzionalità, "
+                "registrati scrivendomi /registrami in chat privata."
+                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a {config.OWNER.mention_html()}."
+            )
+            button_row = [
+                InlineKeyboardButton(
+                    text="Vai alla chat ➡️", url=f"t.me/{context.bot.username}"
+                )
+            ]
+            await chat.send_message(
+                text, reply_markup=InlineKeyboardMarkup([button_row])
+            )
+            return
+
+        text = f"Bentornato {user.mention_html()}!"
+    else:
+        return
+
+    await chat.send_message(text)
+    return
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
+    """Send a message when the /start command is issued."""
 
     session = DBSession()
     user = update.effective_user
     text = (
         f"Ciao {user.first_name}!\n\n"
-        "Sono il bot di Racing Team Italia 🇮🇹 e mi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
-        "e <i>classifiche</i> dei nostri campionati.\n\n"
+        "Sono il bot di Racing Team Italia 🇮🇹\nMi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
+        "e <i>classifiche</i> dei nostri campionati."
     )
 
     driver = get_driver(session, telegram_id=user.id)
     if not driver:
+        website_link = "<a href='https://racingteamitalia.it/#user-registration-form-1115'>sito</a>"
+        instagram_link = "<a href='https://www.instagram.com/rti_racingteamitalia/'>rti_racingteamitalia</a>"
         text += (
-            "Se sei nuovo e vorresti entrare nel team puoi iscriverti sul nostro "
-            "<i><a href='https://racingteamitalia.it/#user-registration-form-1115'>sito web</a></i>."
+            "\n\nSe sei nuovo nel team, l'ultimo step è completare la registrazione tramite il comando /registrami.\n\n"
+            f"Se invece non fai ancora parte del team, puoi registrarti sul nostro {website_link}. "
+            f"Per qualsiasi informazione puoi scriverci sul nostro profilo instagram, {instagram_link}."
         )
     elif team := driver.current_team():
         if getattr(team.leader, "telegram_id", 0) == user.id:
@@ -276,7 +326,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message providing the developer's contact details for help."""
     text = (
-        f"Questo bot è gestito da {config.OWNER.mention_html(config.OWNER.full_name)},"
+        f"Questo bot è gestito da {config.OWNER.mention_html()},"
         " se stai riscontrando un problema non esitare a contattarlo."
     )
     await update.message.reply_text(text)
@@ -1030,6 +1080,9 @@ def main() -> None:
     application.add_handler(CommandHandler("aiuto", help_command))
     application.add_handler(
         ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER)
+    )
+    application.add_handler(
+        ChatMemberHandler(greet_new_chat_members, ChatMemberHandler.CHAT_MEMBER)
     )
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
