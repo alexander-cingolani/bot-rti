@@ -1038,18 +1038,12 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     """Starts the bot."""
 
-    persistence = PicklePersistence(
-        filepath="bot_context",
-        store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False),
-    )
-
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()
         .token(TOKEN)
         .defaults(defaults)
         .post_init(post_init)
-        .persistence(persistence)
         .build()
     )
 
