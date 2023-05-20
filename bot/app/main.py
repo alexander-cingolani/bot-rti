@@ -18,10 +18,13 @@ from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results_conv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as SQLASession
+from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import sessionmaker
+from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
+from telegram import Chat as TGChat
 from telegram import (
-    BotCommandScopeAllPrivateChats,
-    BotCommandScopeChat,
+    ChatMember,
+    ChatMemberUpdated,
     ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -36,9 +39,9 @@ from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     ContextTypes,
-    ConversationHandler,
     Defaults,
     InlineQueryHandler,
     MessageHandler,
@@ -47,8 +50,9 @@ from telegram.ext import (
     filters,
 )
 
-from models import Category, Driver, Participation, Round, RoundParticipant
+from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
+    delete_chat,
     get_all_drivers,
     get_championship,
     get_driver,
@@ -157,22 +161,152 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     os.remove("traceback.txt")
 
 
+def extract_status_change(
+    chat_member_update: ChatMemberUpdated,
+) -> tuple[bool, bool] | None:
+    """Takes a ChatMemberUpdated instance and extracts whether the 'old_chat_member' was a member
+
+    of the chat and whether the 'new_chat_member' is a member of the chat. Returns None, if
+
+    the status didn't change.
+
+    """
+
+    status_change = chat_member_update.difference().get("status")
+
+    old_is_member, new_is_member = chat_member_update.difference().get(
+        "is_member", (None, None)
+    )
+
+    if status_change is None:
+        return None
+
+    old_status, new_status = status_change
+
+    was_member = old_status in (
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ) or (old_status == ChatMember.RESTRICTED and old_is_member is True)
+
+    is_member = new_status in (
+        ChatMember.MEMBER,
+        ChatMember.OWNER,
+        ChatMember.ADMINISTRATOR,
+    ) or (new_status == ChatMember.RESTRICTED and new_is_member is True)
+
+    return was_member, is_member
+
+
+async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tracks the chats the bot is in."""
+
+    result = extract_status_change(update.my_chat_member)
+
+    if result is None:
+        return
+
+    chat = update.effective_chat
+    was_member, is_member = result
+    session = DBSession()
+
+    if was_member and not is_member:
+        delete_chat(session, chat.id)
+        return
+
+    if chat.type == TGChat.CHANNEL and chat.id not in (
+        config.TEST_CHANNEL,
+        config.REPORT_CHANNEL,
+    ):
+        await chat.leave()
+        return
+
+    user = update.effective_user
+    driver = get_driver(session, telegram_id=user.id)
+    if not driver:
+        website_link = "<a href='https://racingteamitalia.it/'>Racing Team Italia</a>"
+        await chat.send_message(
+            f"Questo bot è riservato esclusivamente ai gruppi di {website_link}.\n\n"
+            f"L'utente che mi ha aggiunto, {user.mention_html()}, non risulta "
+            f"essere un membro registrato del team, pertanto procederò a rimuovermi dal gruppo.\n"
+        )
+        await chat.leave()
+        return
+
+    await context.bot.set_my_commands(
+        config.GROUP_COMMANDS, BotCommandScopeChat(chat.id)
+    )
+
+    is_group = True if chat.type in (TGChat.SUPERGROUP, TGChat.GROUP) else False
+    session.add(Chat(chat_id=chat.id, is_group=is_group))
+    session.commit()
+
+
+async def greet_new_chat_members(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    result = extract_status_change(update.my_chat_member)
+    if result is None:
+        return
+
+    chat = update.effective_chat
+    user = update.effective_user
+    was_member, is_member = result
+
+    if was_member and not is_member:
+        text = f"{user.mention_html()} ci ha lasciati 😔"
+    elif not was_member and is_member:
+        if not chat.id == config.GROUP_CHAT:
+            return
+
+        session = DBSession()
+        driver = get_driver(session, telegram_id=user.id)
+        session.close()
+
+        if not driver:
+            text = (
+                f"Benvenuto {user.mention_html()}!\n\n"
+                "Sono il bot di Racing Team Italia, per sfruttare a pieno le mie funzionalità, "
+                "registrati scrivendomi /registrami in chat privata."
+                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a {config.OWNER.mention_html()}."
+            )
+            button_row = [
+                InlineKeyboardButton(
+                    text="Vai alla chat ➡️", url=f"t.me/{context.bot.username}"
+                )
+            ]
+            await chat.send_message(
+                text, reply_markup=InlineKeyboardMarkup([button_row])
+            )
+            return
+
+        text = f"Bentornato {user.mention_html()}!"
+    else:
+        return
+
+    await chat.send_message(text)
+    return
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
+    """Send a message when the /start command is issued."""
 
     session = DBSession()
     user = update.effective_user
     text = (
         f"Ciao {user.first_name}!\n\n"
-        "Sono il bot di Racing Team Italia 🇮🇹 e mi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
-        "e <i>classifiche</i> dei nostri campionati.\n\n"
+        "Sono il bot di Racing Team Italia 🇮🇹\nMi occupo delle <i>segnalazioni</i>, <i>statistiche</i> "
+        "e <i>classifiche</i> dei nostri campionati."
     )
 
     driver = get_driver(session, telegram_id=user.id)
     if not driver:
+        website_link = "<a href='https://racingteamitalia.it/#user-registration-form-1115'>sito</a>"
+        instagram_link = "<a href='https://www.instagram.com/rti_racingteamitalia/'>rti_racingteamitalia</a>"
         text += (
-            "Se sei nuovo e vorresti entrare nel team puoi iscriverti sul nostro "
-            "<i><a href='https://racingteamitalia.it/#user-registration-form-1115'>sito web</a></i>."
+            "\n\nSe sei nuovo nel team, l'ultimo step è completare la registrazione tramite il comando /registrami.\n\n"
+            f"Se invece non fai ancora parte del team, puoi registrarti sul nostro {website_link}. "
+            f"Per qualsiasi informazione puoi scriverci sul nostro profilo instagram, {instagram_link}."
         )
     elif team := driver.current_team():
         if getattr(team.leader, "telegram_id", 0) == user.id:
@@ -191,22 +325,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message providing the developer's contact details for help."""
     text = (
-        f"Questo bot è gestito da {config.OWNER.mention_html(config.OWNER.full_name)},"
+        f"Questo bot è gestito da {config.OWNER.mention_html()},"
         " se stai riscontrando un problema non esitare a contattarlo."
     )
     await update.message.reply_text(text)
-
-
-async def exit_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Clears user_data and ends the conversation"""
-    cast(dict[str, Any], context.user_data).clear()
-    text = "Segnalazione annullata."
-    if update.message:
-        await update.message.reply_text(text)
-    else:
-        await update.callback_query.edit_message_text(text)
-
-    return ConversationHandler.END
 
 
 async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -233,48 +355,6 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text(msg)
     session.close()
-    return
-
-
-async def stats_info(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-    """Tells the user how the statistics are calculated."""
-
-    text = (
-        "Di seguito sono riportate le formule utilizzate per il calcolo delle statistiche:\n\n"
-        "- <b>Driver Rating</b>:\n"
-        "Il driver rating è calcolato utilizzando l'algoritmo "
-        "<a href='https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/'>TrueSkill™</a> "
-        "sviluppato da Microsoft, si basa sulle posizioni di arrivo in gara, tenendo anche conto "
-        "del livello di abilità degli avversari.\n"
-        "Non coinvolgendo altri fattori come il tempo totale di gara o il tempo di qualificazione, "
-        "che possono variare a seconda delle impostazioni del campionato, permette di confrontare "
-        "tutti i piloti di RTI indipendentemente dalla categoria di cui fanno parte.\n\n"
-        "- <b>Affidabilità</b>:\n"
-        "L'affidabilità misura la tendenza di un pilota a guadagnare lo stesso numero di punti "
-        "in ogni gara, viene quindi in primis preso in considerazione il rapporto tra le"
-        "<i>gare effettivamente completate dal pilota (gc)</i> e le <i>gare a cui avrebbe dovuto partecipare (g)</i>."
-        "Questo rapporto assume sempre un valore compreso tra 0 (nessuna gara completata) e 1 (tutte le gare completate). "
-        "In secondo luogo si considera lo <i>scarto quadratico medio dei piazzamenti in gara (σ)</i>. "
-        "La formula risulta quindi: \n"
-        "<code>A = 100(gc/g) - 3σ</code>\n\n"
-        "- <b>Sportività</b>:\n"
-        "La sportività misura la tendenza di un pilota a non ricevere penalità in gara. Vengono "
-        "quindi considerati i <i>secondi (s), punti di penalità (p), warning (w)</i> ricevuti e "
-        "<i>punti licenza (pl)</i> detratti lungo l'arco delle gare (g) del campionato. "
-        "Per calcolare il valore viene quindi utilizzata la seguente formula:\n"
-        "<code>S = 100-(3(s/1.5+p+w+4(pl))/g) </code>\n\n"
-        "- <b>Qualifica</b>:\n"
-        "Misura la velocità in qualifica del pilota. Per questa "
-        "statistica vengono presi in considerazione solamente i distacchi in percentuale "
-        "rispetto al poleman. La formula viene un po' un casino su telegram, se sei curioso "
-        "puoi vedere l'implementazione "
-        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L521'>qui</a>\n\n"
-        "- <b>Passo Gara</b>:\n"
-        "Come per la qualifica, solo che prende come riferimento il tempo di gara del vincitore. "
-        "L'implementazione di questa statistica invece è "
-        "<a href='https://github.com/alexander-cingolani/bot-rti/blob/53aa191387a1d9182a533d0c228a4f9e7cb926e0/bot/app/components/models.py#L586'>qui</a>. "
-    )
-    await update.message.reply_text(text, disable_web_page_preview=True)
     return
 
 
@@ -799,6 +879,10 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         chat_data["participants"] = participants
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
+
+    if participants[0].round.date != datetime.now().date():
+        return
+
     mentions: list[str] = []
     for participant in participants:
         if participant.participating in (
@@ -954,18 +1038,12 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     """Starts the bot."""
 
-    persistence = PicklePersistence(
-        filepath="bot_context",
-        store_data=PersistenceInput(bot_data=True, chat_data=False, user_data=False),
-    )
-
     defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone("Europe/Rome"))
     application = (
         Application.builder()
         .token(TOKEN)
         .defaults(defaults)
         .post_init(post_init)
-        .persistence(persistence)
         .build()
     )
 
@@ -997,6 +1075,12 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("aiuto", help_command))
+    application.add_handler(
+        ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER)
+    )
+    application.add_handler(
+        ChatMemberHandler(greet_new_chat_members, ChatMemberHandler.CHAT_MEMBER)
+    )
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)
@@ -1021,7 +1105,6 @@ def main() -> None:
     )
     application.add_handler(CommandHandler("ultima_gara", last_race_results))
     application.add_handler(CommandHandler("ultime_gare", complete_last_race_results))
-    application.add_handler(CommandHandler("info_stats", stats_info))
     application.add_handler(CommandHandler("my_stats", user_stats))
     application.add_handler(CommandHandler("top_ten", top_ten))
 

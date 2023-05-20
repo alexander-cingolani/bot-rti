@@ -25,6 +25,22 @@ ADMINS = json.loads(os.environ["ADMINS"])
 OWNER_ID = int(os.environ["OWNER_ID"])
 OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
+
+GROUP_COMMANDS = (
+    ("my_stats", "Le tue statistiche."),
+    ("classifica_piloti", "Classifica piloti della tua categoria."),
+    (
+        "classifiche_piloti",
+        "Classifiche piloti del campionato in corso.",
+    ),
+    ("classifica_costruttori", "Classifica costruttori del campionato in corso"),
+    ("calendario", "Calendario della categoria a cui partecipi."),
+    ("prossima_gara", "Info sulla tua prossima gara."),
+    ("ultima_gara", "Risultati della tua scorsa gara."),
+    ("ultime_gare", "Risultati delle ultime gare."),
+    ("aiuto", "Ottieni assistenza sull'uso del bot."),
+)
+
 BASE_COMMANDS = (
     ("my_stats", "Le tue statistiche."),
     ("classifica_piloti", "Classifica piloti della tua categoria."),
@@ -37,7 +53,6 @@ BASE_COMMANDS = (
     ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle ultime gare."),
-    ("info_stats", "Formula e scopo di ciascuna statistica."),
     ("aiuto", "Ottieni assistenza sull'uso del bot."),
     ("registrami", "Registrati al bot."),
 )
