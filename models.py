@@ -1417,7 +1417,7 @@ class Session(Base):
             )
 
         for result in results:
-            if result.gap_to_first or result.gap_to_first == 0:
+            if result.gap_to_first:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
@@ -1426,7 +1426,16 @@ class Session(Base):
                     gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
                 else:
                     gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
-
+            elif result.gap_to_first == 0:
+                
+                total = getattr(result, "total_racetime", 0)
+                if not total:
+                    total = getattr(result, "laptime", 0)
+                
+                minutes, seconds = divmod(total, 60)
+                milliseconds = (seconds % 1) * 1000
+                gap = f"<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+                position = "1"
             else:
                 gap = "<i>assente</i>"
                 position = "/"
