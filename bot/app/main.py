@@ -45,8 +45,6 @@ from telegram.ext import (
     Defaults,
     InlineQueryHandler,
     MessageHandler,
-    PersistenceInput,
-    PicklePersistence,
     filters,
 )
 
@@ -407,7 +405,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                         f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
                         f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
                         f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
-                        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']}</i>\n"
+                        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
                         f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
                         f"<b>Piazz. medio gara</b>: <i>{statistics['avg_race_position']}</i>\n"
                         f"<b>Piazz. medio quali</b>: <i>{statistics['avg_quali_position']}</i>\n"
@@ -462,7 +460,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             driver_name = f"<b>{driver.psn_id}</b>"
         else:
             driver_name = driver.psn_id
-        message += f"{pos} - {driver_name} <i>{points}{diff_text} </i>\n"
+        message += f"{pos} - {driver_name} <i>{points:g}{diff_text} </i>\n"
 
     await update.message.reply_text(text=message)
 
@@ -508,7 +506,9 @@ async def complete_championship_standings(
             else:
                 driver_name = driver.psn_id
 
-            message += f"{pos} - {team_name} {driver_name} <i>{points}{diff_text}</i>\n"
+            message += (
+                f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
+            )
 
     await update.message.reply_text(message)
     sqla_session.close()
@@ -533,10 +533,10 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         if driver:
             current_team = driver.current_team()
             if current_team and current_team.team_id == team.team_id:
-                message += f"{pos} - <b>{team.team.name}</b> <i>{team.points}</i>\n"
+                message += f"{pos} - <b>{team.team.name}</b> <i>{team.points:g}</i>\n"
                 continue
 
-        message += f"{pos} - {team.team.name} <i>{team.points}</i>\n"
+        message += f"{pos} - {team.team.name} <i>{team.points:g}</i>\n"
 
     await update.message.reply_text(message)
 
