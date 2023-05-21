@@ -45,8 +45,6 @@ from telegram.ext import (
     Defaults,
     InlineQueryHandler,
     MessageHandler,
-    PersistenceInput,
-    PicklePersistence,
     filters,
 )
 
