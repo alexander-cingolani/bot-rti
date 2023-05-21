@@ -689,7 +689,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if not (rnd := category.first_non_completed_round()):
+    if not (rnd := category.next_round()):
         sqla_session.close()
         return
 
