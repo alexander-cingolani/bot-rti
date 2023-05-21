@@ -506,7 +506,9 @@ async def complete_championship_standings(
             else:
                 driver_name = driver.psn_id
 
-            message += f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
+            message += (
+                f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
+            )
 
     await update.message.reply_text(message)
     sqla_session.close()
