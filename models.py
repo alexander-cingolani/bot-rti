@@ -1488,7 +1488,9 @@ class RaceResult(Base):
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
-    total_racetime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    total_racetime: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=8, scale=3)
+    )
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
