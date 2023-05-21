@@ -1417,7 +1417,7 @@ class Session(Base):
             )
 
         for result in results:
-            if result.gap_to_first:
+            if result.gap_to_first or result.gap_to_first == 0:
                 position = str(result.relative_position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
