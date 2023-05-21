@@ -1007,7 +1007,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
         f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
         f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
-        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']}</i>\n"
+        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
         f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
         f"<b>Piazz. medio gara</b>: <i>{statistics['avg_race_position']}</i>\n"
         f"<b>Piazz. medio quali</b>: <i>{statistics['avg_quali_position']}</i>\n"
