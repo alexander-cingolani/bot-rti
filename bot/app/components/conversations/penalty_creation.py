@@ -109,7 +109,7 @@ async def ask_round(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     buttons: list[InlineKeyboardButton] = []
     for i, championship_round in enumerate(category.rounds):
-        if championship_round.completed:
+        if championship_round.is_completed:
             buttons.append(
                 InlineKeyboardButton(
                     f"Tappa {championship_round.number}", callback_data=f"R{i}"

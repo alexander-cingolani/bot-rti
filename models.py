@@ -1018,14 +1018,14 @@ class Category(Base):
     def first_non_completed_round(self) -> Round | None:
         """Returns the first non completed Round."""
         for rnd in self.rounds:
-            if not rnd.completed:
+            if not rnd.is_completed:
                 return rnd
         return None
 
     def last_completed_round(self) -> Round | None:
         """Returns the last completed Round."""
         for rnd in reversed(self.rounds):
-            if rnd.completed:
+            if rnd.is_completed:
                 return rnd
         return None
 
@@ -1127,7 +1127,7 @@ class Category(Base):
         driver_map = defaultdict.fromkeys(drivers, float(0))
         result.append(["Tappa"] + drivers)  # type: ignore
         for number, championship_round in enumerate(self.rounds, start=1):
-            if not championship_round.completed:
+            if not championship_round.is_completed:
                 continue
 
             result.append([number])
@@ -1181,7 +1181,7 @@ class Round(Base):
         number (int): The number of the round in the calendar order.
         date (date): The date the round takes place on.
         circuit (str): The circuit the round takes place on.
-        completed (bool): True if the round has been completed.
+        is_completed (bool): True if the round has been completed.
 
         category_id (int): Unique ID of the category the round belongs to.
         championship_id (int): Unique ID of the championship the round belongs to.
@@ -1198,7 +1198,7 @@ class Round(Base):
     round_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.category_id"), nullable=False
@@ -1232,7 +1232,7 @@ class Round(Base):
     )
 
     def __repr__(self) -> str:
-        return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, completed={self.completed})"
+        return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, is_completed={self.is_completed})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Round):
@@ -1602,7 +1602,7 @@ class Championship(Base):
         """Returns all the rounds which have not been disputed yet."""
         rounds: list[Round] = []
         for rnd in self.rounds:
-            if not rnd.completed:
+            if not rnd.is_completed:
                 rounds.append(rnd)
         return rounds
 
