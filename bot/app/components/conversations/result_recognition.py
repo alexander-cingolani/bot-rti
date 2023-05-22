@@ -414,7 +414,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 )
             )
 
-    user_data["round"].completed = True
+    user_data["round"].is_completed = True
 
     for results in race_sessions_results.values():
         update_ratings(results)
