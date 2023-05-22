@@ -1426,7 +1426,17 @@ class Session(Base):
                     gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
                 else:
                     gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+            elif result.gap_to_first == 0:
+                total = getattr(result, "total_racetime", 0)
+                if not total:
+                    total = getattr(result, "laptime", 0)
 
+                minutes, seconds = divmod(total, 60)
+                milliseconds = (seconds % 1) * 1000
+                gap = (
+                    f"<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+                )
+                position = "1"
             else:
                 gap = "<i>assente</i>"
                 position = "/"
@@ -1487,8 +1497,10 @@ class RaceResult(Base):
     relative_position: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=3))
-    total_racetime: Mapped[Decimal | None] = mapped_column(Numeric(precision=3))
+    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    total_racetime: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=8, scale=3)
+    )
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1677,3 +1689,9 @@ class RoundParticipant(Base):
 
     round: Mapped[Round] = relationship("Round", back_populates="participants")
     driver: Mapped[Driver] = relationship("Driver")
+
+
+class Chat(Base):
+    __tablename__ = "chats"
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
