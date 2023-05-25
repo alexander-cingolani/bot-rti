@@ -1035,6 +1035,15 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(message)
 
 
+async def unpin_auto_forward(update: Update, _: ContextTypes.DEFAULT_TYPE):
+    await update.message.unpin()
+    if update.message.from_user.is_bot and not update.message.document:
+        await update.message.delete()
+    if update.message.sticker:
+        await update.message.delete()
+    return
+
+
 def main() -> None:
     """Starts the bot."""
 
@@ -1091,7 +1100,9 @@ def main() -> None:
             update_participation_list, r"participating|not_participating|not_sure"
         )
     )
-
+    application.add_handler(
+        MessageHandler(filters.IS_AUTOMATIC_FORWARD, unpin_auto_forward)
+    )
     application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))  # type: ignore
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
