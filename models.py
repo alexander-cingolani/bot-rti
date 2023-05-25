@@ -1501,6 +1501,8 @@ class RaceResult(Base):
     total_racetime: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=8, scale=3)
     )
+    driver_mu: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
+    driver_sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
