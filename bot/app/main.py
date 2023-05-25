@@ -1038,7 +1038,8 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 async def unpin_auto_forward(update: Update, _: ContextTypes.DEFAULT_TYPE):
     
     await update.message.unpin()
-    
+    if update.message.from_user.is_bot and not update.message.document:
+        await update.message.delete()
     if update.message.sticker:
         await update.message.delete()
     return
