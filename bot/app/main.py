@@ -1036,7 +1036,11 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def unpin_auto_forward(update: Update, _: ContextTypes.DEFAULT_TYPE):
+    
     await update.message.unpin()
+    
+    if update.message.sticker:
+        await update.message.delete()
     return
 
 def main() -> None:
