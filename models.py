@@ -977,6 +977,7 @@ class Category(Base):
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
+    tag: Mapped[str] = mapped_column(String(7), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap_points: Mapped[str] = mapped_column(String(15))
