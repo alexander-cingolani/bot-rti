@@ -632,7 +632,7 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
             f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
             f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
             f"#{championship.abbreviated_name}Tappa{rnd.number}"
-            f" #{rnd.category.name}"
+            f" #{rnd.category.tag}"
         )
 
         await context.bot.send_message(
