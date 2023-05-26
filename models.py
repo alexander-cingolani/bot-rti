@@ -1238,13 +1238,15 @@ class Round(Base):
         if not isinstance(other, Round):
             return NotImplemented
         return self.round_id == other.round_id
+    
 
     def generate_info_message(self) -> str:
         """Generates a message containing info on the category's races."""
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.abbreviated_name}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.circuit_name}</i>\n"
+            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
         )
 
         for session in self.sessions:
