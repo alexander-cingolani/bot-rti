@@ -340,7 +340,6 @@ class DriverCategory(Base):
 
         driver_id (int): Unique ID of the driver joining the category.
         category_id (int): Unique ID of the category being joined by the driver.
-        car_class_id (int): Unique ID of the car class the driver is in.
 
         driver (Driver): Driver joining the category.
         category (Category): Category being joined by the driver.
@@ -366,13 +365,9 @@ class DriverCategory(Base):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.category_id"), primary_key=True
     )
-    car_class_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("car_classes.car_class_id")
-    )
 
     driver: Mapped[Driver] = relationship("Driver", back_populates="categories")
     category: Mapped[Category] = relationship("Category", back_populates="drivers")
-    car_class: Mapped[CarClass] = relationship("CarClass")
 
     def __repr__(self) -> str:
         return f"DriverCategory(driver_id={self.driver_id}, category_id={self.category_id})"
@@ -906,33 +901,6 @@ class TeamChampionship(Base):
     )
 
 
-class CategoryClass(Base):
-    """This class binds a Category to a CarClass.
-    It allows for a Category to be associated with multiple CarClasses while also
-    reusing CarClasses for multiple Categories, since they are determined by the game
-    and are unlikely to change.
-
-    Attributes:
-        category_id (int): ID of the category the class is being registered to.
-        car_class_id (int): ID of the car_class being registered to the category.
-
-        category (Category): Category object associated with the category_id.
-        car_class (CarClass): CarClass object associated with the car_class_id
-    """
-
-    __tablename__ = "category_classes"
-
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), primary_key=True
-    )
-    car_class_id: Mapped[int] = mapped_column(
-        ForeignKey("car_classes.car_class_id"), primary_key=True
-    )
-
-    category: Mapped[Category] = relationship("Category", back_populates="car_classes")
-    car_class: Mapped[CarClass] = relationship("CarClass")
-
-
 class Game(Base):
     """Represents a game Categories can race in.
 
@@ -985,6 +953,7 @@ class Category(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
     )
+    car_class_id: Mapped[int] = mapped_column(ForeignKey("car_classes.car_class_id"), nullable=False)
 
     rounds: Mapped[list[Round]] = relationship(
         "Round", back_populates="category", order_by="Round.date"
@@ -1002,11 +971,7 @@ class Category(Base):
     championship: Mapped[Championship] = relationship(
         "Championship", back_populates="categories"
     )
-    car_classes: Mapped[list[CategoryClass]] = relationship(
-        "CategoryClass",
-        back_populates="category",
-        order_by="CategoryClass.car_class_id",
-    )
+    car_class: Mapped[CarClass] = relationship("CarClass")
 
     def __repr__(self) -> str:
         return f"Category(category_id={self.category_id},name={self.name})"
