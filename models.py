@@ -33,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    ARRAY
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -749,8 +750,7 @@ class QualifyingResult(Base):
         if not self.participated:
             return 0
 
-        return self.session.point_system.scoring[self.position - 1]
-
+        return self.session.point_system.point_system[self.position - 1]
 
 class CarClass(Base):
     """This object represents an in-game car class.
@@ -1122,18 +1122,13 @@ class PointSystem(Base):
     __tablename__ = "point_systems"
 
     point_system_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    point_system: Mapped[str] = mapped_column(String(60), nullable=False)
+    point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
 
     def __repr__(self) -> str:
         return (
             f"PointSystem(point_system_id={self.point_system_id}, "
             f"point_system={self.point_system})"
         )
-
-    @property
-    def scoring(self) -> list[float]:
-        """List containing the number of points assigned"""
-        return list(map(float, self.point_system.split()))
 
 
 class Round(Base):
@@ -1514,9 +1509,9 @@ class RaceResult(Base):
 
         if not self.participated:
             return 0
-
+        
         return (
-            self.session.point_system.scoring[self.position - 1]
+            self.session.point_system.point_system[self.position - 1]
             + self.fastest_lap_points
         )
 
