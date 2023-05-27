@@ -718,7 +718,7 @@ class QualifyingResult(Base):
     )
 
     qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    position: Mapped[int] = mapped_column(SmallInteger)
+    position: Mapped[int | None] = mapped_column(SmallInteger)
     laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
