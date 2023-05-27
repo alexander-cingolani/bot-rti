@@ -369,7 +369,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 quali_results.append(
                     QualifyingResult(
                         position=result.position,
-                        relative_position=result.position,
                         category=category,
                         laptime=result.seconds,
                         gap_to_first=gap_to_first,
@@ -403,7 +402,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 RaceResult(
                     finishing_position=result.position,
                     category=category,
-                    relative_position=result.position,
                     total_racetime=result.seconds,
                     gap_to_first=gap_to_first,
                     driver=result.driver.driver,  # type: ignore

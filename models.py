@@ -526,7 +526,7 @@ class Driver(Base):
         if len(completed_races) < 2:
             return 0
 
-        positions = [race_result.relative_position for race_result in completed_races]
+        positions = [race_result.position for race_result in completed_races]
         participation_ratio = len(completed_races) / len(self.race_results)
         participation_ratio = min(participation_ratio, 1)
         result = round(100 * participation_ratio - 3 * stdev(positions))
@@ -654,21 +654,21 @@ class Driver(Base):
                 continue
 
             statistics["fastest_laps"] += race_result.fastest_lap_points
-            if race_result.relative_position:
-                positions += race_result.relative_position
-            if race_result.relative_position <= 3:
+            if race_result.position:
+                positions += race_result.position
+            if race_result.position <= 3:
                 statistics["podiums"] += 1
-                if race_result.relative_position == 1:
+                if race_result.position == 1:
                     statistics["wins"] += 1
 
         quali_positions = 0
         missed_qualis = 0
         for quali_result in self.qualifying_results:
             if quali_result:
-                if quali_result.relative_position == 1:
+                if quali_result.position == 1:
                     statistics["poles"] += 1
                 if quali_result.participated:
-                    quali_positions += quali_result.relative_position
+                    quali_positions += quali_result.position
 
         statistics["races_completed"] = len(self.race_results) - missed_races
 
@@ -693,7 +693,6 @@ class QualifyingResult(Base):
         qualifying_result_id (int): Automatically generated unique ID assigned upon
             object creation.
         position (int): Position the driver qualified in.
-        relative_position (int): Qualifying position in the driver's car class.
         laptime (Decimal): Best lap registered by the driver in the.
         gap_to_first (Decimal): Seconds by which the laptime is off from the fastest lap
             time in the driver's car class.
@@ -719,7 +718,6 @@ class QualifyingResult(Base):
 
     qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     position: Mapped[int] = mapped_column(SmallInteger)
-    relative_position: Mapped[int] = mapped_column(SmallInteger)
     laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -1291,7 +1289,7 @@ class Session(Base):
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
         race_results (Optional(list[RaceResult])): If session is a race session, contains the
-            race results. [Ordered by finishing_position]
+            race results. [Ordered by position]
         qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
             contains the qualifying results. [Ordered by position]
         round_id (int): Unique ID of the round the session belongs to.
@@ -1320,7 +1318,7 @@ class Session(Base):
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="session", order_by="RaceResult.finishing_position"
+        "RaceResult", back_populates="session", order_by="RaceResult.position"
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
         "QualifyingResult",
@@ -1385,7 +1383,7 @@ class Session(Base):
 
         for result in results:
             if result.gap_to_first:
-                position = str(result.relative_position)
+                position = str(result.position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
 
@@ -1433,8 +1431,7 @@ class RaceResult(Base):
 
     Attributes:
         result_id (int): Automatically generated unique ID assigned upon object creation.
-        finishing_position (int): The position the driver finished in the race.
-        relative_position (int): Position in the driver's class.
+        position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
         gap_to_first (Decimal): Difference between the driver's race time
@@ -1460,8 +1457,7 @@ class RaceResult(Base):
     )
 
     result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    finishing_position: Mapped[int] = mapped_column(SmallInteger)
-    relative_position: Mapped[int] = mapped_column(SmallInteger)
+    position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
@@ -1490,7 +1486,7 @@ class RaceResult(Base):
     def __repr__(self) -> str:
         return (
             f"RaceResult(driver_id={self.driver_id}, "
-            f"finishing_position={self.finishing_position}, "
+            f"position={self.position}, "
             f"fastest_lap={self.fastest_lap}, "
             f"total_racetime={self.total_racetime}) "
         )
@@ -1506,7 +1502,7 @@ class RaceResult(Base):
         if not self.category.split_point:
             return float(self.session.fastest_lap_points)
 
-        if self.finishing_position <= self.category.split_point:
+        if self.position <= self.category.split_point:
             return float(self.category.fastest_lap_points.split()[0])
         return float(self.category.fastest_lap_points.split()[1])
 
@@ -1520,7 +1516,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.finishing_position - 1]
+            self.session.point_system.scoring[self.position - 1]
             + self.fastest_lap_points
         )
 

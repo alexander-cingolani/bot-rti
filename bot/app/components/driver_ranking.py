@@ -68,7 +68,7 @@ def recalculate_ratings():
                             ),
                         )
                         initial_ratings.append(rtg)
-                        finishing_positions.append(result.relative_position)
+                        finishing_positions.append(result.position)
                         race_results.append(result)
                     result.driver_mu = rtg[0].mu
                     result.driver_sigma = rtg[0].sigma
