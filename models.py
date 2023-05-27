@@ -977,6 +977,7 @@ class Category(Base):
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
+    tag: Mapped[str] = mapped_column(String(7), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap_points: Mapped[str] = mapped_column(String(15))
@@ -1244,7 +1245,8 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.abbreviated_name}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.circuit_name}</i>\n"
+            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
         )
 
         for session in self.sessions:

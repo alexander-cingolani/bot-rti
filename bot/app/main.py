@@ -630,9 +630,9 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
     if rnd := championship.reporting_round():
         text = (
             f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
-            f"{rnd.number}ª Tappa / {rnd.circuit.abbreviated_name}\n"
+            f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
             f"#{championship.abbreviated_name}Tappa{rnd.number}"
-            f" #{rnd.category.name}"
+            f" #{rnd.category.tag}"
         )
 
         await context.bot.send_message(
@@ -697,7 +697,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     drivers.sort(key=lambda d: d.driver.psn_id.lower())
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
-        f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
+        f"<b>{rnd.circuit.abbreviated_name} - {rnd.circuit.variation}</b>"
     )
 
     chat_data["participation_list_text"] = text
@@ -780,7 +780,7 @@ async def update_participation_list(
     if not chat_data.get("participation_list_text"):
         chat_data["participation_list_text"] = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
-            f"Circuito: <b>{rnd.circuit.abbreviated_name}</b>"
+            f"<b>{rnd.circuit.abbreviated_name} - {rnd.circuit.variation}</b>"
         )
 
     if not chat_data.get("participation_list_message"):
@@ -1036,13 +1036,13 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def unpin_auto_forward(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    
     await update.message.unpin()
     if update.message.from_user.is_bot and not update.message.document:
         await update.message.delete()
     if update.message.sticker:
         await update.message.delete()
     return
+
 
 def main() -> None:
     """Starts the bot."""
@@ -1100,7 +1100,9 @@ def main() -> None:
             update_participation_list, r"participating|not_participating|not_sure"
         )
     )
-    application.add_handler(MessageHandler(filters.IS_AUTOMATIC_FORWARD, unpin_auto_forward))
+    application.add_handler(
+        MessageHandler(filters.IS_AUTOMATIC_FORWARD, unpin_auto_forward)
+    )
     application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))  # type: ignore
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(CommandHandler("prossima_gara", next_event))
