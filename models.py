@@ -33,7 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
-    ARRAY
+    ARRAY,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -752,6 +752,7 @@ class QualifyingResult(Base):
 
         return self.session.point_system.point_system[self.position - 1]
 
+
 class CarClass(Base):
     """This object represents an in-game car class.
     CarClass records are meant to be reused multiple times for different categories
@@ -951,7 +952,9 @@ class Category(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
     )
-    car_class_id: Mapped[int] = mapped_column(ForeignKey("car_classes.car_class_id"), nullable=False)
+    car_class_id: Mapped[int] = mapped_column(
+        ForeignKey("car_classes.car_class_id"), nullable=False
+    )
 
     rounds: Mapped[list[Round]] = relationship(
         "Round", back_populates="category", order_by="Round.date"
@@ -1509,7 +1512,7 @@ class RaceResult(Base):
 
         if not self.participated:
             return 0
-        
+
         return (
             self.session.point_system.point_system[self.position - 1]
             + self.fastest_lap_points
