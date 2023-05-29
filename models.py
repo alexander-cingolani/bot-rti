@@ -33,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    ARRAY,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -340,7 +341,6 @@ class DriverCategory(Base):
 
         driver_id (int): Unique ID of the driver joining the category.
         category_id (int): Unique ID of the category being joined by the driver.
-        car_class_id (int): Unique ID of the car class the driver is in.
 
         driver (Driver): Driver joining the category.
         category (Category): Category being joined by the driver.
@@ -366,13 +366,9 @@ class DriverCategory(Base):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.category_id"), primary_key=True
     )
-    car_class_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("car_classes.car_class_id")
-    )
 
     driver: Mapped[Driver] = relationship("Driver", back_populates="categories")
     category: Mapped[Category] = relationship("Category", back_populates="drivers")
-    car_class: Mapped[CarClass] = relationship("CarClass")
 
     def __repr__(self) -> str:
         return f"DriverCategory(driver_id={self.driver_id}, category_id={self.category_id})"
@@ -531,7 +527,7 @@ class Driver(Base):
         if len(completed_races) < 2:
             return 0
 
-        positions = [race_result.relative_position for race_result in completed_races]
+        positions = [race_result.position for race_result in completed_races]
         participation_ratio = len(completed_races) / len(self.race_results)
         participation_ratio = min(participation_ratio, 1)
         result = round(100 * participation_ratio - 3 * stdev(positions))
@@ -659,21 +655,21 @@ class Driver(Base):
                 continue
 
             statistics["fastest_laps"] += race_result.fastest_lap_points
-            if race_result.relative_position:
-                positions += race_result.relative_position
-            if race_result.relative_position <= 3:
+            if race_result.position:
+                positions += race_result.position
+            if race_result.position <= 3:
                 statistics["podiums"] += 1
-                if race_result.relative_position == 1:
+                if race_result.position == 1:
                     statistics["wins"] += 1
 
         quali_positions = 0
         missed_qualis = 0
         for quali_result in self.qualifying_results:
             if quali_result:
-                if quali_result.relative_position == 1:
+                if quali_result.position == 1:
                     statistics["poles"] += 1
                 if quali_result.participated:
-                    quali_positions += quali_result.relative_position
+                    quali_positions += quali_result.position
 
         statistics["races_completed"] = len(self.race_results) - missed_races
 
@@ -698,7 +694,6 @@ class QualifyingResult(Base):
         qualifying_result_id (int): Automatically generated unique ID assigned upon
             object creation.
         position (int): Position the driver qualified in.
-        relative_position (int): Qualifying position in the driver's car class.
         laptime (Decimal): Best lap registered by the driver in the.
         gap_to_first (Decimal): Seconds by which the laptime is off from the fastest lap
             time in the driver's car class.
@@ -723,8 +718,7 @@ class QualifyingResult(Base):
     )
 
     qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    position: Mapped[int] = mapped_column(SmallInteger)
-    relative_position: Mapped[int] = mapped_column(SmallInteger)
+    position: Mapped[int | None] = mapped_column(SmallInteger)
     laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -756,7 +750,7 @@ class QualifyingResult(Base):
         if not self.participated:
             return 0
 
-        return self.session.point_system.scoring[self.position - 1]
+        return self.session.point_system.point_system[self.position - 1]
 
 
 class CarClass(Base):
@@ -906,33 +900,6 @@ class TeamChampionship(Base):
     )
 
 
-class CategoryClass(Base):
-    """This class binds a Category to a CarClass.
-    It allows for a Category to be associated with multiple CarClasses while also
-    reusing CarClasses for multiple Categories, since they are determined by the game
-    and are unlikely to change.
-
-    Attributes:
-        category_id (int): ID of the category the class is being registered to.
-        car_class_id (int): ID of the car_class being registered to the category.
-
-        category (Category): Category object associated with the category_id.
-        car_class (CarClass): CarClass object associated with the car_class_id
-    """
-
-    __tablename__ = "category_classes"
-
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), primary_key=True
-    )
-    car_class_id: Mapped[int] = mapped_column(
-        ForeignKey("car_classes.car_class_id"), primary_key=True
-    )
-
-    category: Mapped[Category] = relationship("Category", back_populates="car_classes")
-    car_class: Mapped[CarClass] = relationship("CarClass")
-
-
 class Game(Base):
     """Represents a game Categories can race in.
 
@@ -977,12 +944,16 @@ class Category(Base):
 
     category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
+    tag: Mapped[str] = mapped_column(String(7), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap_points: Mapped[str] = mapped_column(String(15))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey("championships.championship_id"), nullable=False
+    )
+    car_class_id: Mapped[int] = mapped_column(
+        ForeignKey("car_classes.car_class_id"), nullable=False
     )
 
     rounds: Mapped[list[Round]] = relationship(
@@ -1001,11 +972,7 @@ class Category(Base):
     championship: Mapped[Championship] = relationship(
         "Championship", back_populates="categories"
     )
-    car_classes: Mapped[list[CategoryClass]] = relationship(
-        "CategoryClass",
-        back_populates="category",
-        order_by="CategoryClass.car_class_id",
-    )
+    car_class: Mapped[CarClass] = relationship("CarClass")
 
     def __repr__(self) -> str:
         return f"Category(category_id={self.category_id},name={self.name})"
@@ -1027,6 +994,15 @@ class Category(Base):
         for rnd in reversed(self.rounds):
             if rnd.is_completed:
                 return rnd
+        return None
+
+    def penultimate_completed_round(self) -> Round | None:
+        c = 0
+        for rnd in reversed(self.rounds):
+            if rnd.is_completed and c == 1:
+                return rnd
+            elif rnd.is_completed:
+                c += 1
         return None
 
     def next_round(self) -> Round | None:
@@ -1158,18 +1134,13 @@ class PointSystem(Base):
     __tablename__ = "point_systems"
 
     point_system_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    point_system: Mapped[str] = mapped_column(String(60), nullable=False)
+    point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
 
     def __repr__(self) -> str:
         return (
             f"PointSystem(point_system_id={self.point_system_id}, "
             f"point_system={self.point_system})"
         )
-
-    @property
-    def scoring(self) -> list[float]:
-        """List containing the number of points assigned"""
-        return list(map(float, self.point_system.split()))
 
 
 class Round(Base):
@@ -1244,7 +1215,8 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.abbreviated_name}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.circuit_name}</i>\n"
+            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
         )
 
         for session in self.sessions:
@@ -1324,7 +1296,7 @@ class Session(Base):
         laps (int): Number of laps to be completed. (None if session is time based)
         duration (timedelta): Session time limit. (None if session is based on number of laps)
         race_results (Optional(list[RaceResult])): If session is a race session, contains the
-            race results. [Ordered by finishing_position]
+            race results. [Ordered by position]
         qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
             contains the qualifying results. [Ordered by position]
         round_id (int): Unique ID of the round the session belongs to.
@@ -1353,7 +1325,7 @@ class Session(Base):
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="session", order_by="RaceResult.finishing_position"
+        "RaceResult", back_populates="session", order_by="RaceResult.position"
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
         "QualifyingResult",
@@ -1418,7 +1390,7 @@ class Session(Base):
 
         for result in results:
             if result.gap_to_first:
-                position = str(result.relative_position)
+                position = str(result.position)
                 minutes, seconds = divmod(result.gap_to_first, 60)
                 milliseconds = (seconds % 1) * 1000
 
@@ -1466,8 +1438,7 @@ class RaceResult(Base):
 
     Attributes:
         result_id (int): Automatically generated unique ID assigned upon object creation.
-        finishing_position (int): The position the driver finished in the race.
-        relative_position (int): Position in the driver's class.
+        position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
         gap_to_first (Decimal): Difference between the driver's race time
@@ -1493,14 +1464,15 @@ class RaceResult(Base):
     )
 
     result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    finishing_position: Mapped[int] = mapped_column(SmallInteger)
-    relative_position: Mapped[int] = mapped_column(SmallInteger)
+    position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     total_racetime: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=8, scale=3)
     )
+    driver_mu: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
+    driver_sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1521,7 +1493,7 @@ class RaceResult(Base):
     def __repr__(self) -> str:
         return (
             f"RaceResult(driver_id={self.driver_id}, "
-            f"finishing_position={self.finishing_position}, "
+            f"position={self.position}, "
             f"fastest_lap={self.fastest_lap}, "
             f"total_racetime={self.total_racetime}) "
         )
@@ -1537,7 +1509,7 @@ class RaceResult(Base):
         if not self.category.split_point:
             return float(self.session.fastest_lap_points)
 
-        if self.finishing_position <= self.category.split_point:
+        if self.position <= self.category.split_point:
             return float(self.category.fastest_lap_points.split()[0])
         return float(self.category.fastest_lap_points.split()[1])
 
@@ -1551,7 +1523,7 @@ class RaceResult(Base):
             return 0
 
         return (
-            self.session.point_system.scoring[self.finishing_position - 1]
+            self.session.point_system.point_system[self.position - 1]
             + self.fastest_lap_points
         )
 

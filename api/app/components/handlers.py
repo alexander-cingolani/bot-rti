@@ -1,5 +1,5 @@
 import os
-from typing import cast
+from typing import Any, cast
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -26,7 +26,7 @@ def get_categories(championship_id: int | str | None):
     if not championship:
         return []
 
-    categories = []
+    categories: list[dict[str, Any]] = []
     for i, category in enumerate(championship.categories):
         categories.append(
             {
@@ -50,7 +50,7 @@ def get_calendar(category_id: int):
     if not category:
         return
 
-    calendar = []
+    calendar: list[dict[str, Any]] = []
     for championship_round in category.rounds:
         if championship_round.sprint_race:
             info = [
@@ -86,14 +86,13 @@ def get_calendar(category_id: int):
 
 
 # TODO: Optimize this function by removing quali results search
-def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
+def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str, Any]]:
     """Creates a list containing"""
 
     driver = race_results[0].driver
     quali_results = driver.qualifying_results
 
-    driv_res = []
-
+    driv_res: list[dict[str, Any]] = []
     for race_result in race_results:
         if "1" in race_result.session.name:
             info_gp = f"SR{race_result.round_id}"
@@ -115,16 +114,12 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
             extra_points = race_result.fastest_lap
             penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
 
-        finishing_position = (
-            race_result.relative_position
-            if race_result.relative_position is not None
-            else "/"
-        )
+        position = race_result.position if race_result.position is not None else "/"
 
         driv_res.append(
             {
                 "info_gp": info_gp,
-                "position": finishing_position,
+                "position": position,
                 "extra_points": int(extra_points),
                 "penalties": penalties,
             }
@@ -136,16 +131,16 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict]:
 def get_standings_with_results(category_id: int):
     session = Session()
 
-    car_class = get_category(session=session, category_id=category_id)
-    if not car_class:
+    category = get_category(session=session, category_id=category_id)
+    if not category:
         return
 
-    results = car_class.standings_with_results()
+    results = category.standings_with_results()
 
     response = []
 
     if not results:
-        for driver in car_class.active_drivers():
+        for driver in category.active_drivers():
             team = driver.driver.current_team()
 
             if not team:

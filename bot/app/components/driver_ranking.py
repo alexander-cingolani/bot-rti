@@ -24,30 +24,28 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 def update_ratings(results: list[RaceResult]) -> None:
-    """Updates the ratings in the driver objects contained in the RaceResults
-    based on their finishing position.
-    """
+    """Updates the driver ratings"""
     ranks: list[int] = []
     rating_groups: list[tuple[ts.Rating]] = []
-    drivers: list[Driver] = []
+    race_results: list[RaceResult] = []
     for result in results:
         driver: Driver = result.driver
         if result.participated:
-            drivers.append(driver)
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
             ranks.append(result.finishing_position)
+            race_results.append(result)
 
     rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
 
-    for driver, rating_group in zip(drivers, rating_groups):
-        driver.mu = Decimal(str(rating_group[0].mu))
-        driver.sigma = Decimal(str(rating_group[0].sigma))
+    for rating_group, result in zip(rating_groups, race_results):
+        result.driver_mu = result.driver.mu = Decimal(str(rating_group[0].mu))
+        result.driver_sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
 def recalculate_ratings():
     """Only used to recalculate all the ratings in the last championship."""
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = get_championship(sqla_session, championship_id=1)
 
     if not championship:
         return
@@ -63,16 +61,17 @@ def recalculate_ratings():
                 race_results: list[RaceResult] = []
                 for result in session.race_results:
                     if result.participated:
-                        initial_ratings.append(
-                            (
-                                ts.Rating(
-                                    mu=float(result.driver.mu),
-                                    sigma=float(result.driver.sigma),
-                                ),
+                        rtg = (
+                            ts.Rating(
+                                mu=float(result.driver.mu),
+                                sigma=float(result.driver.sigma),
                             ),
                         )
-                        finishing_positions.append(result.relative_position)
+                        initial_ratings.append(rtg)
+                        finishing_positions.append(result.position)
                         race_results.append(result)
+                    result.driver_mu = rtg[0].mu
+                    result.driver_sigma = rtg[0].sigma
                 print(initial_ratings)
                 print(finishing_positions)
                 if initial_ratings:
