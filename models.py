@@ -995,6 +995,16 @@ class Category(Base):
             if rnd.is_completed:
                 return rnd
         return None
+    
+    def penultimate_completed_round(self) -> Round | None:
+        c = 0
+        for rnd in reversed(self.rounds):
+            if rnd.is_completed and c == 1:
+                return rnd
+            elif rnd.is_completed:
+                c+= 1
+        return None
+                
 
     def next_round(self) -> Round | None:
         """Returns the next round on the calendar."""

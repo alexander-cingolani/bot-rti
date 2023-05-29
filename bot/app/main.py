@@ -386,6 +386,26 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
+            
+            current_category = driver.current_category()
+            rnd = current_category.penultimate_completed_round()
+            previous_rating = 0
+            if rnd:
+                for result in rnd.long_race.race_results:
+                    if result.driver_id == driver.driver_id:
+                        previous_rating = result.driver_mu - config.K * result.driver_sigma
+                        break
+            
+            if previous_rating:
+                diff = round(driver.rating - previous_rating, 2)
+                diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
+                driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
+            elif driver.rating:
+                driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)}</i>\n"
+            else:
+                driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
+            
+            
             consistency = driver.consistency()
             speed = driver.speed()
             sportsmanship = driver.sportsmanship()
@@ -397,7 +417,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 input_message_content=InputTextMessageContent(
                     (
                         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
-                        f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
+                        + driver_rating_text +
                         f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
                         f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
@@ -997,9 +1017,27 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     sportsmanship = driver.sportsmanship()
     race_pace = driver.race_pace()
 
+    current_category = driver.current_category()
+    rnd = current_category.penultimate_completed_round()
+    previous_rating = 0
+    if rnd:
+        for result in rnd.long_race.race_results:
+            if result.driver_id == driver.driver_id:
+                previous_rating = result.driver_mu - config.K * result.driver_sigma
+                break
+    
+    if previous_rating:
+        diff = round(driver.rating - previous_rating, 2)
+        diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
+        driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
+    elif driver.rating:
+        driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)}</i>\n"
+    else:
+        driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
+
     await update.message.reply_text(
         f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
-        f"<b>Driver Rating</b>: <i>{round(driver.rating, 2) if driver.rating else 'N.D.'}</i>\n"
+        + driver_rating_text +
         f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
         f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"

@@ -5,7 +5,7 @@ to different groups of users.
 import json
 import os
 from datetime import time
-
+from decimal import Decimal
 from telegram import User
 
 PARTICIPANT_LIST_OPENING = time(7)
@@ -89,3 +89,8 @@ INFRACTIONS = (
     "Taglio linea in ingresso ai box.",
     "Taglio linea in uscita dai box.",
 )
+
+
+MU = 25
+SIGMA = Decimal(MU / 3)
+K = Decimal(MU / SIGMA)
