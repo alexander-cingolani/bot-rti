@@ -357,7 +357,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             f"{report.reporting_driver.psn_id}\n"
             f"<b>Sessione</b>: {report.session.name}\n"
             f"<b>Minuto incidente</b>: {report.incident_time}\n"
-            f"<b>Motivo segnalazione</b>: {report.report_reason}"
+            f"<b>Motivo segnalazione</b>: {report.reason}"
         )
         penalty = Penalty.from_report(report)
         penalty.number = (
@@ -649,7 +649,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_data = cast(dict[str, Any], context.user_data)
 
     if not update.callback_query:
-        user_data["penalty"].penalty_reason = update.message.text
+        user_data["penalty"].reason = update.message.text
 
     penalty: Penalty = user_data["penalty"]
     # Driver always has a team here.
@@ -675,7 +675,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"<b>Pilota</b>: {penalty.driver.psn_id if penalty.driver else '-'}\n"
         f"<b>Fatto</b>: {penalty.fact if penalty.fact else '-'}\n"
         f"<b>Decisione</b>: {penalty.decision if penalty.decision else '-'}\n"
-        f"<b>Motivazione</b>: {penalty.penalty_reason if penalty.penalty_reason else '-'}"
+        f"<b>Motivazione</b>: {penalty.reason if penalty.reason else '-'}"
     )
     reply_markup = [
         [InlineKeyboardButton("« Motivazione", callback_data=str(ASK_PENALTY_REASON))],

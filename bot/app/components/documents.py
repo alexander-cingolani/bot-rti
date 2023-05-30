@@ -21,7 +21,7 @@ class PenaltyDocument:
         self,
         penalty: Penalty,
     ) -> None:
-        if not penalty.time_penalty and not penalty.penalty_points:
+        if not penalty.time_penalty and not penalty.points:
             self.filename = f"{penalty.number} - Decisione {penalty.driver.psn_id}.pdf"
         else:
             self.filename = f"{penalty.number} - Penalità {penalty.driver.psn_id}.pdf"
@@ -51,7 +51,7 @@ class PenaltyDocument:
         self.canvas.drawCentredString(
             297,
             663,
-            f"{self.penalty.round.number}° Round | {self.penalty.round.circuit.circuit_name}",
+            f"{self.penalty.round.number}° Round | {self.penalty.round.circuit.name}",
         )
 
         self.canvas.setFont("arialB", 11)
@@ -115,7 +115,7 @@ class PenaltyDocument:
         self.canvas.drawString(135, 375, "Regolamento Sportivo RTI")
         self.canvas.drawString(135, 350, self.penalty.decision)
 
-        text = self.penalty.penalty_reason
+        text = self.penalty.reason
         lines = "\n".join(wrap(text, 80)).split("\n")
         y_coord = 325
         for line in lines:
@@ -143,7 +143,7 @@ class ReportDocument:
         self.reporting_driver: Driver = report.reporting_driver
         self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.psn_id}.pdf"
         self.subtitle: str = (
-            f"{report.round.number}° Round | {report.round.circuit.circuit_name}"
+            f"{report.round.number}° Round | {report.round.circuit.name}"
         )
         self.canvas = canvas.Canvas(self.filename)
 
@@ -223,7 +223,7 @@ class ReportDocument:
         self.canvas.drawString(155, 449, reported_team_name)
         self.canvas.drawString(155, 424, self.report.incident_time)
         self.canvas.drawString(155, 399, self.report.session.name)
-        text = "\n".join(wrap(self.report.report_reason, 80)).split("\n")
+        text = "\n".join(wrap(self.report.reason, 80)).split("\n")
         y0 = 374
         for line in text:
             self.canvas.drawString(155, y0, line)

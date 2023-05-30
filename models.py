@@ -56,7 +56,7 @@ class Penalty(Base):
 
     Attributes:
         time_penalty (int): Seconds to add to the driver's total race time.
-        penalty_points (float): Points to be subtracted from the driver's
+        points (float): Points to be subtracted from the driver's
             points tally.
         licence_points (int): Points to be subtracted from the driver's licence.
         warnings (int): Number of warnings received.
@@ -73,7 +73,7 @@ class Penalty(Base):
         decision (str): The decision taken. (Made up from time_penalty, penalty_points,
             licence_points and warnings all combined into a nice text format generated
             by the bot).
-        penalty_reason (str): Detailed explanation why the penalty was issued.
+        reason (str): Detailed explanation why the penalty was issued.
     """
 
     __tablename__ = "penalties"
@@ -82,16 +82,14 @@ class Penalty(Base):
     incident_time: str
     fact: str
     decision: str
-    penalty_reason: str
+    reason: str
     reporting_driver: Driver
 
     penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    penalty_points: Mapped[float] = mapped_column(
-        Float(precision=1), default=0, nullable=False
-    )
+    points: Mapped[float] = mapped_column(Float(precision=1), default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     category: Mapped[Category] = relationship("Category")
@@ -124,7 +122,7 @@ class Penalty(Base):
         time_penalty: int = 0,
         licence_points: int = 0,
         warnings: int = 0,
-        penalty_points: int = 0,
+        points: int = 0,
     ) -> Penalty:
         """Initializes a Penalty object from a Report object.
 
@@ -133,7 +131,7 @@ class Penalty(Base):
             time_penalty (int): Time penalty applied to the driver. (Default: 0)
             licence_points (int): Licence points deducted from the driver's licence. (Default: 0)
             warnings (int): Warnings given to the driver. (Default: 0)
-            penalty_points (int): Points to be deducted from the driver's points tally.
+            points (int): Points to be deducted from the driver's points tally.
                 (Default: 0)
 
         Raises:
@@ -151,7 +149,7 @@ class Penalty(Base):
             time_penalty=time_penalty,
             licence_points=licence_points,
             warnings=warnings,
-            penalty_points=penalty_points,
+            points=points,
         )
         c.incident_time = report.incident_time
         c.category = report.category
@@ -169,7 +167,7 @@ class Penalty(Base):
                 self.category,
                 self.round,
                 self.session,
-                self.penalty_reason,
+                self.reason,
                 self.fact,
                 self.decision,
             )
@@ -180,14 +178,14 @@ class Report(Base):
     """This object represents a report.
     Each report is associated with two Drivers and their Teams,
     as well as the Category, Round and Session the reported incident happened in.
-    N.B. fact, penalty, penalty_reason and is_queued may only be provided after
+    N.B. fact, penalty, reason and is_queued may only be provided after
     the report has been reviewed.
 
     Attributes:
         report_id (uuid4): Automatically generated unique ID assigned upon report creation.
         number (int): The number of the report in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
-        report_reason (str): The reason provided by the reporter for making the report.
+        reason (str): The reason provided by the reporter for making the report.
         video_link (str): [Not persisted] Link towards a YouTube video showing the accident
             happening. (Only intended for qualifying sessions)
         is_reviewed (bool): False by default, indicates if the report has been reviewed yet.
@@ -222,7 +220,7 @@ class Report(Base):
     )
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
-    report_reason: Mapped[str] = mapped_column(String(2000), nullable=False)
+    reason: Mapped[str] = mapped_column(String(2000), nullable=False)
     is_reviewed: Mapped[str] = mapped_column(Boolean, nullable=False, default=False)
     report_time: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default="current_timestamp"
@@ -267,7 +265,7 @@ class Report(Base):
     def __str__(self) -> str:
         return (
             f"Report(number={self.number}, incident_time={self.incident_time},"
-            f" report_reason={self.report_reason}, reported_driver={self.reported_driver},"
+            f" reason={self.reason}, reported_driver={self.reported_driver},"
             f" reporting_driver={self.reporting_driver}, reported_team={self.reported_team})"
         )
 
@@ -590,7 +588,7 @@ class Driver(Base):
             (penalty.time_penalty / 1.5)
             + penalty.warnings
             + (penalty.licence_points * 4)
-            + float(penalty.penalty_points)
+            + float(penalty.points)
             for penalty in self.received_penalties
         )
 
@@ -1215,7 +1213,7 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.circuit_name}</i>\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n"
             f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
         )
 
@@ -1471,8 +1469,8 @@ class RaceResult(Base):
     total_racetime: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=8, scale=3)
     )
-    driver_mu: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
-    driver_sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
+    mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
+    sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
@@ -1534,7 +1532,7 @@ class Championship(Base):
 
     Attributes:
         championship_id (int): The championship's unique ID.
-        championship_name (str): The championship's name.
+        name (str): The championship's name.
         start (datetime.date): Date the championship starts on.
         end (datetime.date): Date the championship ends on.
 
@@ -1547,9 +1545,7 @@ class Championship(Base):
     __tablename__ = "championships"
 
     championship_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    championship_name: Mapped[str] = mapped_column(
-        String(60), unique=True, nullable=False
-    )
+    name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     end: Mapped[datetime.date] = mapped_column(Date)
 
@@ -1596,7 +1592,7 @@ class Championship(Base):
         of each word in it.
         E.G. "eSports Championship 1" -> "EC1"
         """
-        return "".join(i[0] for i in self.championship_name.split()).upper()
+        return "".join(i[0] for i in self.name.split()).upper()
 
     @property
     def driver_list(self) -> list[Driver]:
@@ -1612,7 +1608,7 @@ class Circuit(Base):
     """Represents a circuit within the game.
 
     circuit_id (int): The circuit's unique ID. Different variations have different IDs.
-    circuit_name (str): The circuit's name.
+    name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
     variation (str): Specifies the layout of the track.
 
@@ -1622,7 +1618,7 @@ class Circuit(Base):
     __tablename__ = "circuits"
 
     circuit_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    circuit_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
     variation: Mapped[str] = mapped_column(String(100))
 
@@ -1630,7 +1626,7 @@ class Circuit(Base):
 
     @property
     def logo_url(self) -> str:
-        filename = f"{self.circuit_name.lower().replace(' ', '-')}.png"
+        filename = f"{self.name.lower().replace(' ', '-')}.png"
         return CIRCUIT_LOGO_DIR_URL + filename
 
 
