@@ -38,8 +38,8 @@ def update_ratings(results: list[RaceResult]) -> None:
     rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
 
     for rating_group, result in zip(rating_groups, race_results):
-        result.driver_mu = result.driver.mu = Decimal(str(rating_group[0].mu))
-        result.driver_sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
+        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
+        result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
 def recalculate_ratings():
@@ -71,7 +71,7 @@ def recalculate_ratings():
                         finishing_positions.append(result.position)
                         race_results.append(result)
                     result.driver_mu = rtg[0].mu
-                    result.driver_sigma = rtg[0].sigma
+                    result.sigma = rtg[0].sigma
                 print(initial_ratings)
                 print(finishing_positions)
                 if initial_ratings:

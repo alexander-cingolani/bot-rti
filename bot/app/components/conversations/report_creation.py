@@ -494,7 +494,7 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             )
         ]
     )
-    if user_data["report"].report_reason:
+    if user_data["report"].reason:
         buttons[-1].append(
             InlineKeyboardButton("Avanti »", callback_data=str(REPORT_REASON))
         )
@@ -511,14 +511,14 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data = cast(dict[str, Any], context.user_data)
     if update.callback_query:
         if not update.callback_query.data.isdigit():
-            user_data["report"].report_reason = config.REASONS[
+            user_data["report"].reason = config.REASONS[
                 int(update.callback_query.data.removeprefix("r")) - 1
             ].format(
                 a=user_data["report"].reporting_driver.psn_id,
                 b=user_data["report"].reported_driver.psn_id,
             )
     else:
-        user_data["report"].report_reason = update.message.text
+        user_data["report"].reason = update.message.text
     report: Report = user_data["report"]
     text = (
         f"Dopo aver controllato che i dati siano corretti, premi "
@@ -528,7 +528,7 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         f"\n<b>Pilota Vittima</b>: <i>{report.reporting_driver.psn_id}</i>"
         f"\n<b>Pilota Colpevole</b>: <i>{report.reported_driver.psn_id}</i>"
         f"\n<b>Minuto Incidente</b>: <i>{report.incident_time}</i>"
-        f"\n<b>Motivo Segnalazione</b>: <i>{report.report_reason}</i>"
+        f"\n<b>Motivo Segnalazione</b>: <i>{report.reason}</i>"
         f"\n{f'<b>Video</b>: <i>{report.video_link}</i>' if report.video_link else ''}"
     )
 
