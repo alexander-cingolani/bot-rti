@@ -400,7 +400,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             race_sessions_results[session].append(
                 RaceResult(
-                    finishing_position=result.position,
+                    position=result.position,
                     category=category,
                     total_racetime=result.seconds,
                     gap_to_first=gap_to_first,
