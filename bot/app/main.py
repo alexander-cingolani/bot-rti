@@ -386,6 +386,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if not unique_teams:
                 unique_teams = "/"
 
+
             current_category = driver.current_category()
             rnd = current_category.penultimate_completed_round()
             previous_rating = 0
@@ -1030,7 +1031,9 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     if previous_rating:
         diff = round(driver.rating - previous_rating, 2)
         diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
-        driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
+        driver_rating_text = (
+            f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
+        )
     elif driver.rating:
         driver_rating_text = (
             f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)}</i>\n"
