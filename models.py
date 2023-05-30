@@ -995,16 +995,15 @@ class Category(Base):
             if rnd.is_completed:
                 return rnd
         return None
-    
+
     def penultimate_completed_round(self) -> Round | None:
         c = 0
         for rnd in reversed(self.rounds):
             if rnd.is_completed and c == 1:
                 return rnd
             elif rnd.is_completed:
-                c+= 1
+                c += 1
         return None
-                
 
     def next_round(self) -> Round | None:
         """Returns the next round on the calendar."""
@@ -1472,8 +1471,8 @@ class RaceResult(Base):
     total_racetime: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=8, scale=3)
     )
-    driver_mu: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
-    driver_sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6, scale=3))
+    mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
+    sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False

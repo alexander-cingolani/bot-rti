@@ -392,8 +392,8 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             if rnd:
                 for result in rnd.long_race.race_results:
                     if result.driver_id == driver.driver_id:
-                        if result.driver_mu and result.driver_sigma:
-                            previous_rating = result.driver_mu - config.K * result.driver_sigma
+                        if result.mu and result.sigma:
+                            previous_rating = result.mu - config.K * result.sigma
                         break
 
             if previous_rating:
@@ -1024,8 +1024,8 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     if rnd:
         for result in rnd.long_race.race_results:
             if result.driver_id == driver.driver_id:
-                if result.driver_mu and result.driver_sigma:
-                    previous_rating = result.driver_mu - config.K * result.driver_sigma
+                if result.mu and result.sigma:
+                    previous_rating = result.mu - config.K * result.sigma
                 break
     if previous_rating:
         diff = round(driver.rating - previous_rating, 2)
