@@ -368,7 +368,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.session_id)
         .where(RaceResult.participated == True)
-        .order_by(RaceResult.finishing_position)
+        .order_by(RaceResult.position)
     ).all()
 
     penalised_race_result: RaceResult | None = None
@@ -390,7 +390,7 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
     best_time = race_results[0].total_racetime
     for position, result in enumerate(race_results, start=1):
         result.gap_to_first = result.total_racetime - best_time  # type: ignore
-        result.finishing_position = position
+        result.position = position
 
     if not penalised_race_result:
         raise RuntimeError(

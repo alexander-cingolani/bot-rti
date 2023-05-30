@@ -32,7 +32,7 @@ def update_ratings(results: list[RaceResult]) -> None:
         driver: Driver = result.driver
         if result.participated:
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
-            ranks.append(result.finishing_position)
+            ranks.append(result.position)
             race_results.append(result)
 
     rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
