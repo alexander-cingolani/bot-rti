@@ -373,10 +373,11 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
             InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
         ]
+        break
 
-        await update.callback_query.edit_message_text(
-            text, reply_markup=InlineKeyboardMarkup([reply_markup])
-        )
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup([reply_markup])
+    )
 
     return ASK_FACT
 
