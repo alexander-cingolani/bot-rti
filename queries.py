@@ -412,11 +412,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
                 sqla_session.commit()
                 return
 
-            sqla_session.add(
-                DeferredPenalty(
-                    penalty=penalty, driver=penalty.driver
-                )
-            )
+            sqla_session.add(DeferredPenalty(penalty=penalty, driver=penalty.driver))
             sqla_session.commit()
             return
 

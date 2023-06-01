@@ -1679,9 +1679,7 @@ class DeferredPenalty(Base):
     __tablename__ = "deferred_penalties"
 
     deferred_penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    penalty_id: Mapped[int] = mapped_column(
-        ForeignKey(Penalty.penalty_id), unique=True
-    )
+    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.penalty_id), unique=True)
     driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id))
     is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
 
