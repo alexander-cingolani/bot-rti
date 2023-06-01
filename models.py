@@ -36,7 +36,13 @@ from sqlalchemy import (
     ARRAY,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    attribute_keyed_dict,
+)
 
 
 DOMAIN = os.environ.get("ZONE")
@@ -420,6 +426,9 @@ class Driver(Base):
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
         "QualifyingResult", back_populates="driver"
+    )
+    deferred_penalties: Mapped[list[DeferredPenalty]] = relationship(
+        "DeferredPenalty", back_populates="driver"
     )
 
     def __repr__(self) -> str:
@@ -957,6 +966,7 @@ class Category(Base):
     rounds: Mapped[list[Round]] = relationship(
         "Round", back_populates="category", order_by="Round.date"
     )
+
     race_results: Mapped[list[RaceResult]] = relationship(
         "RaceResult", back_populates="category"
     )
@@ -1663,3 +1673,15 @@ class Chat(Base):
     __tablename__ = "chats"
     chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class DeferredPenalty(Base):
+    __tablename__ = "deferred_penalties"
+
+    deferred_penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.penalty_id), unique=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id))
+    is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    penalty: Mapped[Penalty] = relationship()
+    driver: Mapped[Driver] = relationship("Driver", back_populates="deferred_penalties")

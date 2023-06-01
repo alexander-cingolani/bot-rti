@@ -16,6 +16,7 @@ from models import (
     Category,
     Championship,
     Chat,
+    DeferredPenalty,
     Driver,
     DriverAssignment,
     Penalty,
@@ -336,7 +337,7 @@ def save_results(
     session.commit()
 
 
-def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
+def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     """Saves a report and applies the penalties inside it (if any)
     modifying the results of the session the penalty is referred to, while also
     deducting lost points from the driver's team points tally.
@@ -354,17 +355,17 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
 
     # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
     if not penalty.time_penalty:
-        session.add(penalty)
-        session.commit()
+        sqla_session.add(penalty)
+        sqla_session.commit()
         return
 
     # Penalties handed out in qualifying sessions need to be treated differently.
     if penalty.session.is_quali:
-        save_qualifying_penalty(session, penalty)
+        save_qualifying_penalty(sqla_session, penalty)
         return
 
     # Gets the race results from the relevant session ordered by finishing position.
-    rows = session.execute(
+    rows = sqla_session.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.session_id)
         .where(RaceResult.participated == True)
@@ -373,15 +374,47 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
 
     penalised_race_result: RaceResult | None = None
     race_results: list[RaceResult] = []
-    # Finds the race result belonging to the penalised driver and applies the time penalty
     previous_points = 0.0
+    # Finds the race result belonging to the penalised driver and applies the time penalty
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
-        if race_result.driver_id == penalty.driver.driver_id:
+        if (
+            race_result.driver_id == penalty.driver.driver_id
+            and race_result.participated
+        ):
             previous_points = race_result.points_earned
             race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
+
+        # Defers the time penalty in case the penalised driver did not complete the race
+    if not penalised_race_result:
+        if penalty.session.name == "Gara 1":
+            # Finds the race result belonging to the penalised driver and applies the time penalty
+            race_results = penalty.round.long_race.race_results
+
+            for race_result in race_results:
+                race_results.append(race_result)
+                if (
+                    race_result.driver_id == penalty.driver.driver_id
+                    and race_result.participated
+                ):
+                    previous_points = race_result.points_earned
+                    race_result.total_racetime += penalty.time_penalty  # type: ignore
+                    penalised_race_result = race_result
+
+        elif penalty.session.name in ("Gara", "Gara 2"):
+            category = penalty.category
+            session = penalty.session
+            index = category.rounds.index(session.round) + 1
+
+            if len(category.rounds) == index:
+                sqla_session.commit()
+                return
+
+            sqla_session.add(DeferredPenalty(penalty=penalty, driver=penalty.driver))
+            sqla_session.commit()
+            return
 
     # Sorts the race results after the time penalty has been applied
     race_results.sort(key=lambda x: x.total_racetime)  # type: ignore
@@ -392,22 +425,17 @@ def save_and_apply_penalty(session: SQLASession, penalty: Penalty) -> None:
         result.gap_to_first = result.total_racetime - best_time  # type: ignore
         result.position = position
 
-    if not penalised_race_result:
-        raise RuntimeError(
-            "No RaceResult corresponding to the given penalty was found."
-        )
-
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
-    team = penalised_race_result.driver.current_team()
+
     # Driver always has a team here.
-    team_championship: TeamChampionship = team.current_championship()  # type: ignore
+    team_championship: TeamChampionship = penalty.team.current_championship()  # type: ignore
     team_championship.points -= float(previous_points) - float(
         penalised_race_result.points_earned
     )
 
-    session.add(penalty)
-    session.commit()
+    sqla_session.add(penalty)
+    sqla_session.commit()
     return
 
 
