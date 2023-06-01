@@ -587,10 +587,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     report.reported_team = report.reported_driver.current_team()  # type: ignore
     report.reporting_team = report.reporting_driver.current_team()  # type: ignore
     report.number = (
-        get_last_report_number(
-            sqla_session, category.category_id, report.round.round_id
-        )
-        + 1
+        get_last_report_number(sqla_session, category.id, report.round.id) + 1
     )
     channel = (
         config.LATE_REPORT_CHAT
@@ -618,9 +615,9 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         user_data.clear()
         return ConversationHandler.END
     callback_data = (
-        f"withdraw_late_report_{report.report_id}"
+        f"withdraw_late_report_{report.id}"
         if chat_data.get("late_report")
-        else f"withdraw_late_report_{report.report_id}"
+        else f"withdraw_late_report_{report.id}"
     )
     reply_markup = InlineKeyboardMarkup(
         [

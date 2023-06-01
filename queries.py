@@ -46,9 +46,7 @@ def get_championship(
     """
 
     if championship_id:
-        statement = select(Championship).where(
-            Championship.championship_id == championship_id
-        )
+        statement = select(Championship).where(Championship.id == championship_id)
     else:
         statement = select(Championship).order_by(desc(Championship.start))
 
@@ -74,16 +72,16 @@ def get_team_leaders(
     if not championship_id:
         championship = get_championship(session)
         if championship:
-            championship_id = championship.championship_id
+            championship_id = championship.id
         else:
             return None
 
     statement = (
         select(Driver)
-        .join(DriverAssignment, DriverAssignment.driver_id == Driver.driver_id)
-        .join(Team, DriverAssignment.team_id == Team.team_id)
+        .join(DriverAssignment, DriverAssignment.driver_id == Driver.id)
+        .join(Team, DriverAssignment.team_id == Team.id)
         .where(DriverAssignment.is_leader is True)  # type: ignore
-        .join(TeamChampionship, TeamChampionship.team_id == Team.team_id)
+        .join(TeamChampionship, TeamChampionship.team_id == Team.id)
         .where(TeamChampionship.championship_id == championship_id)
     )
 
@@ -186,9 +184,7 @@ def get_report(session: SQLASession, report_id: str) -> Report | None:
     Returns:
         Report | None: None if no matching report_id was found in the database.
     """
-    result = session.execute(
-        select(Report).where(Report.report_id == report_id)
-    ).one_or_none()
+    result = session.execute(select(Report).where(Report.id == report_id)).one_or_none()
     if result:
         return result[0]
     return None
@@ -281,7 +277,7 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
         raise ValueError("QualifyingResult not in database.")
 
     for driver_category in penalty.driver.categories:
-        if driver_category.category_id == penalty.category.category_id:
+        if driver_category.category_id == penalty.category.id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
 
@@ -349,7 +345,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
 
     # Applies licence points and warnings to the penalised driver's record.
     for driver_category in penalty.driver.categories:
-        if driver_category.category_id == penalty.category.category_id:
+        if driver_category.category_id == penalty.category.id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
 
@@ -367,7 +363,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     # Gets the race results from the relevant session ordered by finishing position.
     rows = sqla_session.execute(
         select(RaceResult)
-        .where(RaceResult.session_id == penalty.session.session_id)
+        .where(RaceResult.session_id == penalty.session.id)
         .where(RaceResult.participated == True)
         .order_by(RaceResult.position)
     ).all()
@@ -379,10 +375,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
-        if (
-            race_result.driver_id == penalty.driver.driver_id
-            and race_result.participated
-        ):
+        if race_result.driver_id == penalty.driver.id and race_result.participated:
             previous_points = race_result.points_earned
             race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
@@ -396,7 +389,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
             for race_result in race_results:
                 race_results.append(race_result)
                 if (
-                    race_result.driver_id == penalty.driver.driver_id
+                    race_result.driver_id == penalty.driver.id
                     and race_result.participated
                 ):
                     previous_points = race_result.points_earned
@@ -451,7 +444,7 @@ def get_category(session: SQLASession, category_id: int) -> Category | None:
     """
 
     result = session.execute(
-        select(Category).where(Category.category_id == category_id)
+        select(Category).where(Category.id == category_id)
     ).one_or_none()
 
     if result:
@@ -466,7 +459,7 @@ def delete_report(session: SQLASession, report_id: str) -> None:
         session (SQLASession): Session to execute the query with.
         report_id (str): ID of the report to delete.
     """
-    session.execute(delete(Report).where(Report.report_id == report_id))
+    session.execute(delete(Report).where(Report.id == report_id))
     session.commit()
     session.expire_all()
 
@@ -517,6 +510,6 @@ def update_participant_status(session: SQLASession, participant: RoundParticipan
 
 
 def delete_chat(session: SQLASession, chat_id: int):
-    stmt = delete(Chat).where(Chat.chat_id == chat_id)
+    stmt = delete(Chat).where(Chat.id == chat_id)
     session.execute(stmt)
     session.commit()

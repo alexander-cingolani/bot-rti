@@ -17,6 +17,7 @@ from typing import Any, DefaultDict, Optional
 
 from cachetools import TTLCache, cached
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -33,17 +34,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
-    ARRAY,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    mapped_column,
-    relationship,
-    attribute_keyed_dict,
-)
-
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 DOMAIN = os.environ.get("ZONE")
 SUBDOMAIN = os.environ.get("SUBDOMAIN")
@@ -55,6 +48,662 @@ CIRCUIT_LOGO_DIR_URL = (
 
 class Base(DeclarativeBase):
     pass
+
+
+class Championship(Base):
+    """This object represents a championship.
+    Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
+
+    Attributes:
+        id (int): The championship's unique ID.
+        name (str): The championship's name.
+        start (datetime.date): Date the championship starts on.
+        end (datetime.date): Date the championship ends on.
+
+        categories (list[Category]): Categories belonging to the championship.
+            [Ordered by category_id]
+        drivers (list[DriverChampionship]): Drivers participating in the championship.
+        rounds (list[Round]): Rounds present in the championship.
+    """
+
+    __tablename__ = "championships"
+
+    id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
+    start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    end: Mapped[datetime.date] = mapped_column(Date)
+
+    categories: Mapped[list[Category]] = relationship(
+        back_populates="championship", order_by="Category.id"
+    )
+    teams: Mapped[list[TeamChampionship]] = relationship(back_populates="championship")
+    rounds: Mapped[list[Round]] = relationship(
+        back_populates="championship", order_by="Round.date"
+    )
+
+    def reporting_round(self) -> Round | None:
+        """Returns the round in which reports can currently be created."""
+        now = datetime.datetime.now().date()
+        for championship_roud in self.rounds:
+            if (championship_roud.date + timedelta(hours=24)) == now:
+                return championship_roud
+        return None
+
+    def current_racing_category(self) -> Category | None:
+        """Returns the category which races today."""
+        for championship_round in self.rounds:
+            if championship_round.date == datetime.datetime.now().date():
+                return championship_round.category
+        return None
+
+    def is_active(self) -> bool:
+        """Returns True if the championship is ongoing."""
+        return bool(self.non_disputed_rounds())
+
+    def non_disputed_rounds(self) -> list[Round]:
+        """Returns all the rounds which have not been disputed yet."""
+        rounds: list[Round] = []
+        for rnd in self.rounds:
+            if not rnd.is_completed:
+                rounds.append(rnd)
+        return rounds
+
+    @property
+    def abbreviated_name(self) -> str:
+        """Short version of the championship's name created by taking the first letter
+        of each word in it.
+        E.G. "eSports Championship 1" -> "EC1"
+        """
+        return "".join(i[0] for i in self.name.split()).upper()
+
+    @property
+    def driver_list(self) -> list[Driver]:
+        """List of drivers participating to this championship."""
+        drivers: list[Driver] = []
+        for category in self.categories:
+            for driver in category.drivers:
+                drivers.append(driver.driver)
+        return drivers
+
+
+class Game(Base):
+    """Represents a game Categories can race in.
+
+    Attributes:
+        id (int): The game's unique ID.
+        name (str): The name of the game.
+    """
+
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column("game_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"Game(game_id={self.id}, name={self.name})"
+
+
+class PointSystem(Base):
+    """
+    This object represents a point system.
+    Each point system can be associated with multiple Sessions.
+
+    Attributes:
+        id (int): A unique ID.
+        point_system (str): String containing the number of points for each position,
+            separated by a space. E.g. "25 18 15 .."
+    """
+
+    __tablename__ = "point_systems"
+
+    id: Mapped[int] = mapped_column("point_system_id", SmallInteger, primary_key=True)
+    point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"PointSystem(point_system_id={self.id}, "
+            f"point_system={self.point_system})"
+        )
+
+
+class CarClass(Base):
+    """This object represents an in-game car class.
+    CarClass records are meant to be reused multiple times for different categories
+    and championships, their function is mainly to identify which type of car is
+    assigned to drivers within the same category, this therefore allows to calculate
+    statistics separately from one class and another.
+
+    Attributes:
+        id (int): Unique ID of the car class.
+        name (str): Name of the car class.
+
+        game_id (int): Unique ID of the game the car class is in.
+
+        game (Game): Game object the car class is associated to.
+    """
+
+    __tablename__ = "car_classes"
+
+    id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
+
+    game: Mapped[Game] = relationship()
+
+    def __repr__(self) -> str:
+        return f"CarClass(car_class_id={self.id}, name={self.name})"
+
+    def __key(self) -> int:
+        return self.id
+
+    def __hash__(self) -> int:
+        return hash(self.__key())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CarClass):
+            return NotImplemented
+        return self.id == other.id
+
+
+class Circuit(Base):
+    """Represents a circuit within the game.
+
+    circuit_id (int): The circuit's unique ID. Different variations have different IDs.
+    name (str): The circuit's name.
+    abbreviated_name (str): Shorter version of the circuit name.
+    variation (str): Specifies the layout of the track.
+
+    rounds (list[Round]): The rounds that took place at this circuit.
+    """
+
+    __tablename__ = "circuits"
+
+    id: Mapped[int] = mapped_column("circuit_id", SmallInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    variation: Mapped[str] = mapped_column(String(100))
+
+    rounds: Mapped[list[Round]] = relationship(back_populates="circuit")
+
+    @property
+    def logo_url(self) -> str:
+        filename = f"{self.name.lower().replace(' ', '-')}.png"
+        return CIRCUIT_LOGO_DIR_URL + filename
+
+
+class Category(Base):
+    """Represents a category.
+
+    Attributes:
+        id (int): A Unique ID.
+        name (str): Name of the category.
+
+        championship_id (int): ID of the championship the category belongs to.
+        game_id (int): ID of the game the category is based on.
+        split_point (int): If specified, is used to determine how many points are to be assigned
+            for the fastest lap based on the driver's finishing position.
+        fastest_lap_points (str): One or two numbers in a string split by a " ". The first number
+            tells how many points should be assigned for the first x drivers up to the split point,
+            while the second number tells how many points should be assigned for the drivers after
+            the split point.
+        game (Game): Game the category is based on.
+        rounds (list[Round]): Rounds in the category.
+        race_results (list[RaceResult]): Registered race results.
+        qualifying_results (list[QualifyingResult]): Registered qualifying results.
+        drivers (list[Driver]): Drivers participating in the category. [Ordered by driver_id]
+        championship (Championship): The championship the category belongs to.
+    """
+
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column("category_id", SmallInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    tag: Mapped[str] = mapped_column(String(7), nullable=False)
+    display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    split_point: Mapped[int] = mapped_column(SmallInteger)
+    fastest_lap_points: Mapped[str] = mapped_column(String(15))
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
+    championship_id: Mapped[int] = mapped_column(
+        ForeignKey(Championship.id), nullable=False
+    )
+    car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
+
+    rounds: Mapped[list[Round]] = relationship(
+        back_populates="category", order_by="Round.date"
+    )
+    race_results: Mapped[list[RaceResult]] = relationship(back_populates="category")
+    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
+        back_populates="category"
+    )
+    drivers: Mapped[list[DriverCategory]] = relationship(
+        back_populates="category", order_by="DriverCategory.position"
+    )
+    game: Mapped[Game] = relationship()
+    championship: Mapped[Championship] = relationship(back_populates="categories")
+    car_class: Mapped[CarClass] = relationship()
+
+    def __repr__(self) -> str:
+        return f"Category(id={self.id},name={self.name})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Category):
+            return NotImplemented
+        return self.id == other.id
+
+    def first_non_completed_round(self) -> Round | None:
+        """Returns the first non completed Round."""
+        for rnd in self.rounds:
+            if not rnd.is_completed:
+                return rnd
+        return None
+
+    def last_completed_round(self) -> Round | None:
+        """Returns the last completed Round."""
+        for rnd in reversed(self.rounds):
+            if rnd.is_completed:
+                return rnd
+        return None
+
+    def penultimate_completed_round(self) -> Round | None:
+        c = 0
+        for rnd in reversed(self.rounds):
+            if rnd.is_completed and c == 1:
+                return rnd
+            elif rnd.is_completed:
+                c += 1
+        return None
+
+    def next_round(self) -> Round | None:
+        """Returns the next round on the calendar."""
+        # Rounds in self.rounds are ordered by date
+        for championship_round in self.rounds:
+            if dt.combine(championship_round.date, time(hour=23)) >= dt.now():
+                return championship_round
+        return None
+
+    def active_drivers(self) -> list[DriverCategory]:
+        """Returns list of drivers who are currently competing in this category."""
+        return [driver for driver in self.drivers if not driver.left_on]
+
+    def _sort_drivers(
+        self, standings: dict[Driver, tuple[Decimal, int, int]]
+    ) -> dict[Driver, Decimal]:
+        sorted_standings = sorted(
+            standings.items(),
+            key=lambda x: (x[1][0], -x[1][1] / x[1][2], -x[1][2]),
+        )
+
+        return {driver: values[0] for driver, values in sorted_standings}
+
+    def standings(self, n: int = 0) -> dict[Driver, tuple[float, int]]:
+        """Calculates the current standings in this category.
+
+        Args:
+            n (Optional[int]): Number of races to go back. (Must be 0 or negative)
+
+        Returns:
+            DefaultDict[Driver, [float]]: DefaultDict containing Drivers as keys
+                and a list containing the total points and the number of positions
+                gained by the driver in the championship standings in the last
+                completed_rounds.
+        """
+
+        driver_points_in_last_round: DefaultDict[Driver, float] = defaultdict(lambda: 0)
+
+        last_completed_round = self.last_completed_round()
+        if not last_completed_round:
+            return {driver.driver: (0, 0) for driver in self.drivers}
+
+        # Sum points earned in races
+        for race_result in self.race_results:
+            if race_result.round_id == last_completed_round.id:
+                break
+            driver_points_in_last_round[race_result.driver] += race_result.points_earned
+        # Sum points earned in qualifying sessions
+        for quali_result in self.qualifying_results:
+            if quali_result.round_id == last_completed_round.id:
+                break
+            driver_points_in_last_round[
+                quali_result.driver
+            ] += quali_result.points_earned
+
+        driver_positions_up_to_last_round = sorted(
+            driver_points_in_last_round.keys(),
+            key=lambda d: driver_points_in_last_round[d],
+            reverse=True,
+        )
+        results: dict[Driver, tuple[float, int]] = {}
+        for driver in self.drivers:
+            delta = driver.position - (
+                driver_positions_up_to_last_round.index(driver.driver) + 1
+            )
+            results[driver.driver] = (driver.points, delta)
+
+        return results
+
+    def standings_with_results(self):
+        """Calculates the current standings in this category.
+
+        Returns:
+            list[list[list[RaceResult], int]]: The first level of nesting contains
+                lists: each of those lists contains a list of RaceResult s and an
+                integer representing the points tally the RaceResults amount to.
+        """
+
+        results: DefaultDict[Driver, list[Any]] = defaultdict(lambda: [[], 0])
+
+        for race_result in self.race_results:
+            results[race_result.driver][0].append(race_result)
+            points_earned = race_result.points_earned
+            results[race_result.driver][1] += points_earned
+
+        for qualifying_result in self.qualifying_results:
+            results[qualifying_result.driver][1] += qualifying_result.points_earned
+
+        return sorted(list(results.values()), key=lambda x: x[1], reverse=True)
+
+    def points_per_round(self):
+        """Creates a list containing a list for each round which contains the total amount
+        of points each driver had after that round.
+        """
+        result: list[list[float]] = []
+        drivers = [driver.driver.psn_id for driver in self.drivers]
+        driver_map = defaultdict.fromkeys(drivers, float(0))
+        result.append(["Tappa"] + drivers)  # type: ignore
+        for number, championship_round in enumerate(self.rounds, start=1):
+            if not championship_round.is_completed:
+                continue
+
+            result.append([number])
+
+            for race_result in championship_round.race_results:
+                driver_map[race_result.driver.psn_id] += race_result.points_earned
+            for qualifying_result in championship_round.qualifying_results:
+                driver_map[
+                    qualifying_result.driver.psn_id
+                ] += qualifying_result.points_earned
+
+            result[number].extend(driver_map.values())
+
+        return result
+
+
+class Round(Base):
+    """This object represents a round of a specific category.
+    It is used to group RaceResults and QualifyingResults registered on a specific date.
+
+    Attributes:
+        id (int): Automatically generated unique ID assigned upon object creation.
+        number (int): The number of the round in the calendar order.
+        date (date): The date the round takes place on.
+        circuit (str): The circuit the round takes place on.
+        is_completed (bool): True if the round has been completed.
+
+        category_id (int): Unique ID of the category the round belongs to.
+        championship_id (int): Unique ID of the championship the round belongs to.
+
+        championship (Championship): Championship the round belongs to.
+        category (Category): Category the round belongs to.
+        race_results (list[RaceResult]): All the race results registered to the round.
+        qualifying_results (list[QualifyingResult]): All the qualifying results registered to
+            the round.
+    """
+
+    __tablename__ = "rounds"
+
+    id: Mapped[int] = mapped_column("round_id", SmallInteger, primary_key=True)
+    number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    championship_id: Mapped[int] = mapped_column(
+        ForeignKey(Championship.id), nullable=False
+    )
+    circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), nullable=False)
+
+    championship: Mapped[Championship] = relationship(back_populates="rounds")
+
+    category: Mapped[Category] = relationship(back_populates="rounds")
+    circuit: Mapped[Circuit] = relationship(back_populates="rounds")
+    sessions: Mapped[list[Session]] = relationship(back_populates="round")
+
+    race_results: Mapped[list[RaceResult]] = relationship(back_populates="round")
+    reports: Mapped[list[Report]] = relationship()
+    penalties: Mapped[list[Penalty]] = relationship()
+    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
+        back_populates="round"
+    )
+    participants: Mapped[list[RoundParticipant]] = relationship(back_populates="round")
+
+    def __repr__(self) -> str:
+        return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, is_completed={self.is_completed})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Round):
+            return NotImplemented
+        return self.id == other.id
+
+    def generate_info_message(self) -> str:
+        """Generates a message containing info on the category's races."""
+
+        message = (
+            f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n"
+            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
+        )
+
+        for session in self.sessions:
+            if session.duration:
+                race_length = (
+                    f"<b>Durata:</b> <i>{session.duration.seconds // 60} min.</i>\n"
+                )
+            else:
+                race_length = f"<b>Giri:</b> <i>{session.laps}</i>\n"
+
+            message += (
+                f"<i>{session.name}</i>\n"
+                + race_length
+                + f"<b>Consumo benzina:</b> <i>{session.fuel_consumption}x</i>\n"
+                f"<b>Consumo gomme:</b> <i>{session.tyre_degradation}x</i>\n"
+                f"<b>Orario:</b> <i>{session.time_of_day}</i>\n"
+            )
+            if session.weather:
+                message += f"<b>Meteo:</b> <i>{session.weather}</i>\n"
+
+            message += "\n"
+
+        return message
+
+    @property
+    def has_sprint_race(self) -> bool:
+        """Returns True if the category has a sprint race."""
+        return len(self.sessions) == 3
+
+    @property
+    def qualifying_session(self) -> Session | None:
+        """Returns the Session where qualifying takes place in this Round."""
+        for session in self.sessions:
+            if session.is_quali:
+                return session
+        return None
+
+    @property
+    def race_sessions(self) -> list[Session] | None:
+        sessions: list[Session] = []
+        for session in self.sessions:
+            if not session.is_quali:
+                sessions.append(session)
+        return None
+
+    @property
+    def sprint_race(self) -> Session | None:
+        """Returns the first race session of this round."""
+        for session in self.sessions:
+            if "gara 1" in session.name.lower():
+                return session
+        return None
+
+    @property
+    def long_race(self) -> Session | None:
+        """The Session object corresponding to this round's long race."""
+        for session in self.sessions:
+            name = session.name.lower()
+            if "gara" == name or "2" in name or "lunga" in name:
+                return session
+        return None
+
+
+class Session(Base):
+    """This object represents a session in a round.
+
+    Sessions can be either Race or Qualifying sessions, this is determined by the
+    name attribute.
+
+    Attributes:
+        id (int): Automatically generated unique ID assigned upon object creation.
+        name (str): The name of the session.
+        fuel_consumption (int): In-game fuel consumption setting.
+        tyre_degradation (int): In-game tyre degradation setting.
+        time_of_day (str): In-game session time setting.
+        weather (str): In-game weather setting.
+        laps (int): Number of laps to be completed. (None if session is time based)
+        duration (timedelta): Session time limit. (None if session is based on number of laps)
+        race_results (Optional(list[RaceResult])): If session is a race session, contains the
+            race results. [Ordered by position]
+        qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
+            contains the qualifying results. [Ordered by position]
+        round_id (int): Unique ID of the round the session belongs to.
+        point_system_id (int): Unique ID of the point system used in the session.
+
+        point_system (PointSystem): The point system used to interpret the results of a race.
+        round (Round): Round which the session belongs to.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column("session_id", SmallInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(
+        Enum("Gara 1", "Gara 2", "Gara", "Qualifica"), nullable=False
+    )
+    fuel_consumption: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    tyre_degradation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    time_of_day: Mapped[str] = mapped_column(String, nullable=False)
+    weather: Mapped[str] = mapped_column(String(60))
+    laps: Mapped[int] = mapped_column(SmallInteger)
+    duration: Mapped[datetime.timedelta] = mapped_column(Interval)
+    fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id))
+    point_system_id: Mapped[int] = mapped_column(
+        ForeignKey(PointSystem.id), nullable=False
+    )
+
+    race_results: Mapped[list[RaceResult]] = relationship(
+        "RaceResult", back_populates="session", order_by="RaceResult.position"
+    )
+    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
+        "QualifyingResult",
+        back_populates="session",
+        order_by="QualifyingResult.position",
+    )
+    point_system: Mapped[PointSystem] = relationship()
+    reports: Mapped[list[Report]] = relationship(back_populates="session")
+    penalties: Mapped[list[Penalty]] = relationship(back_populates="session")
+    round: Mapped[Round] = relationship(back_populates="sessions")
+
+    def __repr__(self) -> str:
+        return (
+            f"Session(session_id={self.id}, name={self.name}, "
+            f"round_id={self.round_id}, tyres={self.tyre_degradation})"
+        )
+
+    def participating_drivers(self) -> list[Driver]:
+        """Returns a list of drivers who have participated to this session."""
+        drivers: list[Driver] = []
+        if self.is_quali:
+            for quali_result in self.qualifying_results:
+                if quali_result.participated:
+                    drivers.append(quali_result.driver)
+            return drivers
+
+        for race_result in self.race_results:
+            if race_result.participated:
+                drivers.append(race_result.driver)
+        return drivers
+
+    def get_penalty_seconds_of(self, driver_id: int) -> int:
+        """Returns total time penalties received by a driver."""
+        seconds = 0
+        for penalty in self.penalties:
+            if penalty.driver_id == driver_id:
+                seconds += penalty.time_penalty
+        return seconds
+
+    def results_message(self) -> str:
+        """Generates a message containing the results of this session."""
+        message = f"<i>{self.name}</i>\n"
+
+        # Sorts results, drivers who didn't participate are put to the back of the list.
+        results: list[RaceResult | QualifyingResult] = []  # type: ignore
+        if self.is_quali:
+            results.extend(
+                sorted(
+                    self.qualifying_results,
+                    key=lambda x: x.laptime if x.laptime is not None else float("inf"),  # type: ignore
+                )
+            )
+        else:
+            results.extend(
+                sorted(
+                    self.race_results,
+                    key=lambda x: x.total_racetime  # type: ignore
+                    if x.total_racetime is not None  # type: ignore
+                    else float("inf"),
+                )
+            )
+
+        for result in results:
+            if result.gap_to_first:
+                position = str(result.position)
+                minutes, seconds = divmod(result.gap_to_first, 60)
+                milliseconds = (seconds % 1) * 1000
+
+                if not minutes:
+                    gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
+                else:
+                    gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+            elif result.gap_to_first == 0:
+                total = getattr(result, "total_racetime", 0)
+                if not total:
+                    total = getattr(result, "laptime", 0)
+
+                minutes, seconds = divmod(total, 60)
+                milliseconds = (seconds % 1) * 1000
+                gap = (
+                    f"<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+                )
+                position = "1"
+            else:
+                gap = "<i>assente</i>"
+                position = "/"
+
+            penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
+            message += f"{position} - {result.driver.psn_id} {gap}"
+
+            if penalty_seconds:
+                message += f" (+{penalty_seconds}s)"
+
+            if getattr(result, "fastest_lap_points", 0):
+                message += " GV"
+            message += "\n"
+
+        return message + "\n"
+
+    @property
+    def is_quali(self) -> bool:
+        """Is True if this session is a qualifying session."""
+        return "quali" in self.name.lower()
 
 
 class Penalty(Base):
@@ -91,24 +740,20 @@ class Penalty(Base):
     reason: str
     reporting_driver: Driver
 
-    penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("penalty_id", Integer, primary_key=True)
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     points: Mapped[float] = mapped_column(Float(precision=1), default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    category: Mapped[Category] = relationship("Category")
-    round: Mapped[Round] = relationship("Round", back_populates="penalties")
-    session: Mapped[Session] = relationship("Session")
+    category: Mapped[Category] = relationship()
+    round: Mapped[Round] = relationship(back_populates="penalties")
+    session: Mapped[Session] = relationship()
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.session_id"), nullable=False
-    )
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
@@ -188,7 +833,7 @@ class Report(Base):
     the report has been reviewed.
 
     Attributes:
-        report_id (uuid4): Automatically generated unique ID assigned upon report creation.
+        id (uuid4): Automatically generated unique ID assigned upon report creation.
         number (int): The number of the report in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
         reason (str): The reason provided by the reporter for making the report.
@@ -221,8 +866,8 @@ class Report(Base):
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    report_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[uuid.UUID] = mapped_column(
+        "report_id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
@@ -233,13 +878,9 @@ class Report(Base):
     )
     channel_message_id: Mapped[int] = mapped_column(BigInteger)
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.session_id"), nullable=False
-    )
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
     reported_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
@@ -292,92 +933,6 @@ class Report(Base):
         )
 
 
-class DriverAssignment(Base):
-    """This object creates an association between a Driver and a Team
-
-    Attributes:
-        joined_on (date): Date the driver joined the team.
-        left_on (date): Date the driver left the team.
-        bought_for (int): Price the team paid to acquire the driver.
-        is_leader (bool): Indicates whether the driver is also the leader of that team.
-
-        assignment_id (uuid): Auto-generated UUID assigned upon object creation.
-        driver_id (int): Unique ID of the driver joining the team.
-        team_id (int): Unique ID of the team acquiring the driver.
-
-        driver (Driver): Driver joining the team.
-        team (Team): Team acquiring the driver.
-    """
-
-    __tablename__ = "driver_assignments"
-    __table_args__ = (UniqueConstraint("joined_on", "driver_id", "team_id"),)
-
-    joined_on: Mapped[datetime.date] = mapped_column(
-        Date, server_default=func.now(), default=False, nullable=False
-    )
-    left_on: Mapped[datetime.date] = mapped_column(Date)
-    bought_for: Mapped[Optional[int]] = mapped_column(SmallInteger)
-    is_leader: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    assignment_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, nullable=False
-    )
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey("drivers.driver_id"), primary_key=True, nullable=False
-    )
-    team_id: Mapped[int] = mapped_column(
-        ForeignKey("teams.team_id"), primary_key=True, nullable=False
-    )
-
-    driver: Mapped[Driver] = relationship("Driver", back_populates="teams")
-    team: Mapped[Team] = relationship("Team", back_populates="drivers")
-
-
-class DriverCategory(Base):
-    """This object creates a new association between a Driver and a Category.
-
-    Attributes:
-        joined_on (date): The date on which the driver joined the category.
-        left_on (date): The date on which the driver left the category.
-        race_number (int): The number used by the driver in the category.
-        warnings (int): Number of warnings received in the category.
-        licence_points: Number of points remaining on the driver's licence.
-
-        driver_id (int): Unique ID of the driver joining the category.
-        category_id (int): Unique ID of the category being joined by the driver.
-
-        driver (Driver): Driver joining the category.
-        category (Category): Category being joined by the driver.
-        car_class (CarClass): CarClass the driver is in.
-    """
-
-    __tablename__ = "drivers_categories"
-
-    __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
-
-    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
-    left_on: Mapped[datetime.date] = mapped_column(Date)
-    race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    licence_points: Mapped[int] = mapped_column(
-        SmallInteger, default=10, nullable=False
-    )
-    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    points: Mapped[float] = mapped_column(Float, default=0, nullable=False)
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey("drivers.driver_id"), primary_key=True
-    )
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), primary_key=True
-    )
-
-    driver: Mapped[Driver] = relationship("Driver", back_populates="categories")
-    category: Mapped[Category] = relationship("Category", back_populates="drivers")
-
-    def __repr__(self) -> str:
-        return f"DriverCategory(driver_id={self.driver_id}, category_id={self.category_id})"
-
-
 class Driver(Base):
     """This object represents a driver.
 
@@ -399,48 +954,42 @@ class Driver(Base):
     __tablename__ = "drivers"
     __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
-    driver_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
 
     teams: Mapped[list[DriverAssignment]] = relationship(
-        "DriverAssignment",
         back_populates="driver",
         order_by="DriverAssignment.joined_on",
     )
     categories: Mapped[list[DriverCategory]] = relationship(
-        "DriverCategory", back_populates="driver", order_by=("DriverCategory.joined_on")
+        back_populates="driver", order_by=("DriverCategory.joined_on")
     )
-    race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="driver"
-    )
-    received_penalties: Mapped[list[Penalty]] = relationship(
-        "Penalty", back_populates="driver"
-    )
+    race_results: Mapped[list[RaceResult]] = relationship(back_populates="driver")
+    received_penalties: Mapped[list[Penalty]] = relationship(back_populates="driver")
     reports_made: Mapped[list[Report]] = relationship(
-        "Report",
         back_populates="reporting_driver",
         foreign_keys=[Report.reporting_driver_id],
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult", back_populates="driver"
+        back_populates="driver"
     )
     deferred_penalties: Mapped[list[DeferredPenalty]] = relationship(
-        "DeferredPenalty", back_populates="driver"
+        back_populates="driver"
     )
 
     def __repr__(self) -> str:
-        return f"Driver(psn_id={self.psn_id}, driver_id={self.driver_id})"
+        return f"Driver(psn_id={self.psn_id}, driver_id={self.id})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Driver):
             return NotImplemented
-        return self.driver_id == other.driver_id
+        return self.id == other.id
 
     def __key(self) -> tuple[int, str]:
-        return self.driver_id, self.psn_id
+        return self.id, self.psn_id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -466,7 +1015,7 @@ class Driver(Base):
             return None
 
         for driver_category in current_category.drivers:
-            if self.driver_id == driver_category.driver_id:
+            if self.id == driver_category.driver_id:
                 return driver_category.race_number
 
         return None
@@ -694,112 +1243,6 @@ class Driver(Base):
         return statistics
 
 
-class QualifyingResult(Base):
-    """This object represents a single result made by a driver in a qualifying Session.
-
-    Attributes:
-        qualifying_result_id (int): Automatically generated unique ID assigned upon
-            object creation.
-        position (int): Position the driver qualified in.
-        laptime (Decimal): Best lap registered by the driver in the.
-        gap_to_first (Decimal): Seconds by which the laptime is off from the fastest lap
-            time in the driver's car class.
-        participated (bool): True if the driver participated to the Qualifying session.
-
-        driver_id (int): Unique ID of the driver the result belongs to.
-        round_id (int): Unique ID of the round the result was made in.
-        category_id (int): Unique ID of the category the result was made in.
-        session_id (int): Unique ID of the session the result was made in.
-
-        driver (Driver): Driver the result belongs to.
-        round (Round): Round the result was made in.
-        category (Category): Category the result was made in.
-        session (Session): Session the result was made in.
-    """
-
-    __tablename__ = "qualifying_results"
-
-    __table_args__ = (
-        UniqueConstraint("driver_id", "session_id", "round_id"),
-        UniqueConstraint("position", "session_id", name="position_session_uq"),
-    )
-
-    qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    position: Mapped[int | None] = mapped_column(SmallInteger)
-    laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
-    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
-    participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey("drivers.driver_id"), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), nullable=False
-    )
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.session_id"), nullable=False
-    )
-
-    driver: Mapped[Driver] = relationship("Driver", back_populates="qualifying_results")
-    round: Mapped[Round] = relationship("Round", back_populates="qualifying_results")
-    category: Mapped[Category] = relationship(
-        "Category", back_populates="qualifying_results"
-    )
-    session: Mapped[Session] = relationship("Session")
-
-    def __str__(self) -> str:
-        return f"QualifyingResult({self.driver_id}, {self.position}, {self.laptime})"
-
-    @property
-    def points_earned(self) -> float:
-        """Points earned by the driver in this qualifying session."""
-        if not self.participated:
-            return 0
-
-        return self.session.point_system.point_system[self.position - 1]
-
-
-class CarClass(Base):
-    """This object represents an in-game car class.
-    CarClass records are meant to be reused multiple times for different categories
-    and championships, their function is mainly to identify which type of car is
-    assigned to drivers within the same category, this therefore allows to calculate
-    statistics separately from one class and another.
-
-    Attributes:
-        car_class_id (int): Unique ID of the car class.
-        name (str): Name of the car class.
-
-        game_id (int): Unique ID of the game the car class is in.
-
-        game (Game): Game object the car class is associated to.
-    """
-
-    __tablename__ = "car_classes"
-
-    car_class_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), nullable=False)
-
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
-
-    game: Mapped[Game] = relationship("Game")
-
-    def __repr__(self) -> str:
-        return f"CarClass(car_class_id={self.car_class_id}, name={self.name})"
-
-    def __key(self) -> int:
-        return self.car_class_id
-
-    def __hash__(self) -> int:
-        return hash(self.__key())
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CarClass):
-            return NotImplemented
-        return self.car_class_id == other.car_class_id
-
-
 class Team(Base):
     """This object represents a team.
 
@@ -819,34 +1262,30 @@ class Team(Base):
 
     __tablename__ = "teams"
 
-    team_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("team_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        "TeamChampionship", back_populates="team", order_by="TeamChampionship.joined_on"
+        back_populates="team", order_by="TeamChampionship.joined_on"
     )
-    drivers: Mapped[list[DriverAssignment]] = relationship(
-        "DriverAssignment", back_populates="team"
-    )
+    drivers: Mapped[list[DriverAssignment]] = relationship(back_populates="team")
     reports_made: Mapped[list[Report]] = relationship(
-        "Report",
         back_populates="reporting_team",
         foreign_keys=[Report.reporting_team_id],
     )
     received_penalties: Mapped[list[Penalty]] = relationship(
-        "Penalty",
         back_populates="team",
         foreign_keys=[Penalty.team_id],
     )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Team):
-            return self.team_id == other.team_id
+            return self.id == other.id
         return NotImplemented
 
     def __key(self) -> int:
-        return self.team_id
+        return self.id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -875,6 +1314,148 @@ class Team(Base):
         return self.championships[-1]
 
 
+class DriverAssignment(Base):
+    """This object creates an association between a Driver and a Team
+
+    Attributes:
+        joined_on (date): Date the driver joined the team.
+        left_on (date): Date the driver left the team.
+        bought_for (int): Price the team paid to acquire the driver.
+        is_leader (bool): Indicates whether the driver is also the leader of that team.
+
+        id (uuid): Auto-generated UUID assigned upon object creation.
+        driver_id (int): Unique ID of the driver joining the team.
+        team_id (int): Unique ID of the team acquiring the driver.
+
+        driver (Driver): Driver joining the team.
+        team (Team): Team acquiring the driver.
+    """
+
+    __tablename__ = "driver_assignments"
+    __table_args__ = (UniqueConstraint("joined_on", "driver_id", "team_id"),)
+
+    joined_on: Mapped[datetime.date] = mapped_column(
+        Date, server_default=func.now(), default=False, nullable=False
+    )
+    left_on: Mapped[datetime.date] = mapped_column(Date)
+    bought_for: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    is_leader: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    id: Mapped[str] = mapped_column(
+        "assignment_id", UUID(as_uuid=True), primary_key=True, nullable=False
+    )
+    driver_id: Mapped[int] = mapped_column(
+        ForeignKey(Driver.id), primary_key=True, nullable=False
+    )
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey(Team.id), primary_key=True, nullable=False
+    )
+
+    driver: Mapped[Driver] = relationship(back_populates="teams")
+    team: Mapped[Team] = relationship(back_populates="drivers")
+
+
+class DriverCategory(Base):
+    """This object creates a new association between a Driver and a Category.
+
+    Attributes:
+        joined_on (date): The date on which the driver joined the category.
+        left_on (date): The date on which the driver left the category.
+        race_number (int): The number used by the driver in the category.
+        warnings (int): Number of warnings received in the category.
+        licence_points: Number of points remaining on the driver's licence.
+
+        driver_id (int): Unique ID of the driver joining the category.
+        category_id (int): Unique ID of the category being joined by the driver.
+
+        driver (Driver): Driver joining the category.
+        category (Category): Category being joined by the driver.
+        car_class (CarClass): CarClass the driver is in.
+    """
+
+    __tablename__ = "drivers_categories"
+
+    __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
+
+    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
+    left_on: Mapped[datetime.date] = mapped_column(Date)
+    race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
+    licence_points: Mapped[int] = mapped_column(
+        SmallInteger, default=10, nullable=False
+    )
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    points: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), primary_key=True)
+
+    driver: Mapped[Driver] = relationship(back_populates="categories")
+    category: Mapped[Category] = relationship(back_populates="drivers")
+
+    def __repr__(self) -> str:
+        return f"DriverCategory(driver_id={self.driver_id}, category_id={self.category_id})"
+
+
+class QualifyingResult(Base):
+    """This object represents a single result made by a driver in a qualifying Session.
+
+    Attributes:
+        id (int): Automatically generated unique ID assigned upon
+            object creation.
+        position (int): Position the driver qualified in.
+        laptime (Decimal): Best lap registered by the driver in the.
+        gap_to_first (Decimal): Seconds by which the laptime is off from the fastest lap
+            time in the driver's car class.
+        participated (bool): True if the driver participated to the Qualifying session.
+
+        driver_id (int): Unique ID of the driver the result belongs to.
+        round_id (int): Unique ID of the round the result was made in.
+        category_id (int): Unique ID of the category the result was made in.
+        session_id (int): Unique ID of the session the result was made in.
+
+        driver (Driver): Driver the result belongs to.
+        round (Round): Round the result was made in.
+        category (Category): Category the result was made in.
+        session (Session): Session the result was made in.
+    """
+
+    __tablename__ = "qualifying_results"
+
+    __table_args__ = (
+        UniqueConstraint("driver_id", "session_id", "round_id"),
+        UniqueConstraint("position", "session_id", name="position_session_uq"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        "qualifying_result_id", SmallInteger, primary_key=True
+    )
+    position: Mapped[int | None] = mapped_column(SmallInteger)
+    laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
+
+    driver: Mapped[Driver] = relationship(back_populates="qualifying_results")
+    round: Mapped[Round] = relationship(back_populates="qualifying_results")
+    category: Mapped[Category] = relationship(back_populates="qualifying_results")
+    session: Mapped[Session] = relationship()
+
+    def __str__(self) -> str:
+        return f"QualifyingResult({self.driver_id}, {self.position}, {self.laptime})"
+
+    @property
+    def points_earned(self) -> float:
+        """Points earned by the driver in this qualifying session."""
+        if not self.participated:
+            return 0
+
+        return self.session.point_system.point_system[self.position - 1]
+
+
 class TeamChampionship(Base):
     """This class binds a Team and a Championship together.
     It allows to keep track of the Championships to which teams have participated,
@@ -893,550 +1474,16 @@ class TeamChampionship(Base):
 
     __tablename__ = "team_championships"
 
-    team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id), primary_key=True)
     championship_id: Mapped[int] = mapped_column(
-        ForeignKey("championships.championship_id"), primary_key=True
+        ForeignKey(Championship.id), primary_key=True
     )
     joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     points: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
-    team: Mapped[Team] = relationship("Team", back_populates="championships")
-    championship: Mapped[Championship] = relationship(
-        "Championship", back_populates="teams"
-    )
-
-
-class Game(Base):
-    """Represents a game Categories can race in.
-
-    Attributes:
-        game_id (int): The game's unique ID.
-        name (str): The name of the game.
-    """
-
-    __tablename__ = "games"
-
-    game_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
-
-    def __repr__(self) -> str:
-        return f"Game(game_id={self.game_id}, name={self.name})"
-
-
-class Category(Base):
-    """Represents a category.
-
-    Attributes:
-        category_id (int): A Unique ID.
-        name (str): Name of the category.
-
-        championship_id (int): ID of the championship the category belongs to.
-        game_id (int): ID of the game the category is based on.
-        split_point (int): If specified, is used to determine how many points are to be assigned
-            for the fastest lap based on the driver's finishing position.
-        fastest_lap_points (str): One or two numbers in a string split by a " ". The first number
-            tells how many points should be assigned for the first x drivers up to the split point,
-            while the second number tells how many points should be assigned for the drivers after
-            the split point.
-        game (Game): Game the category is based on.
-        rounds (list[Round]): Rounds in the category.
-        race_results (list[RaceResult]): Registered race results.
-        qualifying_results (list[QualifyingResult]): Registered qualifying results.
-        drivers (list[Driver]): Drivers participating in the category. [Ordered by driver_id]
-        championship (Championship): The championship the category belongs to.
-    """
-
-    __tablename__ = "categories"
-
-    category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(40), nullable=False)
-    tag: Mapped[str] = mapped_column(String(7), nullable=False)
-    display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    split_point: Mapped[int] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[str] = mapped_column(String(15))
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.game_id"), nullable=False)
-    championship_id: Mapped[int] = mapped_column(
-        ForeignKey("championships.championship_id"), nullable=False
-    )
-    car_class_id: Mapped[int] = mapped_column(
-        ForeignKey("car_classes.car_class_id"), nullable=False
-    )
-
-    rounds: Mapped[list[Round]] = relationship(
-        "Round", back_populates="category", order_by="Round.date"
-    )
-
-    race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="category"
-    )
-    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult", back_populates="category"
-    )
-    drivers: Mapped[list[DriverCategory]] = relationship(
-        "DriverCategory", back_populates="category", order_by="DriverCategory.position"
-    )
-    game: Mapped[Game] = relationship("Game")
-    championship: Mapped[Championship] = relationship(
-        "Championship", back_populates="categories"
-    )
-    car_class: Mapped[CarClass] = relationship("CarClass")
-
-    def __repr__(self) -> str:
-        return f"Category(category_id={self.category_id},name={self.name})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Round):
-            return NotImplemented
-        return self.category_id == other.category_id
-
-    def first_non_completed_round(self) -> Round | None:
-        """Returns the first non completed Round."""
-        for rnd in self.rounds:
-            if not rnd.is_completed:
-                return rnd
-        return None
-
-    def last_completed_round(self) -> Round | None:
-        """Returns the last completed Round."""
-        for rnd in reversed(self.rounds):
-            if rnd.is_completed:
-                return rnd
-        return None
-
-    def penultimate_completed_round(self) -> Round | None:
-        c = 0
-        for rnd in reversed(self.rounds):
-            if rnd.is_completed and c == 1:
-                return rnd
-            elif rnd.is_completed:
-                c += 1
-        return None
-
-    def next_round(self) -> Round | None:
-        """Returns the next round on the calendar."""
-        # Rounds in self.rounds are ordered by date
-        for championship_round in self.rounds:
-            if dt.combine(championship_round.date, time(hour=23)) >= dt.now():
-                return championship_round
-        return None
-
-    def active_drivers(self) -> list[DriverCategory]:
-        """Returns list of drivers who are currently competing in this category."""
-        return [driver for driver in self.drivers if not driver.left_on]
-
-    def _sort_drivers(
-        self, standings: dict[Driver, tuple[Decimal, int, int]]
-    ) -> dict[Driver, Decimal]:
-        sorted_standings = sorted(
-            standings.items(),
-            key=lambda x: (x[1][0], -x[1][1] / x[1][2], -x[1][2]),
-        )
-
-        return {driver: values[0] for driver, values in sorted_standings}
-
-    def standings(self, n: int = 0) -> dict[Driver, tuple[float, int]]:
-        """Calculates the current standings in this category.
-
-        Args:
-            n (Optional[int]): Number of races to go back. (Must be 0 or negative)
-
-        Returns:
-            DefaultDict[Driver, [float]]: DefaultDict containing Drivers as keys
-                and a list containing the total points and the number of positions
-                gained by the driver in the championship standings in the last
-                completed_rounds.
-        """
-
-        driver_points_in_last_round: DefaultDict[Driver, float] = defaultdict(lambda: 0)
-
-        last_completed_round = self.last_completed_round()
-        if not last_completed_round:
-            return {driver.driver: (0, 0) for driver in self.drivers}
-
-        # Sum points earned in races
-        for race_result in self.race_results:
-            if race_result.round_id == last_completed_round.round_id:
-                break
-            driver_points_in_last_round[race_result.driver] += race_result.points_earned
-        # Sum points earned in qualifying sessions
-        for quali_result in self.qualifying_results:
-            if quali_result.round_id == last_completed_round.round_id:
-                break
-            driver_points_in_last_round[
-                quali_result.driver
-            ] += quali_result.points_earned
-
-        driver_positions_up_to_last_round = sorted(
-            driver_points_in_last_round.keys(),
-            key=lambda d: driver_points_in_last_round[d],
-            reverse=True,
-        )
-        results: dict[Driver, tuple[float, int]] = {}
-        for driver in self.drivers:
-            delta = driver.position - (
-                driver_positions_up_to_last_round.index(driver.driver) + 1
-            )
-            results[driver.driver] = (driver.points, delta)
-
-        return results
-
-    def standings_with_results(self):
-        """Calculates the current standings in this category.
-
-        Returns:
-            list[list[list[RaceResult], int]]: The first level of nesting contains
-                lists: each of those lists contains a list of RaceResult s and an
-                integer representing the points tally the RaceResults amount to.
-        """
-
-        results: DefaultDict[Driver, list[Any]] = defaultdict(lambda: [[], 0])
-
-        for race_result in self.race_results:
-            results[race_result.driver][0].append(race_result)
-            points_earned = race_result.points_earned
-            results[race_result.driver][1] += points_earned
-
-        for qualifying_result in self.qualifying_results:
-            results[qualifying_result.driver][1] += qualifying_result.points_earned
-
-        return sorted(list(results.values()), key=lambda x: x[1], reverse=True)
-
-    def points_per_round(self):
-        """Creates a list containing a list for each round which contains the total amount
-        of points each driver had after that round.
-        """
-        result: list[list[float]] = []
-        drivers = [driver.driver.psn_id for driver in self.drivers]
-        driver_map = defaultdict.fromkeys(drivers, float(0))
-        result.append(["Tappa"] + drivers)  # type: ignore
-        for number, championship_round in enumerate(self.rounds, start=1):
-            if not championship_round.is_completed:
-                continue
-
-            result.append([number])
-
-            for race_result in championship_round.race_results:
-                driver_map[race_result.driver.psn_id] += race_result.points_earned
-            for qualifying_result in championship_round.qualifying_results:
-                driver_map[
-                    qualifying_result.driver.psn_id
-                ] += qualifying_result.points_earned
-
-            result[number].extend(driver_map.values())
-
-        return result
-
-
-class PointSystem(Base):
-    """
-    This object represents a point system.
-    Each point system can be associated with multiple Sessions.
-
-    Attributes:
-        point_system_id (int): A unique ID.
-        point_system (str): String containing the number of points for each position,
-            separated by a space. E.g. "25 18 15 .."
-    """
-
-    __tablename__ = "point_systems"
-
-    point_system_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
-
-    def __repr__(self) -> str:
-        return (
-            f"PointSystem(point_system_id={self.point_system_id}, "
-            f"point_system={self.point_system})"
-        )
-
-
-class Round(Base):
-    """This object represents a round of a specific category.
-    It is used to group RaceResults and QualifyingResults registered on a specific date.
-
-    Attributes:
-        round_id (int): Automatically generated unique ID assigned upon object creation.
-        number (int): The number of the round in the calendar order.
-        date (date): The date the round takes place on.
-        circuit (str): The circuit the round takes place on.
-        is_completed (bool): True if the round has been completed.
-
-        category_id (int): Unique ID of the category the round belongs to.
-        championship_id (int): Unique ID of the championship the round belongs to.
-
-        championship (Championship): Championship the round belongs to.
-        category (Category): Category the round belongs to.
-        race_results (list[RaceResult]): All the race results registered to the round.
-        qualifying_results (list[QualifyingResult]): All the qualifying results registered to
-            the round.
-    """
-
-    __tablename__ = "rounds"
-
-    round_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), nullable=False
-    )
-    championship_id: Mapped[int] = mapped_column(
-        ForeignKey("championships.championship_id"), nullable=False
-    )
-    circuit_id: Mapped[int] = mapped_column(
-        ForeignKey("circuits.circuit_id"), nullable=False
-    )
-
-    championship: Mapped[Championship] = relationship(
-        "Championship", back_populates="rounds"
-    )
-
-    category: Mapped[Category] = relationship("Category", back_populates="rounds")
-    circuit: Mapped[Circuit] = relationship("Circuit", back_populates="rounds")
-    sessions: Mapped[list[Session]] = relationship("Session", back_populates="round")
-
-    race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="round"
-    )
-    reports: Mapped[list[Report]] = relationship("Report")
-    penalties: Mapped[list[Penalty]] = relationship("Penalty")
-    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult",
-        back_populates="round",
-    )
-    participants: Mapped[list[RoundParticipant]] = relationship(
-        "RoundParticipant", back_populates="round"
-    )
-
-    def __repr__(self) -> str:
-        return f"Round(circuit={self.circuit.abbreviated_name}, date={self.date}, is_completed={self.is_completed})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Round):
-            return NotImplemented
-        return self.round_id == other.round_id
-
-    def generate_info_message(self) -> str:
-        """Generates a message containing info on the category's races."""
-
-        message = (
-            f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n"
-            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
-        )
-
-        for session in self.sessions:
-            if session.duration:
-                race_length = (
-                    f"<b>Durata:</b> <i>{session.duration.seconds // 60} min.</i>\n"
-                )
-            else:
-                race_length = f"<b>Giri:</b> <i>{session.laps}</i>\n"
-
-            message += (
-                f"<i>{session.name}</i>\n"
-                + race_length
-                + f"<b>Consumo benzina:</b> <i>{session.fuel_consumption}x</i>\n"
-                f"<b>Consumo gomme:</b> <i>{session.tyre_degradation}x</i>\n"
-                f"<b>Orario:</b> <i>{session.time_of_day}</i>\n"
-            )
-            if session.weather:
-                message += f"<b>Meteo:</b> <i>{session.weather}</i>\n"
-
-            message += "\n"
-
-        return message
-
-    @property
-    def has_sprint_race(self) -> bool:
-        """Returns True if the category has a sprint race."""
-        return len(self.sessions) == 3
-
-    @property
-    def qualifying_session(self) -> Session | None:
-        """Returns the Session where qualifying takes place in this Round."""
-        for session in self.sessions:
-            if session.is_quali:
-                return session
-        return None
-
-    @property
-    def race_sessions(self) -> list[Session] | None:
-        sessions: list[Session] = []
-        for session in self.sessions:
-            if not session.is_quali:
-                sessions.append(session)
-        return None
-
-    @property
-    def sprint_race(self) -> Session | None:
-        """Returns the first race session of this round."""
-        for session in self.sessions:
-            if "gara 1" in session.name.lower():
-                return session
-        return None
-
-    @property
-    def long_race(self) -> Session | None:
-        """The Session object corresponding to this round's long race."""
-        for session in self.sessions:
-            name = session.name.lower()
-            if "gara" == name or "2" in name or "lunga" in name:
-                return session
-        return None
-
-
-class Session(Base):
-    """This object represents a session in a round.
-
-    Sessions can be either Race or Qualifying sessions, this is determined by the
-    name attribute.
-
-    Attributes:
-        session_id (int): Automatically generated unique ID assigned upon object creation.
-        name (str): The name of the session.
-        fuel_consumption (int): In-game fuel consumption setting.
-        tyre_degradation (int): In-game tyre degradation setting.
-        time_of_day (str): In-game session time setting.
-        weather (str): In-game weather setting.
-        laps (int): Number of laps to be completed. (None if session is time based)
-        duration (timedelta): Session time limit. (None if session is based on number of laps)
-        race_results (Optional(list[RaceResult])): If session is a race session, contains the
-            race results. [Ordered by position]
-        qualifying_results (Optional(list[QualifyingResult])): If session is a qualifying session,
-            contains the qualifying results. [Ordered by position]
-        round_id (int): Unique ID of the round the session belongs to.
-        point_system_id (int): Unique ID of the point system used in the session.
-
-        point_system (PointSystem): The point system used to interpret the results of a race.
-        round (Round): Round which the session belongs to.
-    """
-
-    __tablename__ = "sessions"
-
-    session_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(
-        Enum("Gara 1", "Gara 2", "Gara", "Qualifica"), nullable=False
-    )
-    fuel_consumption: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    tyre_degradation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    time_of_day: Mapped[str] = mapped_column(String, nullable=False)
-    weather: Mapped[str] = mapped_column(String(60))
-    laps: Mapped[int] = mapped_column(SmallInteger)
-    duration: Mapped[datetime.timedelta] = mapped_column(Interval)
-    fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"))
-    point_system_id: Mapped[int] = mapped_column(
-        ForeignKey("point_systems.point_system_id"), nullable=False
-    )
-
-    race_results: Mapped[list[RaceResult]] = relationship(
-        "RaceResult", back_populates="session", order_by="RaceResult.position"
-    )
-    qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        "QualifyingResult",
-        back_populates="session",
-        order_by="QualifyingResult.position",
-    )
-    point_system: Mapped[PointSystem] = relationship("PointSystem")
-    reports: Mapped[list[Report]] = relationship("Report", back_populates="session")
-    penalties: Mapped[list[Penalty]] = relationship("Penalty", back_populates="session")
-    round: Mapped[Round] = relationship("Round", back_populates="sessions")
-
-    def __repr__(self) -> str:
-        return (
-            f"Session(session_id={self.session_id}, name={self.name}, "
-            f"round_id={self.round_id}, tyres={self.tyre_degradation})"
-        )
-
-    def participating_drivers(self) -> list[Driver]:
-        """Returns a list of drivers who have participated to this session."""
-        drivers: list[Driver] = []
-        if self.is_quali:
-            for quali_result in self.qualifying_results:
-                if quali_result.participated:
-                    drivers.append(quali_result.driver)
-            return drivers
-
-        for race_result in self.race_results:
-            if race_result.participated:
-                drivers.append(race_result.driver)
-        return drivers
-
-    def get_penalty_seconds_of(self, driver_id: int) -> int:
-        """Returns total time penalties received by a driver."""
-        seconds = 0
-        for penalty in self.penalties:
-            if penalty.driver_id == driver_id:
-                seconds += penalty.time_penalty
-        return seconds
-
-    def results_message(self) -> str:
-        """Generates a message containing the results of this session."""
-        message = f"<i>{self.name}</i>\n"
-
-        # Sorts results, drivers who didn't participate are put to the back of the list.
-        results: list[RaceResult | QualifyingResult] = []  # type: ignore
-        if self.is_quali:
-            results.extend(
-                sorted(
-                    self.qualifying_results,
-                    key=lambda x: x.laptime if x.laptime is not None else float("inf"),  # type: ignore
-                )
-            )
-        else:
-            results.extend(
-                sorted(
-                    self.race_results,
-                    key=lambda x: x.total_racetime  # type: ignore
-                    if x.total_racetime is not None  # type: ignore
-                    else float("inf"),
-                )
-            )
-
-        for result in results:
-            if result.gap_to_first:
-                position = str(result.position)
-                minutes, seconds = divmod(result.gap_to_first, 60)
-                milliseconds = (seconds % 1) * 1000
-
-                if not minutes:
-                    gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
-                else:
-                    gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
-            elif result.gap_to_first == 0:
-                total = getattr(result, "total_racetime", 0)
-                if not total:
-                    total = getattr(result, "laptime", 0)
-
-                minutes, seconds = divmod(total, 60)
-                milliseconds = (seconds % 1) * 1000
-                gap = (
-                    f"<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
-                )
-                position = "1"
-            else:
-                gap = "<i>assente</i>"
-                position = "/"
-
-            penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
-            message += f"{position} - {result.driver.psn_id} {gap}"
-
-            if penalty_seconds:
-                message += f" (+{penalty_seconds}s)"
-
-            if getattr(result, "fastest_lap_points", 0):
-                message += " GV"
-            message += "\n"
-
-        return message + "\n"
-
-    @property
-    def is_quali(self) -> bool:
-        """Is True if this session is a qualifying session."""
-        return "quali" in self.name.lower()
+    team: Mapped[Team] = relationship(back_populates="championships")
+    championship: Mapped[Championship] = relationship(back_populates="teams")
 
 
 class RaceResult(Base):
@@ -1445,7 +1492,7 @@ class RaceResult(Base):
     for each driver in the Category the Round is registered in.
 
     Attributes:
-        result_id (int): Automatically generated unique ID assigned upon object creation.
+        id (int): Automatically generated unique ID assigned upon object creation.
         position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
@@ -1471,7 +1518,7 @@ class RaceResult(Base):
         ),
     )
 
-    result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("result_id", Integer, primary_key=True)
     position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -1482,21 +1529,15 @@ class RaceResult(Base):
     mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
     sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey("drivers.driver_id"), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.round_id"), nullable=False)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.category_id"), nullable=False
-    )
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.session_id"), nullable=False
-    )
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
 
-    driver: Mapped[Driver] = relationship("Driver", back_populates="race_results")
-    round: Mapped[Round] = relationship("Round", back_populates="race_results")
-    category: Mapped[Category] = relationship("Category", back_populates="race_results")
-    session: Mapped[Session] = relationship("Session", back_populates="race_results")
+    driver: Mapped[Driver] = relationship(back_populates="race_results")
+    round: Mapped[Round] = relationship(back_populates="race_results")
+    category: Mapped[Category] = relationship(back_populates="race_results")
+    session: Mapped[Session] = relationship(back_populates="race_results")
 
     def __repr__(self) -> str:
         return (
@@ -1536,110 +1577,6 @@ class RaceResult(Base):
         )
 
 
-class Championship(Base):
-    """This object represents a championship.
-    Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
-
-    Attributes:
-        championship_id (int): The championship's unique ID.
-        name (str): The championship's name.
-        start (datetime.date): Date the championship starts on.
-        end (datetime.date): Date the championship ends on.
-
-        categories (list[Category]): Categories belonging to the championship.
-            [Ordered by category_id]
-        drivers (list[DriverChampionship]): Drivers participating in the championship.
-        rounds (list[Round]): Rounds present in the championship.
-    """
-
-    __tablename__ = "championships"
-
-    championship_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
-    start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    end: Mapped[datetime.date] = mapped_column(Date)
-
-    categories: Mapped[list[Category]] = relationship(
-        "Category", back_populates="championship", order_by="Category.category_id"
-    )
-    teams: Mapped[list[TeamChampionship]] = relationship(
-        "TeamChampionship", back_populates="championship"
-    )
-    rounds: Mapped[list[Round]] = relationship(
-        "Round", back_populates="championship", order_by="Round.date"
-    )
-
-    def reporting_round(self) -> Round | None:
-        """Returns the round in which reports can currently be created."""
-        now = datetime.datetime.now().date()
-        for championship_roud in self.rounds:
-            if (championship_roud.date + timedelta(hours=24)) == now:
-                return championship_roud
-        return None
-
-    def current_racing_category(self) -> Category | None:
-        """Returns the category which races today."""
-        for championship_round in self.rounds:
-            if championship_round.date == datetime.datetime.now().date():
-                return championship_round.category
-        return None
-
-    def is_active(self) -> bool:
-        """Returns True if the championship is ongoing."""
-        return bool(self.non_disputed_rounds())
-
-    def non_disputed_rounds(self) -> list[Round]:
-        """Returns all the rounds which have not been disputed yet."""
-        rounds: list[Round] = []
-        for rnd in self.rounds:
-            if not rnd.is_completed:
-                rounds.append(rnd)
-        return rounds
-
-    @property
-    def abbreviated_name(self) -> str:
-        """Short version of the championship's name created by taking the first letter
-        of each word in it.
-        E.G. "eSports Championship 1" -> "EC1"
-        """
-        return "".join(i[0] for i in self.name.split()).upper()
-
-    @property
-    def driver_list(self) -> list[Driver]:
-        """List of drivers participating to this championship."""
-        drivers: list[Driver] = []
-        for category in self.categories:
-            for driver in category.drivers:
-                drivers.append(driver.driver)
-        return drivers
-
-
-class Circuit(Base):
-    """Represents a circuit within the game.
-
-    circuit_id (int): The circuit's unique ID. Different variations have different IDs.
-    name (str): The circuit's name.
-    abbreviated_name (str): Shorter version of the circuit name.
-    variation (str): Specifies the layout of the track.
-
-    rounds (list[Round]): The rounds that took place at this circuit.
-    """
-
-    __tablename__ = "circuits"
-
-    circuit_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    variation: Mapped[str] = mapped_column(String(100))
-
-    rounds: Mapped[list[Round]] = relationship("Round", back_populates="circuit")
-
-    @property
-    def logo_url(self) -> str:
-        filename = f"{self.name.lower().replace(' ', '-')}.png"
-        return CIRCUIT_LOGO_DIR_URL + filename
-
-
 class Participation(enum.Enum):
     YES = "YES"
     NO = "NO"
@@ -1652,12 +1589,8 @@ class RoundParticipant(Base):
 
     __tablename__ = "round_participants"
 
-    round_id: Mapped[int] = mapped_column(
-        ForeignKey("rounds.round_id"), primary_key=True
-    )
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey("drivers.driver_id"), primary_key=True
-    )
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), primary_key=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
 
     participating: Mapped[Participation] = mapped_column(
         Enum(Participation, name="participation"),
@@ -1665,23 +1598,23 @@ class RoundParticipant(Base):
         default=Participation.NO_REPLY.value,
     )
 
-    round: Mapped[Round] = relationship("Round", back_populates="participants")
-    driver: Mapped[Driver] = relationship("Driver")
+    round: Mapped[Round] = relationship(back_populates="participants")
+    driver: Mapped[Driver] = relationship()
 
 
 class Chat(Base):
     __tablename__ = "chats"
-    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class DeferredPenalty(Base):
     __tablename__ = "deferred_penalties"
 
-    deferred_penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.penalty_id), unique=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id))
+    id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)
+    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.id), unique=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id))
     is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
 
     penalty: Mapped[Penalty] = relationship()
-    driver: Mapped[Driver] = relationship("Driver", back_populates="deferred_penalties")
+    driver: Mapped[Driver] = relationship(back_populates="deferred_penalties")
