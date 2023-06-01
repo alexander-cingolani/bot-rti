@@ -146,7 +146,7 @@ async def ask_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         penalty.number = (
             get_last_penalty_number(
                 sqla_session,
-                round_id=penalty.round.round_id,
+                round_id=penalty.round.id,
             )
             + 1
         )
@@ -348,7 +348,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     text = "Non risultano esserci segnalazioni "
 
     for report in reports:
-        if not report.category.category_id == selected_category.category_id:
+        if not report.category.id == selected_category.id:
             continue
 
         text = (
@@ -363,7 +363,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         penalty.number = (
             get_last_penalty_number(
                 sqla_session,
-                round_id=penalty.round.round_id,
+                round_id=penalty.round.id,
             )
             + 1
         )

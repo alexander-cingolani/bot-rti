@@ -391,7 +391,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             previous_rating = 0
             if rnd:
                 for result in rnd.long_race.race_results:
-                    if result.driver_id == driver.driver_id:
+                    if result.driver_id == driver.id:
                         if result.mu and result.sigma:
                             previous_rating = result.mu - config.K * result.sigma
                         break
@@ -553,7 +553,7 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     for pos, team in enumerate(teams, start=1):
         if driver:
             current_team = driver.current_team()
-            if current_team and current_team.team_id == team.team_id:
+            if current_team and current_team.id == team.team_id:
                 message += f"{pos} - <b>{team.team.name}</b> <i>{team.points:g}</i>\n"
                 continue
 
@@ -727,7 +727,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     participants: list[RoundParticipant] = []
     for driver in drivers:
         participant = RoundParticipant(
-            round_id=rnd.round_id,
+            round_id=rnd.id,
             driver_id=driver.driver_id,
         )
         participants.append(participant)
@@ -794,7 +794,7 @@ async def update_participation_list(
         return
 
     if not chat_data.get("participants"):
-        participants = get_participants_from_round(session, rnd.round_id)
+        participants = get_participants_from_round(session, rnd.id)
         participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
 
@@ -817,7 +817,7 @@ async def update_participation_list(
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
     for i, participant in enumerate(participants):
-        if driver.driver_id == participant.driver_id:
+        if driver.id == participant.driver_id:
             break
     else:
         await update.callback_query.answer(
@@ -895,7 +895,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         rnd = category.next_round()
         if not rnd:
             return
-        participants = get_participants_from_round(session, rnd.round_id)
+        participants = get_participants_from_round(session, rnd.id)
         participants.sort(key=lambda p: p.driver.psn_id.lower())
         chat_data["participants"] = participants
 
@@ -1023,7 +1023,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     previous_rating = 0
     if rnd:
         for result in rnd.long_race.race_results:
-            if result.driver_id == driver.driver_id:
+            if result.driver_id == driver.id:
                 if result.mu and result.sigma:
                     previous_rating = result.mu - config.K * result.sigma
                 break

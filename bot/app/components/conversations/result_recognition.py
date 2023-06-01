@@ -115,9 +115,7 @@ async def __ask_session(
     completed_sessions = 0
     for session in round.sessions:
         session_buttons.append(
-            InlineKeyboardButton(
-                text=session.name, callback_data=f"S{session.session_id}"
-            )
+            InlineKeyboardButton(text=session.name, callback_data=f"S{session.id}")
         )
         if not results.get(session):
             results[session] = {
@@ -182,7 +180,7 @@ async def save_session(
     # Saves the session selected by the user.
     current_session = None
     for session in round.sessions:
-        if session.session_id == session_id:
+        if session.id == session_id:
             current_session = session
             user_data["current_session"] = current_session
             break
@@ -419,7 +417,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
                     # Applies the time penalty to the driver's race result.
                     for race_result in race_results:
-                        if race_result.driver_id == driver.driver_id:
+                        if race_result.driver_id == driver.id:
                             race_result.total_racetime += penalty.penalty.time_penalty
 
                     # Applies the correct finishing position, recalculates the gap_to_first.

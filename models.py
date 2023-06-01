@@ -55,7 +55,7 @@ class Championship(Base):
     Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
 
     Attributes:
-        championship_id (int): The championship's unique ID.
+        id (int): The championship's unique ID.
         name (str): The championship's name.
         start (datetime.date): Date the championship starts on.
         end (datetime.date): Date the championship ends on.
@@ -68,13 +68,13 @@ class Championship(Base):
 
     __tablename__ = "championships"
 
-    championship_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     end: Mapped[datetime.date] = mapped_column(Date)
 
     categories: Mapped[list[Category]] = relationship(
-        back_populates="championship", order_by="Category.category_id"
+        back_populates="championship", order_by="Category.id"
     )
     teams: Mapped[list[TeamChampionship]] = relationship(back_populates="championship")
     rounds: Mapped[list[Round]] = relationship(
@@ -130,17 +130,17 @@ class Game(Base):
     """Represents a game Categories can race in.
 
     Attributes:
-        game_id (int): The game's unique ID.
+        id (int): The game's unique ID.
         name (str): The name of the game.
     """
 
     __tablename__ = "games"
 
-    game_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("game_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
 
     def __repr__(self) -> str:
-        return f"Game(game_id={self.game_id}, name={self.name})"
+        return f"Game(game_id={self.id}, name={self.name})"
 
 
 class PointSystem(Base):
@@ -149,19 +149,19 @@ class PointSystem(Base):
     Each point system can be associated with multiple Sessions.
 
     Attributes:
-        point_system_id (int): A unique ID.
+        id (int): A unique ID.
         point_system (str): String containing the number of points for each position,
             separated by a space. E.g. "25 18 15 .."
     """
 
     __tablename__ = "point_systems"
 
-    point_system_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("point_system_id", SmallInteger, primary_key=True)
     point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
 
     def __repr__(self) -> str:
         return (
-            f"PointSystem(point_system_id={self.point_system_id}, "
+            f"PointSystem(point_system_id={self.id}, "
             f"point_system={self.point_system})"
         )
 
@@ -174,7 +174,7 @@ class CarClass(Base):
     statistics separately from one class and another.
 
     Attributes:
-        car_class_id (int): Unique ID of the car class.
+        id (int): Unique ID of the car class.
         name (str): Name of the car class.
 
         game_id (int): Unique ID of the game the car class is in.
@@ -184,18 +184,18 @@ class CarClass(Base):
 
     __tablename__ = "car_classes"
 
-    car_class_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    game_id: Mapped[int] = mapped_column(ForeignKey(Game.game_id), nullable=False)
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
     game: Mapped[Game] = relationship()
 
     def __repr__(self) -> str:
-        return f"CarClass(car_class_id={self.car_class_id}, name={self.name})"
+        return f"CarClass(car_class_id={self.id}, name={self.name})"
 
     def __key(self) -> int:
-        return self.car_class_id
+        return self.id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -203,7 +203,7 @@ class CarClass(Base):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CarClass):
             return NotImplemented
-        return self.car_class_id == other.car_class_id
+        return self.id == other.id
 
 
 class Circuit(Base):
@@ -219,7 +219,7 @@ class Circuit(Base):
 
     __tablename__ = "circuits"
 
-    circuit_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("circuit_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
     variation: Mapped[str] = mapped_column(String(100))
@@ -236,7 +236,7 @@ class Category(Base):
     """Represents a category.
 
     Attributes:
-        category_id (int): A Unique ID.
+        id (int): A Unique ID.
         name (str): Name of the category.
 
         championship_id (int): ID of the championship the category belongs to.
@@ -257,19 +257,17 @@ class Category(Base):
 
     __tablename__ = "categories"
 
-    category_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("category_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     tag: Mapped[str] = mapped_column(String(7), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap_points: Mapped[str] = mapped_column(String(15))
-    game_id: Mapped[int] = mapped_column(ForeignKey(Game.game_id), nullable=False)
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
     championship_id: Mapped[int] = mapped_column(
-        ForeignKey(Championship.championship_id), nullable=False
+        ForeignKey(Championship.id), nullable=False
     )
-    car_class_id: Mapped[int] = mapped_column(
-        ForeignKey(CarClass.car_class_id), nullable=False
-    )
+    car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
 
     rounds: Mapped[list[Round]] = relationship(
         back_populates="category", order_by="Round.date"
@@ -286,12 +284,12 @@ class Category(Base):
     car_class: Mapped[CarClass] = relationship()
 
     def __repr__(self) -> str:
-        return f"Category(category_id={self.category_id},name={self.name})"
+        return f"Category(id={self.id},name={self.name})"
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Round):
+        if not isinstance(other, Category):
             return NotImplemented
-        return self.category_id == other.category_id
+        return self.id == other.id
 
     def first_non_completed_round(self) -> Round | None:
         """Returns the first non completed Round."""
@@ -359,12 +357,12 @@ class Category(Base):
 
         # Sum points earned in races
         for race_result in self.race_results:
-            if race_result.round_id == last_completed_round.round_id:
+            if race_result.round_id == last_completed_round.id:
                 break
             driver_points_in_last_round[race_result.driver] += race_result.points_earned
         # Sum points earned in qualifying sessions
         for quali_result in self.qualifying_results:
-            if quali_result.round_id == last_completed_round.round_id:
+            if quali_result.round_id == last_completed_round.id:
                 break
             driver_points_in_last_round[
                 quali_result.driver
@@ -436,7 +434,7 @@ class Round(Base):
     It is used to group RaceResults and QualifyingResults registered on a specific date.
 
     Attributes:
-        round_id (int): Automatically generated unique ID assigned upon object creation.
+        id (int): Automatically generated unique ID assigned upon object creation.
         number (int): The number of the round in the calendar order.
         date (date): The date the round takes place on.
         circuit (str): The circuit the round takes place on.
@@ -454,20 +452,16 @@ class Round(Base):
 
     __tablename__ = "rounds"
 
-    round_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("round_id", SmallInteger, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), nullable=False
-    )
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
     championship_id: Mapped[int] = mapped_column(
-        ForeignKey(Championship.championship_id), nullable=False
+        ForeignKey(Championship.id), nullable=False
     )
-    circuit_id: Mapped[int] = mapped_column(
-        ForeignKey(Circuit.circuit_id), nullable=False
-    )
+    circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), nullable=False)
 
     championship: Mapped[Championship] = relationship(back_populates="rounds")
 
@@ -489,7 +483,7 @@ class Round(Base):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Round):
             return NotImplemented
-        return self.round_id == other.round_id
+        return self.id == other.id
 
     def generate_info_message(self) -> str:
         """Generates a message containing info on the category's races."""
@@ -568,7 +562,7 @@ class Session(Base):
     name attribute.
 
     Attributes:
-        session_id (int): Automatically generated unique ID assigned upon object creation.
+        id (int): Automatically generated unique ID assigned upon object creation.
         name (str): The name of the session.
         fuel_consumption (int): In-game fuel consumption setting.
         tyre_degradation (int): In-game tyre degradation setting.
@@ -589,7 +583,7 @@ class Session(Base):
 
     __tablename__ = "sessions"
 
-    session_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("session_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(
         Enum("Gara 1", "Gara 2", "Gara", "Qualifica"), nullable=False
     )
@@ -600,9 +594,9 @@ class Session(Base):
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
     fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id))
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id))
     point_system_id: Mapped[int] = mapped_column(
-        ForeignKey(PointSystem.point_system_id), nullable=False
+        ForeignKey(PointSystem.id), nullable=False
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(
@@ -620,7 +614,7 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return (
-            f"Session(session_id={self.session_id}, name={self.name}, "
+            f"Session(session_id={self.id}, name={self.name}, "
             f"round_id={self.round_id}, tyres={self.tyre_degradation})"
         )
 
@@ -746,7 +740,7 @@ class Penalty(Base):
     reason: str
     reporting_driver: Driver
 
-    penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("penalty_id", Integer, primary_key=True)
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -757,13 +751,9 @@ class Penalty(Base):
     round: Mapped[Round] = relationship(back_populates="penalties")
     session: Mapped[Session] = relationship()
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id), nullable=False)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey(Session.session_id), nullable=False
-    )
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
@@ -843,7 +833,7 @@ class Report(Base):
     the report has been reviewed.
 
     Attributes:
-        report_id (uuid4): Automatically generated unique ID assigned upon report creation.
+        id (uuid4): Automatically generated unique ID assigned upon report creation.
         number (int): The number of the report in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
         reason (str): The reason provided by the reporter for making the report.
@@ -876,8 +866,8 @@ class Report(Base):
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    report_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[uuid.UUID] = mapped_column(
+        "report_id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
@@ -888,13 +878,9 @@ class Report(Base):
     )
     channel_message_id: Mapped[int] = mapped_column(BigInteger)
 
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), nullable=False
-    )
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id), nullable=False)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey(Session.session_id), nullable=False
-    )
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
     reported_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
@@ -968,7 +954,7 @@ class Driver(Base):
     __tablename__ = "drivers"
     __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
-    driver_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
     psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
@@ -995,15 +981,15 @@ class Driver(Base):
     )
 
     def __repr__(self) -> str:
-        return f"Driver(psn_id={self.psn_id}, driver_id={self.driver_id})"
+        return f"Driver(psn_id={self.psn_id}, driver_id={self.id})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Driver):
             return NotImplemented
-        return self.driver_id == other.driver_id
+        return self.id == other.id
 
     def __key(self) -> tuple[int, str]:
-        return self.driver_id, self.psn_id
+        return self.id, self.psn_id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -1029,7 +1015,7 @@ class Driver(Base):
             return None
 
         for driver_category in current_category.drivers:
-            if self.driver_id == driver_category.driver_id:
+            if self.id == driver_category.driver_id:
                 return driver_category.race_number
 
         return None
@@ -1276,7 +1262,7 @@ class Team(Base):
 
     __tablename__ = "teams"
 
-    team_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("team_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
@@ -1295,11 +1281,11 @@ class Team(Base):
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Team):
-            return self.team_id == other.team_id
+            return self.id == other.id
         return NotImplemented
 
     def __key(self) -> int:
-        return self.team_id
+        return self.id
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -1337,7 +1323,7 @@ class DriverAssignment(Base):
         bought_for (int): Price the team paid to acquire the driver.
         is_leader (bool): Indicates whether the driver is also the leader of that team.
 
-        assignment_id (uuid): Auto-generated UUID assigned upon object creation.
+        id (uuid): Auto-generated UUID assigned upon object creation.
         driver_id (int): Unique ID of the driver joining the team.
         team_id (int): Unique ID of the team acquiring the driver.
 
@@ -1355,14 +1341,14 @@ class DriverAssignment(Base):
     bought_for: Mapped[Optional[int]] = mapped_column(SmallInteger)
     is_leader: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    assignment_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, nullable=False
+    id: Mapped[str] = mapped_column(
+        "assignment_id", UUID(as_uuid=True), primary_key=True, nullable=False
     )
     driver_id: Mapped[int] = mapped_column(
-        ForeignKey(Driver.driver_id), primary_key=True, nullable=False
+        ForeignKey(Driver.id), primary_key=True, nullable=False
     )
     team_id: Mapped[int] = mapped_column(
-        ForeignKey(Team.team_id), primary_key=True, nullable=False
+        ForeignKey(Team.id), primary_key=True, nullable=False
     )
 
     driver: Mapped[Driver] = relationship(back_populates="teams")
@@ -1400,12 +1386,8 @@ class DriverCategory(Base):
     )
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     points: Mapped[float] = mapped_column(Float, default=0, nullable=False)
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey(Driver.driver_id), primary_key=True
-    )
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), primary_key=True
-    )
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), primary_key=True)
 
     driver: Mapped[Driver] = relationship(back_populates="categories")
     category: Mapped[Category] = relationship(back_populates="drivers")
@@ -1418,7 +1400,7 @@ class QualifyingResult(Base):
     """This object represents a single result made by a driver in a qualifying Session.
 
     Attributes:
-        qualifying_result_id (int): Automatically generated unique ID assigned upon
+        id (int): Automatically generated unique ID assigned upon
             object creation.
         position (int): Position the driver qualified in.
         laptime (Decimal): Best lap registered by the driver in the.
@@ -1444,20 +1426,18 @@ class QualifyingResult(Base):
         UniqueConstraint("position", "session_id", name="position_session_uq"),
     )
 
-    qualifying_result_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(
+        "qualifying_result_id", SmallInteger, primary_key=True
+    )
     position: Mapped[int | None] = mapped_column(SmallInteger)
     laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id), nullable=False)
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id), nullable=False)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), nullable=False
-    )
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey(Session.session_id), nullable=False
-    )
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
 
     driver: Mapped[Driver] = relationship(back_populates="qualifying_results")
     round: Mapped[Round] = relationship(back_populates="qualifying_results")
@@ -1494,9 +1474,9 @@ class TeamChampionship(Base):
 
     __tablename__ = "team_championships"
 
-    team_id: Mapped[int] = mapped_column(ForeignKey(Team.team_id), primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id), primary_key=True)
     championship_id: Mapped[int] = mapped_column(
-        ForeignKey(Championship.championship_id), primary_key=True
+        ForeignKey(Championship.id), primary_key=True
     )
     joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
@@ -1512,7 +1492,7 @@ class RaceResult(Base):
     for each driver in the Category the Round is registered in.
 
     Attributes:
-        result_id (int): Automatically generated unique ID assigned upon object creation.
+        id (int): Automatically generated unique ID assigned upon object creation.
         position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
@@ -1538,7 +1518,7 @@ class RaceResult(Base):
         ),
     )
 
-    result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("result_id", Integer, primary_key=True)
     position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -1549,14 +1529,10 @@ class RaceResult(Base):
     mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
     sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
-    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id), nullable=False)
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id), nullable=False)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey(Category.category_id), nullable=False
-    )
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey(Session.session_id), nullable=False
-    )
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
+    category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
+    session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
 
     driver: Mapped[Driver] = relationship(back_populates="race_results")
     round: Mapped[Round] = relationship(back_populates="race_results")
@@ -1613,10 +1589,8 @@ class RoundParticipant(Base):
 
     __tablename__ = "round_participants"
 
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.round_id), primary_key=True)
-    driver_id: Mapped[int] = mapped_column(
-        ForeignKey(Driver.driver_id), primary_key=True
-    )
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), primary_key=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
 
     participating: Mapped[Participation] = mapped_column(
         Enum(Participation, name="participation"),
@@ -1630,16 +1604,16 @@ class RoundParticipant(Base):
 
 class Chat(Base):
     __tablename__ = "chats"
-    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class DeferredPenalty(Base):
     __tablename__ = "deferred_penalties"
 
-    deferred_penalty_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.penalty_id), unique=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.driver_id))
+    id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)
+    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.id), unique=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id))
     is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
 
     penalty: Mapped[Penalty] = relationship()

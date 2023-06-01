@@ -30,7 +30,7 @@ def get_categories(championship_id: int | str | None):
     for i, category in enumerate(championship.categories):
         categories.append(
             {
-                "category_id": category.category_id,
+                "category_id": category.id,
                 "category_name": category.name,
                 "championship": category.championship_id,
                 "order": i,
@@ -55,12 +55,12 @@ def get_calendar(category_id: int):
         if championship_round.sprint_race:
             info = [
                 {
-                    "session_id": f"SR{championship_round.round_id}",
+                    "session_id": f"SR{championship_round.id}",
                     "race_name": championship_round.sprint_race.name,
                     "order": 1,
                 },
                 {
-                    "session_id": f"LR{championship_round.round_id}",
+                    "session_id": f"LR{championship_round.id}",
                     "race_name": championship_round.long_race.name,
                     "order": 2,
                 },
@@ -68,7 +68,7 @@ def get_calendar(category_id: int):
         else:
             info = [
                 {
-                    "session_id": f"LR{championship_round.round_id}",
+                    "session_id": f"LR{championship_round.id}",
                     "race_name": championship_round.long_race.name,
                     "order": 0,
                 }
@@ -107,12 +107,12 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
             if quali_result:
                 extra_points += quali_result.points_earned
 
-            penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
+            penalties = race_result.session.get_penalty_seconds_of(driver.id)
 
         else:
             info_gp = f"LR{race_result.round_id}"
             extra_points = race_result.fastest_lap
-            penalties = race_result.session.get_penalty_seconds_of(driver.driver_id)
+            penalties = race_result.session.get_penalty_seconds_of(driver.id)
 
         position = race_result.position if race_result.position is not None else "/"
 
@@ -165,7 +165,7 @@ def get_standings_with_results(category_id: int):
             team = driver.teams[-1].team
 
         driver_summary = {
-            "driver_id": driver.driver_id,
+            "driver_id": driver.id,
             "driver_name": driver.psn_id,
             "points": int(points_tally),
             "team": team.name,
@@ -190,7 +190,7 @@ def get_drivers_points(championship_id: int):
         return
 
     for category in championship.categories:
-        result[category.category_id] = category.points_per_round()
+        result[category.id] = category.points_per_round()
 
     return result
 
