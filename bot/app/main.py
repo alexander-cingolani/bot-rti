@@ -346,7 +346,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif not (rnd := current_category.next_round()):
+    elif not (rnd := current_category.category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
         msg = rnd.generate_info_message()
@@ -387,7 +387,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 unique_teams = "/"
 
             current_category = driver.current_category()
-            rnd = current_category.penultimate_completed_round()
+            rnd = current_category.category.penultimate_completed_round()
             previous_rating = 0
             if rnd:
                 for result in rnd.long_race.race_results:
@@ -455,7 +455,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    category = user_driver.current_category()
+    category = user_driver.current_category().category
 
     if not category:
         text = (
@@ -584,7 +584,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    rnd = category.last_completed_round()
+    rnd = category.category.last_completed_round()
 
     if not rnd:
         await update.message.reply_text(
@@ -950,9 +950,9 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    message += f"<b>Calendario {category.name}</b>\n\n"
+    message += f"<b>Calendario {category.category.name}</b>\n\n"
 
-    for rnd in category.rounds:
+    for rnd in category.category.rounds:
         if rnd.date > datetime.now().date():
             message += f"{rnd.number} - {rnd.circuit.abbreviated_name}\n"
         else:
@@ -1019,7 +1019,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     race_pace = driver.race_pace()
 
     current_category = driver.current_category()
-    rnd = current_category.penultimate_completed_round()
+    rnd = current_category.category.penultimate_completed_round()
     previous_rating = 0
     if rnd:
         for result in rnd.long_race.race_results:

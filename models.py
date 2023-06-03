@@ -1001,11 +1001,11 @@ class Driver(Base):
                 return team.team
         return None
 
-    def current_category(self) -> Category | None:
+    def current_category(self) -> DriverCategory | None:
         """Returns the category the driver is currently competing in."""
         if not self.categories:
             return None
-        return self.categories[-1].category
+        return self.categories[-1]
 
     @property
     def current_race_number(self) -> int | None:
@@ -1014,7 +1014,7 @@ class Driver(Base):
         if not current_category:
             return None
 
-        for driver_category in current_category.drivers:
+        for driver_category in current_category.category.drivers:
             if self.id == driver_category.driver_id:
                 return driver_category.race_number
 
