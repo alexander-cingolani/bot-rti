@@ -119,7 +119,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     rnds: list[Round] = []
     for rnd in reversed(category.rounds):
-        if rnd.completed:
+        if rnd.is_completed:
               rnds.append(rnd)
         if len(rnds) == 3:
               break
@@ -318,5 +318,5 @@ penalty_deletion = ConversationHandler(
         ],
     },
     fallbacks=[],
-    allow_reentry=True,
+    allow_reentry=False,
 )
