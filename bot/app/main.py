@@ -2,6 +2,7 @@
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
 
+from io import StringIO
 import json
 import logging
 import os
@@ -112,32 +113,25 @@ async def post_init(application: Application) -> None:
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Writes full error traceback to a file and sends it to the dev channel.
-    If the error was caused by a user a message will be displayed informing him
-    about the error.
-    """
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error("Exception while handling an update:", exc_info=context.error)
 
-    if isinstance(context.error, NetworkError):
-        return
-
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
-    try:
-        if update.message.chat.type == ChatType.PRIVATE:
-            await update.effective_user.send_message(
-                text=(
-                    "Problemi, problemi, problemi! 😓\n"
-                    f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
-                    "Non farti problemi ad insultarlo in chat."
-                )
+    if update and update.message.chat.type == ChatType.PRIVATE:
+        await update.effective_user.send_message(
+            text=(
+                "Problemi, problemi, problemi! 😓\n"
+                f"Si è verificato un errore inaspettato, {config.OWNER.mention_html()} "
+                "è stato informato del problema e cercherà di risolverlo il prima possibile."
             )
-    except AttributeError:
-        pass
+        )
 
-    traceback_list = traceback.format_exception(
-        None, context.error, context.error.__traceback__  # type: ignore
+    tb_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__
     )
-    traceback_string = "".join(traceback_list)
-    update_str = update.to_dict()
+    tb_string = "".join(tb_list)
+    update_str = update_str = (
+        update.to_dict() if isinstance(update, Update) else str(update)  # type: ignore
+    )
 
     message = (
         "An exception was raised while handling an update\n"
@@ -145,18 +139,12 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "\n\n"
         f"context.chat_data = {str(context.chat_data)}\n\n"
         f"context.user_data = {str(context.user_data)}\n\n"
-        f"{traceback_string}"
+        f"{tb_string}"
     )
 
-    with open("traceback.txt", "w") as file:
-        file.write(message)
-        caption = "An error occured."
-
-    with open("traceback.txt", "rb") as doc:
-        await context.bot.send_document(
-            chat_id=config.DEVELOPER_CHAT, caption=caption, document=doc
-        )
-    os.remove("traceback.txt")
+    file = StringIO(message)
+    file.name = context.error
+    await context.bot.send_document(chat_id=config.DEVELOPER_CHAT, document=file)
 
 
 def extract_status_change(
