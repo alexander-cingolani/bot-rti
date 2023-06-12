@@ -1606,7 +1606,8 @@ class Chat(Base):
     __tablename__ = "chats"
     id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
+    name: Mapped[str] = mapped_column(String)
+    user_id: Mapped[int] = mapped_column(BigInteger)
 
 class DeferredPenalty(Base):
     __tablename__ = "deferred_penalties"
