@@ -411,7 +411,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
         for driver in drivers:
-            for penalty in driver.deferred_penalites:
+            for penalty in driver.deferred_penalties:
                 if not penalty.is_applied:
                     race_results = race_sessions_results[session]
 
