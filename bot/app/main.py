@@ -116,7 +116,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Log the error and send a telegram message to notify the developer."""
     logger.error("Exception while handling an update:", exc_info=context.error)
 
-    if update and update.message.chat.type == ChatType.PRIVATE:
+    if update and update.effective_chat.type == ChatType.PRIVATE:
         await update.effective_user.send_message(
             text=(
                 "Problemi, problemi, problemi! 😓\n"
@@ -224,7 +224,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
     is_group = True if chat.type in (TGChat.SUPERGROUP, TGChat.GROUP) else False
-    session.add(Chat(chat_id=chat.id, is_group=is_group))
+    session.add(Chat(id=chat.id, is_group=is_group, name=chat.title))
     session.commit()
 
 
@@ -305,6 +305,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
+    session.merge(
+        Chat(
+            id=update.message.chat_id,
+            is_group=False,
+            user_id=user.id,
+            name=user.username,
+        )
+    )
+    session.commit()
     session.close()
 
 
