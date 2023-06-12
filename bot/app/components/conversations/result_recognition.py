@@ -348,7 +348,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     session_results: dict[Session, dict[str, list[Result]]] = user_data["results"]
 
     quali_results: list[QualifyingResult] = []
-    race_sessions_results: dict[Session, list[RaceResult]] = {}
+    sessions_results: dict[Session, list[RaceResult]] = {}
     for session, results in session_results.items():
         result_objects: list[Result] = results["result_objects"]
 
@@ -378,7 +378,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 )
             continue
 
-        race_sessions_results[session] = []
+        sessions_results[session] = []
         fastest_lap_driver = cast(DriverCategory, results["fastest_lap_driver"])
         drivers: list[Driver] = []
         for pos, result in enumerate(result_objects, start=1):
@@ -395,8 +395,9 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             if not participated:
                 result.position = None
-                drivers.append(result.driver.driver)
-            race_sessions_results[session].append(
+
+            drivers.append(result.driver.driver)
+            sessions_results[session].append(
                 RaceResult(
                     position=result.position,
                     category=category,
@@ -409,30 +410,31 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     fastest_lap=fastest_lap,
                 )
             )
-
         for driver in drivers:
             for penalty in driver.deferred_penalties:
                 if not penalty.is_applied:
-                    race_results = race_sessions_results[session]
+                    race_results = sessions_results[session]
 
                     # Applies the time penalty to the driver's race result.
                     for race_result in race_results:
-                        if race_result.driver_id == driver.id:
+                        if race_result.driver.id == driver.id:
                             race_result.total_racetime += penalty.penalty.time_penalty
 
-                    # Applies the correct finishing position, recalculates the gap_to_first.
+                    race_results.sort(key=lambda rr: rr.gap_to_first if rr.gap_to_first else float('inf'))
                     best_time = race_results[0].total_racetime
+                    # Applies the correct finishing position, recalculates the gap_to_first.
                     for position, result in enumerate(race_results, start=1):
-                        result.gap_to_first = result.total_racetime - best_time
-                        result.position = position
+                        if result.participated:
+                            result.gap_to_first = result.total_racetime - best_time
+                            result.position = position
                     penalty.is_applied = True
 
     user_data["round"].is_completed = True
 
-    for results in race_sessions_results.values():
+    for results in sessions_results.values():
         update_ratings(results)
 
-    save_results(user_data["sqla_session"], quali_results, race_sessions_results)
+    save_results(user_data["sqla_session"], quali_results, sessions_results)
 
     await update.callback_query.edit_message_text("Risultati salvati correttamente!")
 
