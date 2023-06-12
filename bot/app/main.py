@@ -2,6 +2,7 @@
 This telegram bot manages racingteamitalia's leaderboards, statistics and penalties.
 """
 
+from io import StringIO
 import json
 import logging
 import os
@@ -112,32 +113,25 @@ async def post_init(application: Application) -> None:
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Writes full error traceback to a file and sends it to the dev channel.
-    If the error was caused by a user a message will be displayed informing him
-    about the error.
-    """
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error("Exception while handling an update:", exc_info=context.error)
 
-    if isinstance(context.error, NetworkError):
-        return
-
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
-    try:
-        if update.message.chat.type == ChatType.PRIVATE:
-            await update.effective_user.send_message(
-                text=(
-                    "Problemi, problemi, problemi! 😓\n"
-                    f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
-                    "Non farti problemi ad insultarlo in chat."
-                )
+    if update and update.effective_chat.type == ChatType.PRIVATE:
+        await update.effective_user.send_message(
+            text=(
+                "Problemi, problemi, problemi! 😓\n"
+                f"Si è verificato un errore inaspettato, {config.OWNER.mention_html()} "
+                "è stato informato del problema e cercherà di risolverlo il prima possibile."
             )
-    except AttributeError:
-        pass
+        )
 
-    traceback_list = traceback.format_exception(
-        None, context.error, context.error.__traceback__  # type: ignore
+    tb_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__
     )
-    traceback_string = "".join(traceback_list)
-    update_str = update.to_dict()
+    tb_string = "".join(tb_list)
+    update_str = update_str = (
+        update.to_dict() if isinstance(update, Update) else str(update)  # type: ignore
+    )
 
     message = (
         "An exception was raised while handling an update\n"
@@ -145,18 +139,12 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "\n\n"
         f"context.chat_data = {str(context.chat_data)}\n\n"
         f"context.user_data = {str(context.user_data)}\n\n"
-        f"{traceback_string}"
+        f"{tb_string}"
     )
 
-    with open("traceback.txt", "w") as file:
-        file.write(message)
-        caption = "An error occured."
-
-    with open("traceback.txt", "rb") as doc:
-        await context.bot.send_document(
-            chat_id=config.DEVELOPER_CHAT, caption=caption, document=doc
-        )
-    os.remove("traceback.txt")
+    file = StringIO(message)
+    file.name = "Traceback"
+    await context.bot.send_document(chat_id=config.DEVELOPER_CHAT, document=file)
 
 
 def extract_status_change(
@@ -236,7 +224,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
     is_group = True if chat.type in (TGChat.SUPERGROUP, TGChat.GROUP) else False
-    session.add(Chat(chat_id=chat.id, is_group=is_group))
+    session.add(Chat(id=chat.id, is_group=is_group, name=chat.title))
     session.commit()
 
 
@@ -317,6 +305,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=ForceReply(selective=True),
     )
 
+    session.merge(
+        Chat(
+            id=update.message.chat_id,
+            is_group=False,
+            user_id=user.id,
+            name=user.username,
+        )
+    )
+    session.commit()
     session.close()
 
 
@@ -346,7 +343,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not (current_category := driver.current_category()):
         msg = "Al momento non fai parte di alcuna categoria."
-    elif not (rnd := current_category.next_round()):
+    elif not (rnd := current_category.category.next_round()):
         msg = "Il campionato è terminato, non ci sono più gare da completare."
     else:
         msg = rnd.generate_info_message()
@@ -387,7 +384,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 unique_teams = "/"
 
             current_category = driver.current_category()
-            rnd = current_category.penultimate_completed_round()
+            rnd = current_category.category.penultimate_completed_round()
             previous_rating = 0
             if rnd:
                 for result in rnd.long_race.race_results:
@@ -455,7 +452,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    category = user_driver.current_category()
+    category = user_driver.current_category().category
 
     if not category:
         text = (
@@ -584,7 +581,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    rnd = category.last_completed_round()
+    rnd = category.category.last_completed_round()
 
     if not rnd:
         await update.message.reply_text(
@@ -950,9 +947,9 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    message += f"<b>Calendario {category.name}</b>\n\n"
+    message += f"<b>Calendario {category.category.name}</b>\n\n"
 
-    for rnd in category.rounds:
+    for rnd in category.category.rounds:
         if rnd.date > datetime.now().date():
             message += f"{rnd.number} - {rnd.circuit.abbreviated_name}\n"
         else:
@@ -1019,7 +1016,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     race_pace = driver.race_pace()
 
     current_category = driver.current_category()
-    rnd = current_category.penultimate_completed_round()
+    rnd = current_category.category.penultimate_completed_round()
     previous_rating = 0
     if rnd:
         for result in rnd.long_race.race_results:
