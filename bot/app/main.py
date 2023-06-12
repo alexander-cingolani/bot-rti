@@ -143,7 +143,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     file = StringIO(message)
-    file.name = context.error
+    file.name = "Traceback"
     await context.bot.send_document(chat_id=config.DEVELOPER_CHAT, document=file)
 
 
