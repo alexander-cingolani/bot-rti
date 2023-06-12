@@ -467,7 +467,9 @@ class Round(Base):
 
     category: Mapped[Category] = relationship(back_populates="rounds")
     circuit: Mapped[Circuit] = relationship(back_populates="rounds")
-    sessions: Mapped[list[Session]] = relationship(back_populates="round", order_by="Session.name")
+    sessions: Mapped[list[Session]] = relationship(
+        back_populates="round", order_by="Session.name"
+    )
 
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="round")
     reports: Mapped[list[Report]] = relationship()
