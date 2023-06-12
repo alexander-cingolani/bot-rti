@@ -1609,6 +1609,7 @@ class Chat(Base):
     name: Mapped[str] = mapped_column(String)
     user_id: Mapped[int] = mapped_column(BigInteger)
 
+
 class DeferredPenalty(Base):
     __tablename__ = "deferred_penalties"
 

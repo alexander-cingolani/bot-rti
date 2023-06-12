@@ -422,14 +422,12 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
 
-    delta = float(previous_points) - float(
-        penalised_race_result.points_earned
-    )
+    delta = float(previous_points) - float(penalised_race_result.points_earned)
     team_championship: TeamChampionship = penalty.team.current_championship()  # type: ignore
     team_championship.points -= delta
-    driver_category: DriverCategory = penalty.driver.current_category() # type: ignore
+    driver_category: DriverCategory = penalty.driver.current_category()  # type: ignore
     driver_category.points -= delta
-    
+
     drivers = driver_category.category.drivers
     drivers.sort(key=lambda d: d.points, reverse=True)
 
@@ -438,7 +436,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         driver.position = pos
         if driver.driver_id == penalty.driver_id:
             break
-        
+
     sqla_session.add(penalty)
     sqla_session.commit()
     return
