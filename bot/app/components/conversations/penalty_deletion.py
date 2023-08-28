@@ -1,5 +1,6 @@
 """
-This module contains the necessary callbacks to allow admins to delete a report.
+This module contains the necessary callbacks to allow admins to delete a penalty
+that has already been applied.
 """
 
 import os
@@ -32,7 +33,8 @@ CANCEL = "c"
 
 
 async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Asks which category the user wants to delete a penalty from."""
+    """Checks if there are penalties to delete, if there are, it then asks which category
+    the penalty is in."""
 
     user_data = cast(dict[str, Any], context.user_data)
 
@@ -85,6 +87,7 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def __ask_category(update: Update, category_buttons: list[InlineKeyboardButton]):
+    """Asks which category the penalty was in."""
     text = """Seleziona la categoria dove si trova la penalità da eliminare:"""
 
     reply_markup = InlineKeyboardMarkup(
@@ -99,7 +102,7 @@ async def __ask_category(update: Update, category_buttons: list[InlineKeyboardBu
 
 
 async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Asks which round the user wants to delete a penalty from."""
+    """Saves the category and asks which round the penalty was in."""
 
     user_data = cast(dict[str, Any], context.user_data)
     championship = cast(Championship, user_data["championship"])
@@ -132,7 +135,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def __ask_round(update: Update, rnds: list[Round]):
-    """Sends the user a message asking for the round to delete the penalty from."""
+    """Asks which round the penalty was in."""
 
     buttons: list[InlineKeyboardButton] = []
     for i, rnd in enumerate(rnds):
@@ -168,7 +171,7 @@ async def save_round(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def __ask_penalty(update: Update, rnd: Round):
-    """Sends the user a message asking which penalty to delete."""
+    """Asks which penalty to delete."""
 
     text = (
         f"Queste sono le penalità della <b>{rnd.number}^ Tappa</b>.\n"
@@ -215,7 +218,7 @@ async def save_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def __ask_confirmation(update: Update, penalty: Penalty):
-    """Sends a message to the user asking if he wants to delete the penalty."""
+    """Asks the user if he is sure he wants to delete the penalty."""
     text = (
         "<u>Sei sicuro</u> di voler annullare questa penalità?\n\n"
         f"N° Documento: {penalty.number}\n"
@@ -236,7 +239,7 @@ async def __ask_confirmation(update: Update, penalty: Penalty):
 
 
 async def confirm_again(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Asks the user if he is absolutely sure he wants to delete the penalty."""
+    """Asks the user to reconfirm that he wants to delete the penalty."""
 
     if update.callback_query.data == BACK:
         user_data = cast(dict[str, Any], context.user_data)
@@ -271,7 +274,7 @@ async def confirm_again(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Deletes the selected penalty, goes back to penalty selection or ends
-    the conversation without doing anything based on the user's input."""
+    the conversation."""
 
     user_data = cast(dict[str, Any], context.user_data)
     sqla_session = cast(SQLASession, user_data["sqla_session"])
