@@ -108,9 +108,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     championship = cast(Championship, user_data["championship"])
 
     if update.callback_query.data == EXIT:
-        await update.callback_query.edit_message_text(
-            "Ok! Non eliminiamo nulla per ora."
-        )
+        await update.callback_query.edit_message_text("Ok! Non cancelliamo nulla.")
         user_data["sqla_session"].close()
         user_data.clear()
         return ConversationHandler.END
@@ -119,14 +117,13 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     category = championship.categories[index]
     user_data["category"] = category
 
-    
     rnds: list[Round] = []
     for rnd in reversed(category.rounds):
         if rnd.is_completed:
-              rnds.append(rnd)
+            rnds.append(rnd)
         if len(rnds) == 3:
-              break
-          
+            break
+
     user_data["rounds"] = rnds
 
     await __ask_round(update, user_data["rounds"])
@@ -178,7 +175,7 @@ async def __ask_penalty(update: Update, rnd: Round):
         "Quale vuoi eliminare?\n"
         "<i>(I numeri corrispondono a quelli dei documenti)</i>\n\n"
     )
-    
+
     buttons: list[InlineKeyboardButton] = []
     for i, penalty in enumerate(rnd.penalties):
         text += f"{penalty.number} - {penalty.driver.psn_id}, {penalty.time_penalty}s\n"
@@ -249,7 +246,7 @@ async def confirm_again(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return SAVE_PENALTY
 
     if update.callback_query.data == CANCEL:
-        text = "Ok! Non eliminiamo nulla."
+        text = "Ok! Non cancelliamo nulla."
         await update.callback_query.edit_message_text(text)
         return ConversationHandler.END
 
@@ -292,10 +289,16 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     delete_penalty(sqla_session, penalty)
 
-    text = "Penalità rimossa con successo!"
-
+    text = (
+        "Penalità rimossa con successo!\n"
+        f"\n<b>{penalty.warnings}</b> warning rimosso/i"
+        f"\n<b>{penalty.licence_points}</b> punto/i licenza restituiti"
+        f"\n<b>{penalty.points}</b> punto/i di penalità rimosso/i"
+        f"\n<b>{penalty.time_penalty}s</b> tolti dal tempo di gara"
+        
+    )
     if penalty.time_penalty:
-        text += " Le classifiche sono state aggiornate di conseguenza."
+        text += "\n\nStatistiche e classifiche sono state aggiornate di conseguenza."
 
     await update.callback_query.edit_message_text(text)
 
