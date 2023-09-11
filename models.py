@@ -213,8 +213,10 @@ class Circuit(Base):
     name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
     variation (str): Specifies the layout of the track.
+    game_id (int): The ID of the game this track is in.
 
     rounds (list[Round]): The rounds that took place at this circuit.
+    game (Game): The game this track is in.
     """
 
     __tablename__ = "circuits"
@@ -223,13 +225,21 @@ class Circuit(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
     variation: Mapped[str] = mapped_column(String(100))
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
     rounds: Mapped[list[Round]] = relationship(back_populates="circuit")
+    game: Mapped[Game] = relationship()
 
     @property
     def logo_url(self) -> str:
         filename = f"{self.name.lower().replace(' ', '-')}.png"
         return CIRCUIT_LOGO_DIR_URL + filename
+
+    def __repr__(self) -> str:
+        return (
+            f"Circuit(id={self.id}, name={self.name}, abbreviated_name={self.abbreviated_name}"
+            ", variation={self.variation}, game_id={self.game_id})"
+        )
 
 
 class Category(Base):
