@@ -176,20 +176,24 @@ class CarClass(Base):
     Attributes:
         id (int): Unique ID of the car class.
         name (str): Name of the car class.
-
+        in_game_id (int): ID of the class in the game.
+        
         game_id (int): Unique ID of the game the car class is in.
 
         game (Game): Game object the car class is associated to.
+        cars (list[Cars]): Cars belonging to this class.
     """
 
     __tablename__ = "car_classes"
 
     id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), nullable=False)
+    in_game_id: Mapped[int]= mapped_column(Integer, nullable=False)
 
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
     game: Mapped[Game] = relationship()
+    cars: Mapped[list[Car]] = relationship(back_populates="car_class")
 
     def __repr__(self) -> str:
         return f"CarClass(car_class_id={self.id}, name={self.name})"
@@ -205,6 +209,27 @@ class CarClass(Base):
             return NotImplemented
         return self.id == other.id
 
+class Car(Base):
+    """Represents a car within a car class.
+    
+    id (int): The car's unique id.
+    name (str): The car's name.
+    in_game_id (int): ID of the car in the game.
+    
+    car_class_id (int): The car's class id.
+    
+    car_class (CarClass): CarClass the car belongs to.
+    """
+    
+    __tablename__ = "cars"
+    
+    id: Mapped[int] = mapped_column("car_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
+    
+    car_class: Mapped[CarClass] = relationship(back_populates="cars")
 
 class Circuit(Base):
     """Represents a circuit within the game.
