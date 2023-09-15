@@ -51,7 +51,7 @@ class Base(DeclarativeBase):
 
 
 class Championship(Base):
-    """This object represents a championship.
+    """Represents a championship.
     Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
 
     Attributes:
@@ -145,7 +145,7 @@ class Game(Base):
 
 class PointSystem(Base):
     """
-    This object represents a point system.
+    Represents a point system.
     Each point system can be associated with multiple Sessions.
 
     Attributes:
@@ -214,7 +214,7 @@ class RolePermission(Base):
 
 
 class CarClass(Base):
-    """This object represents an in-game car class.
+    """Represents an in-game car class.
     CarClass records are meant to be reused multiple times for different categories
     and championships, their function is mainly to identify which type of car is
     assigned to drivers within the same category, this therefore allows to calculate
@@ -513,7 +513,7 @@ class Category(Base):
 
 
 class Round(Base):
-    """This object represents a round of a specific category.
+    """Represents a round in the calendar of a specific category.
     It is used to group RaceResults and QualifyingResults registered on a specific date.
 
     Attributes:
@@ -641,10 +641,7 @@ class Round(Base):
 
 
 class Session(Base):
-    """This object represents a session in a round.
-
-    Sessions can be either Race or Qualifying sessions, this is determined by the
-    name attribute.
+    """Represents a session in a round. E.g. a qualifying session or a race session.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon object creation.
@@ -792,7 +789,7 @@ class Session(Base):
 
 
 class Penalty(Base):
-    """This class represents a penalty applied to a driver in a given session.
+    """Represents a penalty applied to a driver in a given session.
 
     Attributes:
         time_penalty (int): Seconds to add to the driver's total race time.
@@ -911,7 +908,7 @@ class Penalty(Base):
 
 
 class Report(Base):
-    """This object represents a report.
+    """Represents a report.
     Each report is associated with two Drivers and their Teams,
     as well as the Category, Round and Session the reported incident happened in.
     N.B. fact, penalty, reason and is_queued may only be provided after
@@ -1019,7 +1016,7 @@ class Report(Base):
 
 
 class Driver(Base):
-    """This object represents a driver.
+    """Represents a driver.
 
     Attributes:
         driver_id (int): Automatically generated unique ID assigned upon object creation.
@@ -1214,8 +1211,7 @@ class Driver(Base):
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def sportsmanship(self) -> int:
-        """This statistic is calculated based on the seriousness and
-        amount of reports received.
+        """Based on the seriousness and number of reports received.
 
         Returns:
             int: Sportsmanship rating. (0-100)
@@ -1239,8 +1235,8 @@ class Driver(Base):
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def race_pace(self) -> int:
-        """This statistic is calculated based on the average gap from the race winner
-        in all of the races completed by the driver.
+        """Based on the average gap from the race winner in all of the races
+        completed by the driver.
 
         Return:
             int: Race pace score. (40-100)
@@ -1329,7 +1325,7 @@ class Driver(Base):
 
 
 class Team(Base):
-    """This object represents a team.
+    """Represents a team.
 
     Attributes:
         reports_made (list[Report]): Reports made by the team.
@@ -1400,7 +1396,7 @@ class Team(Base):
 
 
 class DriverAssignment(Base):
-    """This object creates an association between a Driver and a Team
+    """Association object between a Driver and a Team.
 
     Attributes:
         joined_on (date): Date the driver joined the team.
@@ -1441,7 +1437,7 @@ class DriverAssignment(Base):
 
 
 class DriverCategory(Base):
-    """This object creates a new association between a Driver and a Category.
+    """Association object between a Driver and a Category.
 
     Attributes:
         joined_on (date): The date on which the driver joined the category.
@@ -1482,7 +1478,7 @@ class DriverCategory(Base):
 
 
 class QualifyingResult(Base):
-    """This object represents a single result made by a driver in a qualifying Session.
+    """Represents a single result made by a driver in a qualifying Session.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon
@@ -1542,7 +1538,7 @@ class QualifyingResult(Base):
 
 
 class TeamChampionship(Base):
-    """This class binds a Team and a Championship together.
+    """Association object between a Team and a Championship.
     It allows to keep track of the Championships to which teams have participated,
     while also allowing to add penalties to a team's points tally.
 
@@ -1572,7 +1568,7 @@ class TeamChampionship(Base):
 
 
 class RaceResult(Base):
-    """This object represents a Driver's result in a race.
+    """Represents a Driver's result in a race session.
     Each Round will have multiple RaceResults, one (two if the round has a sprint race)
     for each driver in the Category the Round is registered in.
 
@@ -1670,7 +1666,8 @@ class Participation(enum.Enum):
 
 
 class RoundParticipant(Base):
-    """This object is used to keep track of what"""
+    """Used to keep track of which drivers have given confirmation for
+    participating (or not) to a Round."""
 
     __tablename__ = "round_participants"
 
@@ -1688,14 +1685,38 @@ class RoundParticipant(Base):
 
 
 class Chat(Base):
+    """Represents a chat the bot is in.
+    
+    id (int): The actual chat id used by telegram.
+    is_group (bool): True if the chat is a group.
+    name (str): The chat name at the time the bot was added.
+    user_id (int | None): ID of the user who created the chat. None if not
+        a group chat.
+    """
     __tablename__ = "chats"
+    
     id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     name: Mapped[str] = mapped_column(String)
-    user_id: Mapped[int] = mapped_column(BigInteger)
+    user_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class DeferredPenalty(Base):
+    """Represents a penalty to be applied to the result of next race the penalised
+    driver participates in. The need for this object comes from the fact that
+    sometimes drivers can be penalised without having completed the race they were
+    penalised in. DeferredPenalty objects are also linked to a separate Penalty
+    object which contains all the details about the penalty.
+    
+    id (int): Unique ID for this object.
+    penalty_id (int): Unique ID of the Penalty this object is related to.
+    driver_id (int): Unique ID of the Driver who received the penalty.
+    is_applied (bool): True if the penalty was applied.
+    
+    penalty (Penalty): Penalty object this DeferredPenalty is related to.
+    driver (Driver): Driver object who received the penalty.
+    
+    """
     __tablename__ = "deferred_penalties"
 
     id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)
