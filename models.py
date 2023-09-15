@@ -166,6 +166,53 @@ class PointSystem(Base):
         )
 
 
+class Permission(Base):
+    """Represents a permission granted to one or more roles in the team.
+
+    id (int): Unique ID for the permission.
+    name (str): Name of the permission. E.g. "report-filing"
+    """
+
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column("privilige_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+
+
+class Role(Base):
+    """Represents a role in the organization chart of the team.
+
+    id (int): Unique ID for the role.
+    name (str): Name of the role. E.g. "team-leader"
+    """
+
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column("role_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+
+
+class RolePermission(Base):
+    """Association object between a role and a permission.
+
+    role_id (int): ID of the role.
+    permission_id (int): ID of the permission.
+
+    role (Role): Role object.
+    permission (Permission): Permission object.
+    """
+
+    __tablename__ = "role_permissions"
+
+    role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+    permission_id: Mapped[int] = mapped_column(
+        ForeignKey(Permission.id), primary_key=True
+    )
+
+    role: Mapped[Role] = relationship()
+    permission: Mapped[Permission] = relationship()
+
+
 class CarClass(Base):
     """This object represents an in-game car class.
     CarClass records are meant to be reused multiple times for different categories
@@ -174,7 +221,6 @@ class CarClass(Base):
     statistics separately from one class and another.
 
     Attributes:
-        id (int): Unique ID of the car class.
         name (str): Name of the car class.
         in_game_id (int): ID of the class in the game.
 
