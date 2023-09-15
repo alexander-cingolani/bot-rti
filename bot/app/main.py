@@ -36,7 +36,7 @@ from telegram import (
     User,
 )
 from telegram.constants import ChatType, ParseMode
-from telegram.error import BadRequest, NetworkError
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
