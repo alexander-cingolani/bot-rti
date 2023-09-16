@@ -280,10 +280,9 @@ class Car(Base):
 class Circuit(Base):
     """Represents a circuit within the game.
 
-    circuit_id (int): The circuit's unique ID. Different variations have different IDs.
+    circuit_id (int): The circuit's unique ID.
     name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
-    variation (str): Specifies the layout of the track.
     game_id (int): The ID of the game this track is in.
 
     rounds (list[Round]): The rounds that took place at this circuit.
@@ -295,9 +294,11 @@ class Circuit(Base):
     id: Mapped[int] = mapped_column("circuit_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    variation: Mapped[str] = mapped_column(String(100))
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
+    configurations: Mapped[list[CircuitConfiguration]] = relationship(
+        back_populates="circuit"
+    )
     rounds: Mapped[list[Round]] = relationship(back_populates="circuit")
     game: Mapped[Game] = relationship()
 
@@ -309,8 +310,26 @@ class Circuit(Base):
     def __repr__(self) -> str:
         return (
             f"Circuit(id={self.id}, name={self.name}, abbreviated_name={self.abbreviated_name}"
-            ", variation={self.variation}, game_id={self.game_id})"
+            f", game_id={self.game_id})"
         )
+
+
+class CircuitConfiguration(Base):
+    """Represents a specific configuration of a circuit.
+
+    circuit_id (int): Unique ID of the circuit this configuration is a variation of.
+    configuration_id (int): Unique ID for this configuration.
+    name (name): Name of this configuration.
+
+    circuit (Circuit): Circuit object this configuration is a variation of.
+    """
+
+    __tablename__ = "circuit_configurations"
+
+    id: Mapped[int] = mapped_column("configuration_id", primary_key=True)
+    circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    circuit: Mapped[Circuit] = relationship(back_populates="configurations")
 
 
 class Category(Base):
@@ -518,7 +537,8 @@ class Round(Base):
         id (int): Automatically generated unique ID assigned upon object creation.
         number (int): The number of the round in the calendar order.
         date (date): The date the round takes place on.
-        circuit (str): The circuit the round takes place on.
+        circuit (Circuit): The circuit the round takes place on.
+        configuration (CircuitConfiguration): The specific configuration of the circuit.
         is_completed (bool): True if the round has been completed.
 
         category_id (int): Unique ID of the category the round belongs to.
@@ -543,11 +563,12 @@ class Round(Base):
         ForeignKey(Championship.id), nullable=False
     )
     circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), nullable=False)
-
+    configuration_id: Mapped[CircuitConfiguration] = mapped_column(ForeignKey(CircuitConfiguration.id), nullable=False)
+    
     championship: Mapped[Championship] = relationship(back_populates="rounds")
-
     category: Mapped[Category] = relationship(back_populates="rounds")
     circuit: Mapped[Circuit] = relationship(back_populates="rounds")
+    configuration: Mapped[CircuitConfiguration] = relationship()
     sessions: Mapped[list[Session]] = relationship(
         back_populates="round", order_by="Session.name"
     )
@@ -573,8 +594,7 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n"
-            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n\n"
         )
 
         for session in self.sessions:
@@ -946,9 +966,7 @@ class Report(Base):
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    id: Mapped[int] = mapped_column(
-        "report_id", Integer, primary_key=True
-    )
+    id: Mapped[int] = mapped_column("report_id", Integer, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
     reason: Mapped[str] = mapped_column(String(2000), nullable=False)

@@ -715,7 +715,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     drivers.sort(key=lambda d: d.driver.psn_id.lower())
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
-        f"<b>{rnd.circuit.abbreviated_name} - {rnd.circuit.variation}</b>"
+        f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
     )
 
     chat_data["participation_list_text"] = text
@@ -798,7 +798,7 @@ async def update_participation_list(
     if not chat_data.get("participation_list_text"):
         chat_data["participation_list_text"] = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
-            f"<b>{rnd.circuit.abbreviated_name} - {rnd.circuit.variation}</b>"
+            f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
         )
 
     if not chat_data.get("participation_list_message"):
