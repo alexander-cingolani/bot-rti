@@ -1024,7 +1024,7 @@ class Driver(Base):
         telegram_id (str): The driver's telegram ID.
 
         championships (list[DriverChampionship]): Championships the driver has participated in.
-        teams (list[DriverAssignment]): Teams the driver has been acquired by.
+        teams (list[DriverContract]): Teams the driver has been acquired by.
         categories (list[DriverCategory]): Categories the driver has participated in.
         race_results (list[RaceResult]): Results made by the driver in his career.
         received_reports (list[Report]): Reports made against the driver during his career.
@@ -1043,12 +1043,12 @@ class Driver(Base):
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
 
-    teams: Mapped[list[DriverAssignment]] = relationship(
+    teams: Mapped[list[DriverContract]] = relationship(
         back_populates="driver",
-        order_by="DriverAssignment.joined_on",
+        order_by="DriverContract.start_date",
     )
     categories: Mapped[list[DriverCategory]] = relationship(
-        back_populates="driver", order_by=("DriverCategory.joined_on")
+        back_populates="driver", order_by=("DriverCategory.start_date")
     )
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="driver")
     received_penalties: Mapped[list[Penalty]] = relationship(back_populates="driver")
@@ -1081,7 +1081,7 @@ class Driver(Base):
     def current_team(self) -> Team | None:
         """Returns the team the driver is currently competing with."""
         for team in self.teams:
-            if not team.left_on:
+            if not team.expiry_date:
                 return team.team
         return None
 
@@ -1333,7 +1333,7 @@ class Team(Base):
         reports_made (list[Report]): Reports made by the team.
         received_reports (list[Report]): Reports received by the team.
 
-        drivers (list[DriverAssignment]): Drivers who are members of the team.
+        drivers (list[DriverContract]): Drivers contracted to the team.
         leader (Driver): Driver who is allowed to make reports for the team.
 
         team_id (int): The team's unique ID.
@@ -1350,9 +1350,9 @@ class Team(Base):
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        back_populates="team", order_by="TeamChampionship.joined_on"
+        back_populates="team", order_by="TeamChampionship.start_date"
     )
-    drivers: Mapped[list[DriverAssignment]] = relationship(back_populates="team")
+    drivers: Mapped[list[DriverContract]] = relationship(back_populates="team")
     reports_made: Mapped[list[Report]] = relationship(
         back_populates="reporting_team",
         foreign_keys=[Report.reporting_team_id],
@@ -1382,9 +1382,9 @@ class Team(Base):
         return None
 
     @property
-    def active_drivers(self) -> list[DriverAssignment]:
+    def active_drivers(self) -> list[DriverContract]:
         """List of drivers who currently have a contract with the team."""
-        return [driver for driver in self.drivers if not driver.left_on]
+        return [driver for driver in self.drivers if not driver.expiry_date]
 
     @property
     def logo_url(self) -> str:
@@ -1397,35 +1397,36 @@ class Team(Base):
         return self.championships[-1]
 
 
-class DriverAssignment(Base):
+class DriverContract(Base):
     """Association object between a Driver and a Team.
 
     Attributes:
-        joined_on (date): Date the driver joined the team.
-        left_on (date): Date the driver left the team.
-        bought_for (int): Price the team paid to acquire the driver.
+        start_date (date): Date the driver joined the team.
+        expiry_date (date): Date the driver left the team.
+        acquisition_fee (int): Price the team paid to acquire the driver.
         is_leader (bool): Indicates whether the driver is also the leader of that team.
 
         id (uuid): Auto-generated UUID assigned upon object creation.
         driver_id (int): Unique ID of the driver joining the team.
         team_id (int): Unique ID of the team acquiring the driver.
-
+        length (int): Number of seasons the driver is contracted for.
+        
         driver (Driver): Driver joining the team.
         team (Team): Team acquiring the driver.
     """
 
-    __tablename__ = "driver_assignments"
-    __table_args__ = (UniqueConstraint("joined_on", "driver_id", "team_id"),)
+    __tablename__ = "driver_contracts"
+    __table_args__ = (UniqueConstraint("start_date", "driver_id", "team_id"),)
 
-    joined_on: Mapped[datetime.date] = mapped_column(
+    start_date: Mapped[datetime.date] = mapped_column(
         Date, server_default=func.now(), default=False, nullable=False
     )
-    left_on: Mapped[datetime.date] = mapped_column(Date)
-    bought_for: Mapped[Optional[int]] = mapped_column(SmallInteger)
-    is_leader: Mapped[bool] = mapped_column(Boolean, default=False)
+    expiry_date: Mapped[datetime.date] = mapped_column(Date)
+    acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    length: Mapped[int] = mapped_column(Integer, nullable=False)
 
     id: Mapped[str] = mapped_column(
-        "assignment_id", UUID(as_uuid=True), primary_key=True, nullable=False
+        "contract_id", UUID(as_uuid=True), primary_key=True, nullable=False
     )
     driver_id: Mapped[int] = mapped_column(
         ForeignKey(Driver.id), primary_key=True, nullable=False
@@ -1461,7 +1462,7 @@ class DriverCategory(Base):
     """Association object between a Driver and a Category.
 
     Attributes:
-        joined_on (date): The date on which the driver joined the category.
+        start_date (date): The date on which the driver joined the category.
         left_on (date): The date on which the driver left the category.
         race_number (int): The number used by the driver in the category.
         warnings (int): Number of warnings received in the category.
@@ -1479,7 +1480,7 @@ class DriverCategory(Base):
 
     __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
-    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
+    start_date: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
     left_on: Mapped[datetime.date] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -1580,7 +1581,7 @@ class TeamChampionship(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), primary_key=True
     )
-    joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     points: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
