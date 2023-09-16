@@ -7,7 +7,6 @@ from __future__ import annotations
 import datetime
 import enum
 import os
-import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
@@ -35,7 +34,6 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 DOMAIN = os.environ.get("ZONE")
@@ -51,7 +49,7 @@ class Base(DeclarativeBase):
 
 
 class Championship(Base):
-    """This object represents a championship.
+    """Represents a championship.
     Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
 
     Attributes:
@@ -145,8 +143,7 @@ class Game(Base):
 
 class PointSystem(Base):
     """
-    This object represents a point system.
-    Each point system can be associated with multiple Sessions.
+    Represents a point system that can be used for race or qualifying sessions.
 
     Attributes:
         id (int): A unique ID.
@@ -166,30 +163,80 @@ class PointSystem(Base):
         )
 
 
+class Permission(Base):
+    """Represents a permission that can be granted to one or more roles in the team.
+
+    id (int): Unique ID for the permission.
+    name (str): Name of the permission. E.g. "report-filing"
+    """
+
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column("privilige_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+
+
+class Role(Base):
+    """Represents a role in the organizational chart of the team.
+
+    id (int): Unique ID for the role.
+    name (str): Name of the role. E.g. "team-leader"
+    """
+
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column("role_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+
+
+class RolePermission(Base):
+    """Association object between a role and a permission.
+
+    role_id (int): ID of the role.
+    permission_id (int): ID of the permission.
+
+    role (Role): Role object.
+    permission (Permission): Permission object.
+    """
+
+    __tablename__ = "role_permissions"
+
+    role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+    permission_id: Mapped[int] = mapped_column(
+        ForeignKey(Permission.id), primary_key=True
+    )
+
+    role: Mapped[Role] = relationship()
+    permission: Mapped[Permission] = relationship()
+
+
 class CarClass(Base):
-    """This object represents an in-game car class.
+    """Represents an in-game car class.
     CarClass records are meant to be reused multiple times for different categories
     and championships, their function is mainly to identify which type of car is
-    assigned to drivers within the same category, this therefore allows to calculate
+    assigned to drivers within the same category, this allows to calculate
     statistics separately from one class and another.
 
     Attributes:
-        id (int): Unique ID of the car class.
         name (str): Name of the car class.
+        in_game_id (int): ID of the class in the game.
 
         game_id (int): Unique ID of the game the car class is in.
 
         game (Game): Game object the car class is associated to.
+        cars (list[Cars]): Cars belonging to this class.
     """
 
     __tablename__ = "car_classes"
 
     id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(20), nullable=False)
+    in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
     game: Mapped[Game] = relationship()
+    cars: Mapped[list[Car]] = relationship(back_populates="car_class")
 
     def __repr__(self) -> str:
         return f"CarClass(car_class_id={self.id}, name={self.name})"
@@ -206,15 +253,40 @@ class CarClass(Base):
         return self.id == other.id
 
 
-class Circuit(Base):
-    """Represents a circuit within the game.
+class Car(Base):
+    """Represents a specific car make and model within a car class.
 
-    circuit_id (int): The circuit's unique ID. Different variations have different IDs.
+    id (int): The car's unique id.
+    name (str): The car's name.
+    in_game_id (int): ID of the car in the game.
+
+    car_class_id (int): The car's class id.
+
+    car_class (CarClass): CarClass the car belongs to.
+    """
+
+    __tablename__ = "cars"
+
+    id: Mapped[int] = mapped_column("car_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
+
+    car_class: Mapped[CarClass] = relationship(back_populates="cars")
+
+
+class Circuit(Base):
+    """Represents a circuit within a game.
+
+    circuit_id (int): The circuit's unique ID.
     name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
-    variation (str): Specifies the layout of the track.
+    game_id (int): The ID of the game this track is in.
 
+    configurations (list[CircuitConfiguration]): All the configurations available in the game.
     rounds (list[Round]): The rounds that took place at this circuit.
+    game (Game): The game this track is in.
     """
 
     __tablename__ = "circuits"
@@ -222,14 +294,42 @@ class Circuit(Base):
     id: Mapped[int] = mapped_column("circuit_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    variation: Mapped[str] = mapped_column(String(100))
+    game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
+    configurations: Mapped[list[CircuitConfiguration]] = relationship(
+        back_populates="circuit"
+    )
     rounds: Mapped[list[Round]] = relationship(back_populates="circuit")
+    game: Mapped[Game] = relationship()
 
     @property
     def logo_url(self) -> str:
         filename = f"{self.name.lower().replace(' ', '-')}.png"
         return CIRCUIT_LOGO_DIR_URL + filename
+
+    def __repr__(self) -> str:
+        return (
+            f"Circuit(id={self.id}, name={self.name}, abbreviated_name={self.abbreviated_name}"
+            f", game_id={self.game_id})"
+        )
+
+
+class CircuitConfiguration(Base):
+    """Represents a specific configuration of a circuit.
+
+    circuit_id (int): Unique ID of the circuit this configuration is a variation of.
+    configuration_id (int): Unique ID for this configuration.
+    name (name): Name of this configuration.
+
+    circuit (Circuit): Circuit object this configuration is a variation of.
+    """
+
+    __tablename__ = "circuit_configurations"
+
+    id: Mapped[int] = mapped_column("configuration_id", primary_key=True)
+    circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    circuit: Mapped[Circuit] = relationship(back_populates="configurations")
 
 
 class Category(Base):
@@ -430,14 +530,15 @@ class Category(Base):
 
 
 class Round(Base):
-    """This object represents a round of a specific category.
-    It is used to group RaceResults and QualifyingResults registered on a specific date.
+    """Represents a round in the calendar of a specific category.
+    All RaceResults and QualifyingResults are linked to their Round.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon object creation.
         number (int): The number of the round in the calendar order.
         date (date): The date the round takes place on.
-        circuit (str): The circuit the round takes place on.
+        circuit (Circuit): The circuit the round takes place on.
+        configuration (CircuitConfiguration): The specific configuration of the circuit.
         is_completed (bool): True if the round has been completed.
 
         category_id (int): Unique ID of the category the round belongs to.
@@ -462,11 +563,14 @@ class Round(Base):
         ForeignKey(Championship.id), nullable=False
     )
     circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), nullable=False)
+    configuration_id: Mapped[CircuitConfiguration] = mapped_column(
+        ForeignKey(CircuitConfiguration.id), nullable=False
+    )
 
     championship: Mapped[Championship] = relationship(back_populates="rounds")
-
     category: Mapped[Category] = relationship(back_populates="rounds")
     circuit: Mapped[Circuit] = relationship(back_populates="rounds")
+    configuration: Mapped[CircuitConfiguration] = relationship()
     sessions: Mapped[list[Session]] = relationship(
         back_populates="round", order_by="Session.name"
     )
@@ -492,8 +596,7 @@ class Round(Base):
 
         message = (
             f"<i><b>INFO {self.number}ᵃ TAPPA {self.category.name.upper()}</b></i>\n\n"
-            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n"
-            f"<b>Variante:</b> <i>{self.circuit.variation}</i>\n\n"
+            f"<b>Tracciato:</b> <i>{self.circuit.name}</i>\n\n"
         )
 
         for session in self.sessions:
@@ -558,10 +661,7 @@ class Round(Base):
 
 
 class Session(Base):
-    """This object represents a session in a round.
-
-    Sessions can be either Race or Qualifying sessions, this is determined by the
-    name attribute.
+    """Represents a session in a round. E.g. a qualifying session or a race session.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon object creation.
@@ -709,7 +809,7 @@ class Session(Base):
 
 
 class Penalty(Base):
-    """This class represents a penalty applied to a driver in a given session.
+    """Represents a penalty applied to a driver in a given session.
 
     Attributes:
         time_penalty (int): Seconds to add to the driver's total race time.
@@ -828,14 +928,14 @@ class Penalty(Base):
 
 
 class Report(Base):
-    """This object represents a report.
+    """Represents a report.
     Each report is associated with two Drivers and their Teams,
     as well as the Category, Round and Session the reported incident happened in.
     N.B. fact, penalty, reason and is_queued may only be provided after
     the report has been reviewed.
 
     Attributes:
-        id (uuid4): Automatically generated unique ID assigned upon report creation.
+        id (int): Automatically generated unique ID assigned upon report creation.
         number (int): The number of the report in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
         reason (str): The reason provided by the reporter for making the report.
@@ -868,9 +968,7 @@ class Report(Base):
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        "report_id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[int] = mapped_column("report_id", Integer, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
     reason: Mapped[str] = mapped_column(String(2000), nullable=False)
@@ -936,7 +1034,7 @@ class Report(Base):
 
 
 class Driver(Base):
-    """This object represents a driver.
+    """Represents a driver.
 
     Attributes:
         driver_id (int): Automatically generated unique ID assigned upon object creation.
@@ -944,13 +1042,14 @@ class Driver(Base):
         telegram_id (str): The driver's telegram ID.
 
         championships (list[DriverChampionship]): Championships the driver has participated in.
-        teams (list[DriverAssignment]): Teams the driver has been acquired by.
+        teams (list[DriverContract]): Teams the driver has been acquired by.
         categories (list[DriverCategory]): Categories the driver has participated in.
         race_results (list[RaceResult]): Results made by the driver in his career.
         received_reports (list[Report]): Reports made against the driver during his career.
         reports_made (list[Report]): Reports made by the driver during his career.
         qualifying_results (list[Report]): Results obtained by the driver in qualifying sessions
             during his career.
+        roles (list[DriverRole]): Roles covered by this driver.
     """
 
     __tablename__ = "drivers"
@@ -962,12 +1061,12 @@ class Driver(Base):
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
 
-    teams: Mapped[list[DriverAssignment]] = relationship(
+    teams: Mapped[list[DriverContract]] = relationship(
         back_populates="driver",
-        order_by="DriverAssignment.joined_on",
+        order_by="DriverContract.start_date",
     )
     categories: Mapped[list[DriverCategory]] = relationship(
-        back_populates="driver", order_by=("DriverCategory.joined_on")
+        back_populates="driver", order_by=("DriverCategory.start_date")
     )
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="driver")
     received_penalties: Mapped[list[Penalty]] = relationship(back_populates="driver")
@@ -981,6 +1080,7 @@ class Driver(Base):
     deferred_penalties: Mapped[list[DeferredPenalty]] = relationship(
         back_populates="driver"
     )
+    roles: Mapped[list[DriverRole]] = relationship(back_populates="driver")
 
     def __repr__(self) -> str:
         return f"Driver(psn_id={self.psn_id}, driver_id={self.id})"
@@ -999,7 +1099,7 @@ class Driver(Base):
     def current_team(self) -> Team | None:
         """Returns the team the driver is currently competing with."""
         for team in self.teams:
-            if not team.left_on:
+            if not team.expiry_date:
                 return team.team
         return None
 
@@ -1131,8 +1231,7 @@ class Driver(Base):
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def sportsmanship(self) -> int:
-        """This statistic is calculated based on the seriousness and
-        amount of reports received.
+        """Based on the seriousness and number of reports received.
 
         Returns:
             int: Sportsmanship rating. (0-100)
@@ -1156,8 +1255,8 @@ class Driver(Base):
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def race_pace(self) -> int:
-        """This statistic is calculated based on the average gap from the race winner
-        in all of the races completed by the driver.
+        """Based on the average gap from the race winner in all of the races
+        completed by the driver.
 
         Return:
             int: Race pace score. (40-100)
@@ -1246,13 +1345,13 @@ class Driver(Base):
 
 
 class Team(Base):
-    """This object represents a team.
+    """Represents a team.
 
     Attributes:
         reports_made (list[Report]): Reports made by the team.
         received_reports (list[Report]): Reports received by the team.
 
-        drivers (list[DriverAssignment]): Drivers who are members of the team.
+        drivers (list[DriverContract]): Drivers contracted to the team.
         leader (Driver): Driver who is allowed to make reports for the team.
 
         team_id (int): The team's unique ID.
@@ -1269,9 +1368,9 @@ class Team(Base):
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        back_populates="team", order_by="TeamChampionship.joined_on"
+        back_populates="team", order_by="TeamChampionship.start_date"
     )
-    drivers: Mapped[list[DriverAssignment]] = relationship(back_populates="team")
+    drivers: Mapped[list[DriverContract]] = relationship(back_populates="team")
     reports_made: Mapped[list[Report]] = relationship(
         back_populates="reporting_team",
         foreign_keys=[Report.reporting_team_id],
@@ -1301,9 +1400,9 @@ class Team(Base):
         return None
 
     @property
-    def active_drivers(self) -> list[DriverAssignment]:
+    def active_drivers(self) -> list[DriverContract]:
         """List of drivers who currently have a contract with the team."""
-        return [driver for driver in self.drivers if not driver.left_on]
+        return [driver for driver in self.drivers if not driver.expiry_date]
 
     @property
     def logo_url(self) -> str:
@@ -1316,35 +1415,36 @@ class Team(Base):
         return self.championships[-1]
 
 
-class DriverAssignment(Base):
-    """This object creates an association between a Driver and a Team
+class DriverContract(Base):
+    """Association object between a Driver and a Team.
 
     Attributes:
-        joined_on (date): Date the driver joined the team.
-        left_on (date): Date the driver left the team.
-        bought_for (int): Price the team paid to acquire the driver.
+        start_date (date): Date the driver joined the team.
+        expiry_date (date): Date the driver left the team.
+        acquisition_fee (int): Price the team paid to acquire the driver.
         is_leader (bool): Indicates whether the driver is also the leader of that team.
 
-        id (uuid): Auto-generated UUID assigned upon object creation.
+        id (int): Auto-generated ID assigned upon object creation.
         driver_id (int): Unique ID of the driver joining the team.
         team_id (int): Unique ID of the team acquiring the driver.
+        length (int): Number of seasons the driver is contracted for.
 
         driver (Driver): Driver joining the team.
         team (Team): Team acquiring the driver.
     """
 
-    __tablename__ = "driver_assignments"
-    __table_args__ = (UniqueConstraint("joined_on", "driver_id", "team_id"),)
+    __tablename__ = "driver_contracts"
+    __table_args__ = (UniqueConstraint("start_date", "driver_id", "team_id"),)
 
-    joined_on: Mapped[datetime.date] = mapped_column(
+    start_date: Mapped[datetime.date] = mapped_column(
         Date, server_default=func.now(), default=False, nullable=False
     )
-    left_on: Mapped[datetime.date] = mapped_column(Date)
-    bought_for: Mapped[Optional[int]] = mapped_column(SmallInteger)
-    is_leader: Mapped[bool] = mapped_column(Boolean, default=False)
+    expiry_date: Mapped[datetime.date] = mapped_column(Date)
+    acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    length: Mapped[int] = mapped_column(Integer, nullable=False)
 
     id: Mapped[str] = mapped_column(
-        "assignment_id", UUID(as_uuid=True), primary_key=True, nullable=False
+        "contract_id", Integer, primary_key=True, nullable=False
     )
     driver_id: Mapped[int] = mapped_column(
         ForeignKey(Driver.id), primary_key=True, nullable=False
@@ -1357,11 +1457,30 @@ class DriverAssignment(Base):
     team: Mapped[Team] = relationship(back_populates="drivers")
 
 
+class DriverRole(Base):
+    """Association object between a driver and a role.
+    Drivers can cover multiple roles, and each role grants access to specific permissions.
+
+    driver_id (int): Unique ID of the associated driver.
+    role_id (int): Unique ID of the associated role.
+
+    driver (Driver): Associated Driver object.
+    role (Role): Associated Role object.
+    """
+
+    __tablename__ = "driver_roles"
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+
+    driver: Mapped[Driver] = relationship(back_populates="roles")
+    role: Mapped[Role] = relationship()
+
+
 class DriverCategory(Base):
-    """This object creates a new association between a Driver and a Category.
+    """Association object between a Driver and a Category.
 
     Attributes:
-        joined_on (date): The date on which the driver joined the category.
+        start_date (date): The date on which the driver joined the category.
         left_on (date): The date on which the driver left the category.
         race_number (int): The number used by the driver in the category.
         warnings (int): Number of warnings received in the category.
@@ -1379,7 +1498,7 @@ class DriverCategory(Base):
 
     __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
-    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
+    start_date: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
     left_on: Mapped[datetime.date] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -1399,7 +1518,7 @@ class DriverCategory(Base):
 
 
 class QualifyingResult(Base):
-    """This object represents a single result made by a driver in a qualifying Session.
+    """Represents a single result made by a driver in a qualifying Session.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon
@@ -1459,7 +1578,7 @@ class QualifyingResult(Base):
 
 
 class TeamChampionship(Base):
-    """This class binds a Team and a Championship together.
+    """Association object between a Team and a Championship.
     It allows to keep track of the Championships to which teams have participated,
     while also allowing to add penalties to a team's points tally.
 
@@ -1480,7 +1599,7 @@ class TeamChampionship(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), primary_key=True
     )
-    joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     points: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
@@ -1489,7 +1608,7 @@ class TeamChampionship(Base):
 
 
 class RaceResult(Base):
-    """This object represents a Driver's result in a race.
+    """Represents a Driver's result in a race session.
     Each Round will have multiple RaceResults, one (two if the round has a sprint race)
     for each driver in the Category the Round is registered in.
 
@@ -1587,7 +1706,8 @@ class Participation(enum.Enum):
 
 
 class RoundParticipant(Base):
-    """This object is used to keep track of what"""
+    """Used to keep track of which drivers have given confirmation for
+    participating (or not) to a Round."""
 
     __tablename__ = "round_participants"
 
@@ -1605,14 +1725,40 @@ class RoundParticipant(Base):
 
 
 class Chat(Base):
+    """Represents a chat the bot is in.
+
+    id (int): The actual chat id used by telegram.
+    is_group (bool): True if the chat is a group.
+    name (str): The chat name at the time the bot was added.
+    user_id (int | None): ID of the user who created the chat. None if not
+        a group chat.
+    """
+
     __tablename__ = "chats"
+
     id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     name: Mapped[str] = mapped_column(String)
-    user_id: Mapped[int] = mapped_column(BigInteger)
+    user_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class DeferredPenalty(Base):
+    """Represents a penalty to be applied to the result of next race the penalised
+    driver participates in. The need for this object comes from the fact that
+    sometimes drivers can be penalised without having completed the race they were
+    penalised in. DeferredPenalty objects are also linked to a separate Penalty
+    object which contains all the details about the penalty.
+
+    id (int): Unique ID for this object.
+    penalty_id (int): Unique ID of the Penalty this object is related to.
+    driver_id (int): Unique ID of the Driver who received the penalty.
+    is_applied (bool): True if the penalty was applied.
+
+    penalty (Penalty): Penalty object this DeferredPenalty is related to.
+    driver (Driver): Driver object who received the penalty.
+
+    """
+
     __tablename__ = "deferred_penalties"
 
     id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)

@@ -2,11 +2,10 @@
 This module contains configuration options for the bot, such as commands available
 to different groups of users.
 """
-import json
+
 import os
 from datetime import time
 from decimal import Decimal
-from telegram import User
 
 PARTICIPANT_LIST_OPENING = time(7)
 PARTICIPATION_LIST_REMINDER = time(19)
@@ -21,9 +20,6 @@ LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])
 GROUP_CHAT = int(os.environ["GROUP_CHAT"])
 DEVELOPER_CHAT = int(os.environ["DEVELOPER_CHAT"])
 TEAM_LEADER_CHAT = int(os.environ["TEAM_LEADER_CHAT"])
-ADMINS = json.loads(os.environ["ADMINS"])
-OWNER_ID = int(os.environ["OWNER_ID"])
-OWNER = User(id=OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
 
 GROUP_COMMANDS = (
