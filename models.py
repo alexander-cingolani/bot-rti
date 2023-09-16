@@ -1031,6 +1031,7 @@ class Driver(Base):
         reports_made (list[Report]): Reports made by the driver during his career.
         qualifying_results (list[Report]): Results obtained by the driver in qualifying sessions
             during his career.
+        roles (list[DriverRole]): Roles covered by this driver.
     """
 
     __tablename__ = "drivers"
@@ -1061,6 +1062,7 @@ class Driver(Base):
     deferred_penalties: Mapped[list[DeferredPenalty]] = relationship(
         back_populates="driver"
     )
+    roles: Mapped[list[DriverRole]] = relationship(back_populates="driver")
 
     def __repr__(self) -> str:
         return f"Driver(psn_id={self.psn_id}, driver_id={self.id})"
@@ -1436,6 +1438,25 @@ class DriverAssignment(Base):
     team: Mapped[Team] = relationship(back_populates="drivers")
 
 
+class DriverRole(Base):
+    """Association object between a driver and a role.
+    Drivers can cover multiple roles, and each role grants access to specific permissions.
+
+    driver_id (int): Unique ID of the associated driver.
+    role_id (int): Unique ID of the associated role.
+
+    driver (Driver): Associated Driver object.
+    role (Role): Associated Role object.
+    """
+
+    __tablename__ = "driver_roles"
+    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+
+    driver: Mapped[Driver] = relationship(back_populates="roles")
+    role: Mapped[Role] = relationship()
+
+
 class DriverCategory(Base):
     """Association object between a Driver and a Category.
 
@@ -1686,15 +1707,16 @@ class RoundParticipant(Base):
 
 class Chat(Base):
     """Represents a chat the bot is in.
-    
+
     id (int): The actual chat id used by telegram.
     is_group (bool): True if the chat is a group.
     name (str): The chat name at the time the bot was added.
     user_id (int | None): ID of the user who created the chat. None if not
         a group chat.
     """
+
     __tablename__ = "chats"
-    
+
     id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     name: Mapped[str] = mapped_column(String)
@@ -1707,16 +1729,17 @@ class DeferredPenalty(Base):
     sometimes drivers can be penalised without having completed the race they were
     penalised in. DeferredPenalty objects are also linked to a separate Penalty
     object which contains all the details about the penalty.
-    
+
     id (int): Unique ID for this object.
     penalty_id (int): Unique ID of the Penalty this object is related to.
     driver_id (int): Unique ID of the Driver who received the penalty.
     is_applied (bool): True if the penalty was applied.
-    
+
     penalty (Penalty): Penalty object this DeferredPenalty is related to.
     driver (Driver): Driver object who received the penalty.
-    
+
     """
+
     __tablename__ = "deferred_penalties"
 
     id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)
