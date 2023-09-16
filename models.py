@@ -143,8 +143,7 @@ class Game(Base):
 
 class PointSystem(Base):
     """
-    Represents a point system.
-    Each point system can be associated with multiple Sessions.
+    Represents a point system that can be used for race or qualifying sessions.
 
     Attributes:
         id (int): A unique ID.
@@ -165,7 +164,7 @@ class PointSystem(Base):
 
 
 class Permission(Base):
-    """Represents a permission granted to one or more roles in the team.
+    """Represents a permission that can be granted to one or more roles in the team.
 
     id (int): Unique ID for the permission.
     name (str): Name of the permission. E.g. "report-filing"
@@ -178,7 +177,7 @@ class Permission(Base):
 
 
 class Role(Base):
-    """Represents a role in the organization chart of the team.
+    """Represents a role in the organizational chart of the team.
 
     id (int): Unique ID for the role.
     name (str): Name of the role. E.g. "team-leader"
@@ -215,7 +214,7 @@ class CarClass(Base):
     """Represents an in-game car class.
     CarClass records are meant to be reused multiple times for different categories
     and championships, their function is mainly to identify which type of car is
-    assigned to drivers within the same category, this therefore allows to calculate
+    assigned to drivers within the same category, this allows to calculate
     statistics separately from one class and another.
 
     Attributes:
@@ -255,7 +254,7 @@ class CarClass(Base):
 
 
 class Car(Base):
-    """Represents a car within a car class.
+    """Represents a specific car make and model within a car class.
 
     id (int): The car's unique id.
     name (str): The car's name.
@@ -278,13 +277,14 @@ class Car(Base):
 
 
 class Circuit(Base):
-    """Represents a circuit within the game.
+    """Represents a circuit within a game.
 
     circuit_id (int): The circuit's unique ID.
     name (str): The circuit's name.
     abbreviated_name (str): Shorter version of the circuit name.
     game_id (int): The ID of the game this track is in.
 
+    configurations (list[CircuitConfiguration]): All the configurations available in the game.
     rounds (list[Round]): The rounds that took place at this circuit.
     game (Game): The game this track is in.
     """
@@ -531,7 +531,7 @@ class Category(Base):
 
 class Round(Base):
     """Represents a round in the calendar of a specific category.
-    It is used to group RaceResults and QualifyingResults registered on a specific date.
+    All RaceResults and QualifyingResults are linked to their Round.
 
     Attributes:
         id (int): Automatically generated unique ID assigned upon object creation.
