@@ -563,8 +563,10 @@ class Round(Base):
         ForeignKey(Championship.id), nullable=False
     )
     circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), nullable=False)
-    configuration_id: Mapped[CircuitConfiguration] = mapped_column(ForeignKey(CircuitConfiguration.id), nullable=False)
-    
+    configuration_id: Mapped[CircuitConfiguration] = mapped_column(
+        ForeignKey(CircuitConfiguration.id), nullable=False
+    )
+
     championship: Mapped[Championship] = relationship(back_populates="rounds")
     category: Mapped[Category] = relationship(back_populates="rounds")
     circuit: Mapped[Circuit] = relationship(back_populates="rounds")

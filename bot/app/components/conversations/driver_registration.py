@@ -30,6 +30,7 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 
 OWNER = User(id=config.OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
 
+
 async def driver_registration_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
