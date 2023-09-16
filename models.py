@@ -7,7 +7,6 @@ from __future__ import annotations
 import datetime
 import enum
 import os
-import uuid
 from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
@@ -35,7 +34,6 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 DOMAIN = os.environ.get("ZONE")
@@ -915,7 +913,7 @@ class Report(Base):
     the report has been reviewed.
 
     Attributes:
-        id (uuid4): Automatically generated unique ID assigned upon report creation.
+        id (int): Automatically generated unique ID assigned upon report creation.
         number (int): The number of the report in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
         reason (str): The reason provided by the reporter for making the report.
@@ -948,8 +946,8 @@ class Report(Base):
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        "report_id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[int] = mapped_column(
+        "report_id", Integer, primary_key=True
     )
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
@@ -1406,11 +1404,11 @@ class DriverContract(Base):
         acquisition_fee (int): Price the team paid to acquire the driver.
         is_leader (bool): Indicates whether the driver is also the leader of that team.
 
-        id (uuid): Auto-generated UUID assigned upon object creation.
+        id (int): Auto-generated ID assigned upon object creation.
         driver_id (int): Unique ID of the driver joining the team.
         team_id (int): Unique ID of the team acquiring the driver.
         length (int): Number of seasons the driver is contracted for.
-        
+
         driver (Driver): Driver joining the team.
         team (Team): Team acquiring the driver.
     """
@@ -1426,7 +1424,7 @@ class DriverContract(Base):
     length: Mapped[int] = mapped_column(Integer, nullable=False)
 
     id: Mapped[str] = mapped_column(
-        "contract_id", UUID(as_uuid=True), primary_key=True, nullable=False
+        "contract_id", Integer, primary_key=True, nullable=False
     )
     driver_id: Mapped[int] = mapped_column(
         ForeignKey(Driver.id), primary_key=True, nullable=False
