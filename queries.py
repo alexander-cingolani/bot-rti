@@ -18,7 +18,7 @@ from models import (
     Chat,
     DeferredPenalty,
     Driver,
-    DriverAssignment,
+    DriverContract,
     DriverCategory,
     Penalty,
     QualifyingResult,
@@ -79,9 +79,9 @@ def get_team_leaders(
 
     statement = (
         select(Driver)
-        .join(DriverAssignment, DriverAssignment.driver_id == Driver.id)
-        .join(Team, DriverAssignment.team_id == Team.id)
-        .where(DriverAssignment.is_leader is True)  # type: ignore
+        .join(DriverContract, DriverContract.driver_id == Driver.id)
+        .join(Team, DriverContract.team_id == Team.id)
+        .where(DriverContract.is_leader is True)  # type: ignore
         .join(TeamChampionship, TeamChampionship.team_id == Team.id)
         .where(TeamChampionship.championship_id == championship_id)
     )
