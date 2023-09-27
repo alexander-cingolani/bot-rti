@@ -371,7 +371,9 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         if query.lower() in driver.psn_id.lower():
             statistics = driver.stats()
 
-            unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+            unique_teams = ",".join(
+                set(map(lambda team: team.team.name, driver.contracts))
+            )
             current_team = driver.current_team()
             if not current_team:
                 team_text = "/"
@@ -999,7 +1001,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.contracts)))
     current_team = driver.current_team()
     if not current_team:
         team_text = "/"

@@ -162,7 +162,7 @@ def get_standings_with_results(category_id: int):
         team = driver.current_team()
 
         if not team:
-            team = driver.teams[-1].team
+            team = driver.contracts[-1].team
 
         driver_summary = {
             "driver_id": driver.id,
