@@ -1365,7 +1365,9 @@ class Team(Base):
     championships: Mapped[list[TeamChampionship]] = relationship(
         back_populates="team", order_by="TeamChampionship.start"
     )
-    drivers: Mapped[list[DriverContract]] = relationship(back_populates="team")
+    contracted_drivers: Mapped[list[DriverContract]] = relationship(
+        back_populates="team"
+    )
     reports_made: Mapped[list[Report]] = relationship(
         back_populates="reporting_team",
         foreign_keys=[Report.reporting_team_id],
@@ -1389,15 +1391,15 @@ class Team(Base):
     @property
     def leader(self) -> Driver | None:
         """The leader of this team."""
-        for driver in self.active_drivers:
-            if driver.is_leader:
-                return driver.driver
+        for contract in self.active_drivers:
+            if contract.role.name == "team-leader":
+                return contract.driver
         return None
 
     @property
     def active_drivers(self) -> list[DriverContract]:
         """List of drivers who currently have a contract with the team."""
-        return [driver for driver in self.drivers if not driver.end]
+        return [driver for driver in self.contracted_drivers if not driver.end]
 
     @property
     def logo_url(self) -> str:
@@ -1484,7 +1486,7 @@ class DriverContract(Base):
     end: Mapped[datetime.date | None] = mapped_column(Date)
     acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
     length: Mapped[int] = mapped_column(Integer, nullable=False)
-    role_id: Mapped[int] = mapped_column(ForeignKey(TeamRole.id), nullable=False)
+    role_id: Mapped[int] = mapped_column("team_role_id", ForeignKey(TeamRole.id), nullable=False)
 
     id: Mapped[str] = mapped_column(
         "contract_id", Integer, primary_key=True, nullable=False
@@ -1497,7 +1499,7 @@ class DriverContract(Base):
     )
 
     driver: Mapped[Driver] = relationship(back_populates="contracts")
-    team: Mapped[Team] = relationship(back_populates="drivers")
+    team: Mapped[Team] = relationship(back_populates="contracted_drivers")
     role: Mapped[TeamRole] = relationship()
 
 
