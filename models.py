@@ -695,7 +695,6 @@ class Session(Base):
     weather: Mapped[str] = mapped_column(String(60))
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
-    fastest_lap_points: Mapped[float] = mapped_column(Numeric(precision=1))
     round_id: Mapped[int] = mapped_column(ForeignKey(Round.id))
     point_system_id: Mapped[int] = mapped_column(
         ForeignKey(PointSystem.id), nullable=False
@@ -1723,7 +1722,7 @@ class RaceResult(Base):
             return 0
 
         if not self.category.split_point:
-            return float(self.session.fastest_lap_points)
+            return float(self.category.fastest_lap_points)
 
         if self.position <= self.category.split_point:
             return float(self.category.fastest_lap_points.split()[0])
