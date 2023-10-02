@@ -361,7 +361,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     of each of them.
     """
 
-    query = update.inline_query.query
+    query = update.inline_query.query.lower()
     session = DBSession()
     results: list[InlineQueryResultArticle] = []
     championship = get_championship(session)
@@ -370,7 +370,15 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     for driver in championship.driver_list:
-        if query.lower() in driver.psn_id.lower():
+        
+        match = False
+        if driver.psn_id:
+            if query in driver.psn_id.lower():
+                match = True
+        elif query in driver.full_name.lower():
+            match = True
+            
+        if match:
             statistics = driver.stats()
 
             unique_teams = ",".join(
@@ -415,10 +423,10 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
-                title=driver.psn_id,
+                title=driver.full_name,
                 input_message_content=InputTextMessageContent(
                     (
-                        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+                        f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name}</b></i>\n\n"
                         + driver_rating_text
                         + f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
