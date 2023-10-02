@@ -188,6 +188,8 @@ class Role(Base):
     id: Mapped[int] = mapped_column("role_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
+    permissions: Mapped[list[RolePermission]] = relationship(back_populates="role")
+
 
 class RolePermission(Base):
     """Association object between a role and a permission.
@@ -367,7 +369,6 @@ class Category(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), nullable=False
     )
-    car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
 
     rounds: Mapped[list[Round]] = relationship(
         back_populates="category", order_by="Round.date"
@@ -381,7 +382,6 @@ class Category(Base):
     )
     game: Mapped[Game] = relationship()
     championship: Mapped[Championship] = relationship(back_populates="categories")
-    car_class: Mapped[CarClass] = relationship()
 
     def __repr__(self) -> str:
         return f"Category(id={self.id},name={self.name})"
@@ -424,7 +424,7 @@ class Category(Base):
 
     def active_drivers(self) -> list[DriverCategory]:
         """Returns list of drivers who are currently competing in this category."""
-        return [driver for driver in self.drivers if not driver.leave]
+        return [driver for driver in self.drivers if not driver.left_on]
 
     def _sort_drivers(
         self, standings: dict[Driver, tuple[Decimal, int, int]]
@@ -1065,7 +1065,7 @@ class Driver(Base):
         order_by="DriverContract.start",
     )
     categories: Mapped[list[DriverCategory]] = relationship(
-        back_populates="driver", order_by=("DriverCategory.start")
+        back_populates="driver", order_by=("DriverCategory.joined_on")
     )
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="driver")
     received_penalties: Mapped[list[Penalty]] = relationship(back_populates="driver")
@@ -1100,6 +1100,13 @@ class Driver(Base):
         for contract in self.contracts:
             if not contract.end:
                 return contract.team
+        return None
+
+    def current_contract(self) -> DriverContract | None:
+        """Returns the driver's current contract."""
+        for contract in self.contracts:
+            if not contract.end:
+                return contract
         return None
 
     def current_category(self) -> DriverCategory | None:
@@ -1147,7 +1154,7 @@ class Driver(Base):
     def licence_points(self) -> int:
         """The amount of licence points this driver has currently."""
         for driver_category in self.categories:
-            if not driver_category.leave:
+            if not driver_category.left_on:
                 return driver_category.licence_points
         return 0
 
@@ -1157,14 +1164,14 @@ class Driver(Base):
         currently competing in.
         """
         for driver_category in self.categories:
-            if not driver_category.leave:
+            if not driver_category.left_on:
                 return driver_category.warnings
         return 0
 
     @property
     def is_active(self) -> bool:
         """A driver is considered active if he is currently competing in a championship."""
-        return not self.categories[-1].leave
+        return not self.categories[-1].left_on
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def consistency(self) -> int:
@@ -1337,6 +1344,15 @@ class Driver(Base):
 
         return statistics
 
+    def has_permission(self, permission_id: int) -> bool:
+        """Given a permission ID, returns True if the driver has a role that
+        grants him that permission."""
+        for role in self.roles:
+            for permission in role.role.permissions:
+                if permission.permission_id == permission_id:
+                    return True
+        return False
+
 
 class Team(Base):
     """Represents a team.
@@ -1436,6 +1452,7 @@ class TeamRole(Base):
     id: Mapped[int] = mapped_column("team_role_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
+    permissions: Mapped[list[TeamRolePermission]] = relationship(back_populates="team_role")
 
 class TeamRolePermission(Base):
     """Association object between a role and a permission.
@@ -1450,12 +1467,12 @@ class TeamRolePermission(Base):
 
     __tablename__ = "team_role_permissions"
 
-    team_role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+    team_role_id: Mapped[int] = mapped_column(ForeignKey(TeamRole.id), primary_key=True)
     team_permission_id: Mapped[int] = mapped_column(
         ForeignKey(TeamPermission.id), primary_key=True
     )
 
-    team_role: Mapped[TeamRole] = relationship()
+    team_role: Mapped[TeamRole] = relationship(back_populates="permissions")
     team_permission: Mapped[TeamPermission] = relationship()
 
 
@@ -1463,7 +1480,7 @@ class DriverContract(Base):
     """Association object between a Driver and a Team.
 
     Attributes:
-        start (date): The starting date of the contract.
+        start_date (date): The starting date of the contract.
         end (date | None): The date the contract ends.
         acquisition_fee (int): Price the team paid to acquire the driver.
 
@@ -1485,7 +1502,9 @@ class DriverContract(Base):
     end: Mapped[datetime.date | None] = mapped_column(Date)
     acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
     length: Mapped[int] = mapped_column(Integer, nullable=False)
-    role_id: Mapped[int] = mapped_column("team_role_id", ForeignKey(TeamRole.id), nullable=False)
+    role_id: Mapped[int] = mapped_column(
+        "team_role_id", ForeignKey(TeamRole.id), nullable=False
+    )
 
     id: Mapped[str] = mapped_column(
         "contract_id", Integer, primary_key=True, nullable=False
@@ -1500,6 +1519,13 @@ class DriverContract(Base):
     driver: Mapped[Driver] = relationship(back_populates="contracts")
     team: Mapped[Team] = relationship(back_populates="contracted_drivers")
     role: Mapped[TeamRole] = relationship()
+    
+    def has_permission(self, team_permission_id: int) -> bool:
+        """Returns true if the driver has the required permission."""
+        for permission in self.role.permissions:
+            if permission.team_permission_id == team_permission_id:
+                return True
+        return False
 
 
 class DriverRole(Base):
@@ -1525,8 +1551,8 @@ class DriverCategory(Base):
     """Association object between a Driver and a Category.
 
     Attributes:
-        start (date): The date on which the driver joined the category.
-        leave (date): The date on which the driver left the category.
+        joined_on (date): The date on which the driver joined the category.
+        left_on (date): The date on which the driver left the category.
         race_number (int): The number used by the driver in the category.
         warnings (int): Number of warnings received in the category.
         licence_points: Number of points remaining on the driver's licence.
@@ -1543,8 +1569,8 @@ class DriverCategory(Base):
 
     __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
-    start: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
-    leave: Mapped[datetime.date] = mapped_column(Date)
+    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
+    left_on: Mapped[datetime.date] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(

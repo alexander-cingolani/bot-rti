@@ -20,6 +20,7 @@ from models import (
     Driver,
     DriverContract,
     DriverCategory,
+    DriverRole,
     Penalty,
     QualifyingResult,
     RaceResult,
@@ -59,7 +60,7 @@ def get_championship(
 
 def get_team_leaders(
     session: SQLASession, championship_id: int | None = None
-) -> list[Driver] | None:
+) -> list[Driver]:
     """Returns a list of the team leaders in the championship specified by championship_id.
     If championship_id is not given, the function defaults to the latest championship.
 
@@ -75,13 +76,13 @@ def get_team_leaders(
         if championship:
             championship_id = championship.id
         else:
-            return None
+            return []
 
     statement = (
         select(Driver)
         .join(DriverContract, DriverContract.driver_id == Driver.id)
         .join(Team, DriverContract.team_id == Team.id)
-        .where(DriverContract.is_leader is True)  # type: ignore
+        .where(DriverContract.role_id == 1)
         .join(TeamChampionship, TeamChampionship.team_id == Team.id)
         .where(TeamChampionship.championship_id == championship_id)
     )
@@ -89,8 +90,21 @@ def get_team_leaders(
     result = session.execute(statement).all()
     if result:
         return [row[0] for row in result]
-    return None
+    return []
 
+
+def get_admins(session: SQLASession) -> list[Driver]:
+    statement = (
+        select(Driver)
+        .join(DriverRole, Driver.id == DriverRole.driver_id)
+        .where(DriverRole.role_id == 4)
+    )
+
+    result = session.execute(statement).all()
+    
+    if result:
+        return [row[0] for row in result]
+    return [] 
 
 def get_reports(
     session: SQLASession,

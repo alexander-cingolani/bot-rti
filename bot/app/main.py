@@ -52,6 +52,7 @@ from telegram.ext import (
 from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
     delete_chat,
+    get_admins,
     get_all_drivers,
     get_championship,
     get_driver,
@@ -83,6 +84,7 @@ async def post_init(application: Application) -> None:
 
     session = DBSession()
     leaders = get_team_leaders(session)
+    admins = get_admins(session)
     session.close()
 
     # Set base user commands
@@ -103,10 +105,10 @@ async def post_init(application: Application) -> None:
                 pass
 
     # Set admin commands in group and private chats
-    for admin_id in config.ADMINS:
+    for admin in admins:
         try:
             await application.bot.set_my_commands(
-                config.ADMIN_COMMANDS, BotCommandScopeChat(admin_id)
+                config.ADMIN_COMMANDS, BotCommandScopeChat(admin.telegram_id)
             )
         except BadRequest:
             pass
@@ -120,7 +122,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.effective_user.send_message(
             text=(
                 "Problemi, problemi, problemi! 😓\n"
-                f"Si è verificato un errore inaspettato, {config.OWNER.mention_html()} "
+                f"Si è verificato un errore inaspettato, lo sviluppatore "
                 "è stato informato del problema e cercherà di risolverlo il prima possibile."
             )
         )
@@ -254,7 +256,7 @@ async def greet_new_chat_members(
                 f"Benvenuto {user.mention_html()}!\n\n"
                 "Sono il bot di Racing Team Italia, per sfruttare a pieno le mie funzionalità, "
                 "registrati scrivendomi /registrami in chat privata."
-                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a {config.OWNER.mention_html()}."
+                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a un admin."
             )
             button_row = [
                 InlineKeyboardButton(
@@ -320,7 +322,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message providing the developer's contact details for help."""
     text = (
-        f"Questo bot è gestito da {config.OWNER.mention_html()},"
+        f"Questo bot è gestito da @alex_cingolani,"
         " se stai riscontrando un problema non esitare a contattarlo."
     )
     await update.message.reply_text(text)
