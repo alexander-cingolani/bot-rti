@@ -1163,7 +1163,19 @@ class Driver(Base):
             if not driver_category.left_on:
                 return driver_category.licence_points
         return 0
-
+    
+    @property
+    def full_name(self) -> str:
+        if self.name and self.surname:
+            return f"{self.name} {self.surname}"
+        return self.psn_id
+        
+    @property
+    def abbreviated_full_name(self) -> str:
+        if self.name and self.surname:
+            return f"{self.name[0]}. {self.surname}"
+        return self.psn_id
+    
     @property
     def warnings(self) -> int:
         """Returns the warnings received by the driver in the category he is
