@@ -1037,7 +1037,10 @@ class Driver(Base):
 
     Attributes:
         driver_id (int): Automatically generated unique ID assigned upon object creation.
-        psn_id (str): The driver's Playstation ID (max 16 characters).
+        name (str): The driver's real name.
+        surname (str): The driver's surname.
+        rre_id (int | None): The driver's RaceRoom ID.
+        psn_id (str | None): The driver's Playstation ID (max 16 characters).
         telegram_id (str): The driver's telegram ID.
 
         championships (list[DriverChampionship]): Championships the driver has participated in.
@@ -1055,7 +1058,10 @@ class Driver(Base):
     __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
     id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
-    psn_id: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    surname: Mapped[str] = mapped_column(String, nullable=False)
+    rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
+    psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
     mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
     _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
@@ -1452,7 +1458,10 @@ class TeamRole(Base):
     id: Mapped[int] = mapped_column("team_role_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
-    permissions: Mapped[list[TeamRolePermission]] = relationship(back_populates="team_role")
+    permissions: Mapped[list[TeamRolePermission]] = relationship(
+        back_populates="team_role"
+    )
+
 
 class TeamRolePermission(Base):
     """Association object between a role and a permission.
@@ -1519,7 +1528,7 @@ class DriverContract(Base):
     driver: Mapped[Driver] = relationship(back_populates="contracts")
     team: Mapped[Team] = relationship(back_populates="contracted_drivers")
     role: Mapped[TeamRole] = relationship()
-    
+
     def has_permission(self, team_permission_id: int) -> bool:
         """Returns true if the driver has the required permission."""
         for permission in self.role.permissions:
