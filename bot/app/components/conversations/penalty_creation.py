@@ -27,6 +27,7 @@ from telegram.ext import (
 from models import Category, Championship, Driver, Penalty, Report
 from queries import (
     get_championship,
+    get_driver,
     get_last_penalty_number,
     get_reports,
     save_and_apply_penalty,
@@ -57,11 +58,20 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Allows admins to create penalties without a pre-existing report made by a leader."""
 
-    if update.effective_user.id not in config.ADMINS:
-        await update.message.reply_text(text="Questo comando è riservato agli admin.")
+    sqla_session = DBSession()
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    if not driver:
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
+        )
         return ConversationHandler.END
 
-    sqla_session = DBSession()
+    if not driver.has_permission(config.MANAGE_PENALTIES):
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
+        )
+        return ConversationHandler.END
+
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
 
@@ -280,11 +290,7 @@ async def report_processing_entry_point(
 
     if update.effective_user.id not in config.ADMINS:
         text = "Questa funzione è riservata agli admin di RTI.\n"
-        button = InlineKeyboardButton(
-            text="Chiedi l'autorizzazione", url=f"tg://user?id={config.OWNER_ID}"
-        )
-        reply_markup = InlineKeyboardMarkup([[button]])
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await update.message.reply_text(text)
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END

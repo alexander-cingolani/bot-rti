@@ -28,8 +28,6 @@ engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
-OWNER = User(id=config.OWNER_ID, first_name="Alexander Cingolani", is_bot=False)
-
 async def driver_registration_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
@@ -88,7 +86,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato con questo ID.\n"
                 f"Se sei sicuro che {update.message.text} si tratti del tuo ID, contatta "
-                f"{OWNER.mention_html(OWNER.full_name)} per risolvere il problema."
+                f"un amministratore per risolvere il problema."
             )
         else:
             driver_obj.telegram_id = update.effective_user.id
@@ -148,7 +146,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato con questo ID."
                 f"Se sei sicuro che {user_data['suggested_driver']} sia il tuo ID, "
-                f"contatta {OWNER.mention_html(OWNER.full_name)}"
+                f"contatta un amministratore."
             )
             sqla_session.close()
             user_data.clear()

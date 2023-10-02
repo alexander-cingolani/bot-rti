@@ -26,7 +26,7 @@ from telegram.ext import (
     filters,
 )
 
-from models import Category, Report, Round
+from models import Category, Driver, Report, Round, Team
 from queries import (
     delete_report,
     get_championship,
@@ -66,7 +66,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
     user_data["categories"] = {}
-
+    
     driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
     if not driver:
         await update.message.reply_text(
@@ -76,26 +76,25 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data.clear()
         return ConversationHandler.END
 
-    driver_team = driver.current_team()
-    if not driver_team:
+    current_contract = driver.current_contract()
+    if not current_contract:
         await update.message.reply_text(
-            "Questa funzione è riservata ai capi scuderia, "
-            "e al momento non fai parte di una scuderia."
+            "Per usare questa funzione devi far parte di una scuderia."
         )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
-    if driver_team.leader != driver:
+    if not current_contract.has_permission(config.FILE_REPORT):
         await update.message.reply_text(
-            text="Questa funzione è riservata ai capi scuderia."
+            text="Non hai il permesso necessario per fare una segnalazione."
         )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
-    user_data["leader"] = driver
-
+    user_data["reporter"] = driver
+    user_data["reporting_team"] = current_contract.team
     if not championship:
         await update.message.reply_text(
             "Il campionato è terminato, non è più possibile effettuare segnalazioni."
@@ -193,10 +192,9 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_data = cast(dict[str, Any], context.user_data)
     user_data.clear()
     sqla_session = DBSession()
-    user_data["leader"] = get_driver(sqla_session, telegram_id=user.id)
-    user_data["sqla_session"] = sqla_session
+    driver = get_driver(sqla_session, telegram_id=user.id)
 
-    if not user_data["leader"]:
+    if not driver:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"
         )
@@ -204,23 +202,28 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         user_data.clear()
         return ConversationHandler.END
 
-    if not user_data["leader"].is_leader:
-        text = "Solamente i capi scuderia possono effettuare segnalazioni."
-        reply_markup = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        text="Chiedi il permesso",
-                        url=f"tg://user?id={config.OWNER}",
-                    )
-                ]
-            ]
+    current_contract = driver.current_contract()
+    if not current_contract:
+        await update.message.reply_text(
+            "Per usare questa funzione devi far parte di una scuderia."
         )
+        sqla_session.close()
+        user_data.clear()
+        return ConversationHandler.END
+        
+
+    if not current_contract.has_permission(config.FILE_REPORT):
+        text = "Non hai il permesso per fare una segnalazione."
+
         await update.message.reply_text(text=text, reply_markup=reply_markup)
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
+    user_data["reporter"] = driver
+    user_data["reporting_team"] = current_contract.team
+    user_data["sqla_session"] = sqla_session
+    
     championship = get_championship(sqla_session)
 
     if not championship:
@@ -321,10 +324,10 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     text = "Chi è la vittima?"
     buttons: list[InlineKeyboardButton] = []
-    for i, driver in enumerate(user_data["leader"].current_team().active_drivers):
+    for i, driver in enumerate(user_data["reporting_team"].active_drivers):
         driver = driver.driver
         driver_alias = f"d{i}"
-
+        # Only list the drivers who are in the specified category
         if driver_category := driver.current_category():
             if driver_category.category_id == user_data["category"].category_id:
                 user_data["drivers"][driver_alias] = driver
@@ -355,6 +358,8 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     chat_data = cast(dict[str, Any], context.chat_data)
     user_data = cast(dict[str, Any], context.user_data)
 
+    reporting_team = cast(Team, user_data["reporting_team"])
+    
     if (
         not getattr(update.callback_query, "data", "").isdigit()
         and user_data["report"].session.is_quali
@@ -363,14 +368,13 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     text = "Chi è la vittima?"
     buttons: list[InlineKeyboardButton] = []
-    for i, driver in enumerate(user_data["category"].active_drivers()):
-        driver = driver.driver
+    for i, driver_contract in enumerate(reporting_team.active_drivers):
+        driver = driver_contract.driver
         driver_alias = f"d{i}"
-        if driver.current_team().leader.driver_id == user_data["leader"].driver_id:
-            user_data["drivers"][driver_alias] = driver
-            buttons.append(
-                InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
-            )
+        user_data["drivers"][driver_alias] = driver
+        buttons.append(
+            InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
+        )
 
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
@@ -401,19 +405,22 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the victim and asks for the reported driver."""
     user_data = cast(dict[str, Any], context.user_data)
-
+    category = cast(Category, user_data["category"])
+    
+    # Save victim
     if not update.callback_query.data.isdigit():
         user_data["report"].reporting_driver = user_data["drivers"][
             update.callback_query.data
         ]
 
+    # Ask which driver to report
     text = "Chi ritieni essere il colpevole?"
     buttons: list[InlineKeyboardButton] = []
     user_data["drivers"] = {}
-    for i, driver in enumerate(user_data["category"].active_drivers()):
+    for i, driver in enumerate(category.active_drivers()):
         driver = driver.driver
         driver_alias = f"d{i}"
-        if driver.current_team().leader != user_data["leader"]:
+        if driver.current_team() != user_data["reporting_team"]:
             user_data["drivers"][driver_alias] = driver
             buttons.append(
                 InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
@@ -585,7 +592,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     report.category = category
     report.round = championship_round
     report.reported_team = report.reported_driver.current_team()  # type: ignore
-    report.reporting_team = report.reporting_driver.current_team()  # type: ignore
+    report.reporting_team = user_data["reporting_team"]
     report.number = (
         get_last_report_number(sqla_session, category.id, report.round.id) + 1
     )
@@ -603,17 +610,18 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     try:
         sqla_session.add(report)
         sqla_session.commit()
+        
     except IntegrityError:
         os.remove(report_document_name)
         await message.delete()
         await update.callback_query.edit_message_text(
             "Problemi, problemi, problemi! 😓\n"
-            f"Questo errore è dovuto all'incompetenza di {config.OWNER.mention_html()}.\n"
-            "Non ci pensare due volte prima di insultarlo in chat."
+            f"Si è verificato un errore inaspettato.."
         )
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
+    
     callback_data = (
         f"withdraw_late_report_{report.id}"
         if chat_data.get("late_report")
