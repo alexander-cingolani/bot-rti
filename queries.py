@@ -301,6 +301,24 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     session.commit()
 
 
+def _update_ratings(results: list[RaceResult]) -> None:
+    """Updates the driver ratings"""
+    ranks: list[int] = []
+    rating_groups: list[tuple[ts.Rating]] = []
+    race_results: list[RaceResult] = []
+    for result in results:
+        driver: Driver = result.driver
+        if result.participated:
+            rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
+            ranks.append(result.position)
+            race_results.append(result)
+
+    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
+
+    for rating_group, result in zip(rating_groups, race_results):
+        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
+        result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
+
 def save_results(
     session: SQLASession,
     qualifying_results: list[QualifyingResult],
@@ -324,6 +342,7 @@ def save_results(
     # Calculates points earned across all race sessions by each driver.
     for race_session in races:
         session.add_all(race_session.race_results)
+        _update_ratings(race_session.race_results)
         for race_result in race_session.race_results:
             points_earned = race_result.points_earned
             driver_points[race_result.driver] += points_earned

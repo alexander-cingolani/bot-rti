@@ -1,5 +1,5 @@
 """
-This module contains the driver ranking function.
+This module is for recalculating ratings in the database from scratch.
 """
 from decimal import Decimal
 import os
@@ -8,7 +8,7 @@ import trueskill as ts  # type: ignore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, RaceResult
+from models import RaceResult
 from queries import get_championship
 
 TrueSkillEnv = ts.TrueSkill(
@@ -21,25 +21,6 @@ if not DB_URL:
 engine = create_engine(DB_URL)
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
-
-
-def update_ratings(results: list[RaceResult]) -> None:
-    """Updates the driver ratings"""
-    ranks: list[int] = []
-    rating_groups: list[tuple[ts.Rating]] = []
-    race_results: list[RaceResult] = []
-    for result in results:
-        driver: Driver = result.driver
-        if result.participated:
-            rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
-            ranks.append(result.position)
-            race_results.append(result)
-
-    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
-
-    for rating_group, result in zip(rating_groups, race_results):
-        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
-        result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
 def recalculate_ratings():

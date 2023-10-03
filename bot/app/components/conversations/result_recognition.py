@@ -10,7 +10,6 @@ from io import BytesIO
 from typing import Any, cast
 
 from app import config
-from app.components.driver_ranking import update_ratings
 from app.components.results_processing import (
     Result,
     image_to_results,
@@ -434,9 +433,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     penalty.is_applied = True
 
     user_data["round"].is_completed = True
-
-    for results in sessions_results.values():
-        update_ratings(results)
 
     save_results(user_data["sqla_session"], quali_results, sessions_results)
 
