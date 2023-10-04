@@ -651,13 +651,13 @@ class Round(Base):
         return None
 
     @property
-    def long_race(self) -> Session | None:
+    def long_race(self) -> Session:
         """The Session object corresponding to this round's long race."""
         for session in self.sessions:
             name = session.name.lower()
             if "gara" == name or "2" in name or "lunga" in name:
                 return session
-        return None
+        raise RuntimeError("Round does not have a race session.")
 
 
 class Session(Base):
@@ -1396,7 +1396,7 @@ class Team(Base):
     credits: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
 
     championships: Mapped[list[TeamChampionship]] = relationship(
-        back_populates="team", order_by="TeamChampionship.start"
+        back_populates="team", order_by="TeamChampionship.joined_on"
     )
     contracted_drivers: Mapped[list[DriverContract]] = relationship(
         back_populates="team"
@@ -1691,7 +1691,7 @@ class TeamChampionship(Base):
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), primary_key=True
     )
-    start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    joined_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     penalty_points: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     points: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
