@@ -4,8 +4,10 @@ such as Reports, Categories and Drivers.
 """
 
 from collections import defaultdict
+from decimal import Decimal
 
 import sqlalchemy as sa
+import trueskill as ts
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc, select, update
 from sqlalchemy.exc import MultipleResultsFound
@@ -18,8 +20,8 @@ from models import (
     Chat,
     DeferredPenalty,
     Driver,
-    DriverContract,
     DriverCategory,
+    DriverContract,
     DriverRole,
     Penalty,
     QualifyingResult,
@@ -29,6 +31,10 @@ from models import (
     Session,
     Team,
     TeamChampionship,
+)
+
+TrueSkillEnv = ts.TrueSkill(
+    draw_probability=0,
 )
 
 
@@ -101,10 +107,11 @@ def get_admins(session: SQLASession) -> list[Driver]:
     )
 
     result = session.execute(statement).all()
-    
+
     if result:
         return [row[0] for row in result]
-    return [] 
+    return []
+
 
 def get_reports(
     session: SQLASession,
@@ -308,6 +315,7 @@ def _update_ratings(results: list[RaceResult]) -> None:
     race_results: list[RaceResult] = []
     for result in results:
         driver: Driver = result.driver
+
         if result.participated:
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
             ranks.append(result.position)
@@ -318,6 +326,7 @@ def _update_ratings(results: list[RaceResult]) -> None:
     for rating_group, result in zip(rating_groups, race_results):
         result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
         result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
+
 
 def save_results(
     session: SQLASession,
@@ -340,10 +349,10 @@ def save_results(
         team_championship.points += points_earned
 
     # Calculates points earned across all race sessions by each driver.
-    for race_session in races:
-        session.add_all(race_session.race_results)
-        _update_ratings(race_session.race_results)
-        for race_result in race_session.race_results:
+    for _, race_results in races.items():
+        session.add_all(race_results)
+        _update_ratings(race_results)
+        for race_result in race_results:
             points_earned = race_result.points_earned
             driver_points[race_result.driver] += points_earned
 
