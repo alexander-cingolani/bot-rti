@@ -9,7 +9,7 @@ more-itertools==9.1.0
 
 python-telegram-bot[job-queue]==20.3
 
-Pillow==9.3.0
+Pillow==10.0.1
 
 mypy
 mypy-extensions
