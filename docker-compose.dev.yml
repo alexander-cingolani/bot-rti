@@ -61,12 +61,11 @@ services:
       dockerfile: ./api/Dockerfile
 
     ports:
-      - "8087:8087"
+      - "8087:80"
 
     depends_on:
       - db
-      #  - cloudflare-ddns
-
+      
     env_file:
       - .env
     
