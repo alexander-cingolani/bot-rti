@@ -298,11 +298,6 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     if not result:
         raise ValueError("QualifyingResult not in database.")
 
-    for driver_category in penalty.driver.categories:
-        if driver_category.category_id == penalty.category.id:
-            driver_category.licence_points -= penalty.licence_points
-            driver_category.warnings += penalty.warnings
-
     # penalty.reported_driver_id = penalty.driver.driver_id
     session.add(penalty)
     session.commit()
@@ -391,6 +386,17 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         if driver_category.category_id == penalty.category.id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
+            driver_category.points -= penalty.points
+
+            if penalty.points:
+                if team := driver_category.driver.current_team():
+                    team_championship = team.current_championship()
+                    team_championship.points -= penalty.points
+                # Sort drivers in case standings changed
+                drivers = [d for d in driver_category.category.drivers]
+                drivers.sort(key=lambda d: d.points, reverse=True)
+                for pos, driver in enumerate(drivers):
+                    driver.position = pos
 
     # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
     if not penalty.time_penalty:
@@ -398,7 +404,6 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         sqla_session.commit()
         return
 
-    # Penalties handed out in qualifying sessions need to be treated differently.
     if penalty.session.is_quali:
         save_qualifying_penalty(sqla_session, penalty)
         return
