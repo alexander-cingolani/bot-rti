@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import enum
+import logging
 import os
 from collections import defaultdict
 from datetime import datetime as dt
@@ -474,10 +475,13 @@ class Category(Base):
             reverse=True,
         )
         results: dict[Driver, tuple[float, int]] = {}
+        
         for driver in self.drivers:
-            delta = driver.position - (
-                driver_positions_up_to_last_round.index(driver.driver) + 1
-            )
+            delta = 0
+            if driver.driver in driver_positions_up_to_last_round:
+                delta = driver.position - (
+                    driver_positions_up_to_last_round.index(driver.driver) + 1
+                )
             results[driver.driver] = (driver.points, delta)
 
         return results
@@ -508,7 +512,7 @@ class Category(Base):
         of points each driver had after that round.
         """
         result: list[list[float]] = []
-        drivers = [driver.driver.psn_id for driver in self.drivers]
+        drivers = [driver.driver.full_name for driver in self.drivers]
         driver_map = defaultdict.fromkeys(drivers, float(0))
         result.append(["Tappa"] + drivers)  # type: ignore
         for number, championship_round in enumerate(self.rounds, start=1):
@@ -518,10 +522,10 @@ class Category(Base):
             result.append([number])
 
             for race_result in championship_round.race_results:
-                driver_map[race_result.driver.psn_id] += race_result.points_earned
+                driver_map[race_result.driver.full_name] += race_result.points_earned
             for qualifying_result in championship_round.qualifying_results:
                 driver_map[
-                    qualifying_result.driver.psn_id
+                    qualifying_result.driver.full_name
                 ] += qualifying_result.points_earned
 
             result[number].extend(driver_map.values())
@@ -790,7 +794,7 @@ class Session(Base):
                 position = "/"
 
             penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
-            message += f"{position} - {result.driver.psn_id} {gap}"
+            message += f"{position} - {result.driver.abbreviated_full_name} {gap}"
 
             if penalty_seconds:
                 message += f" (+{penalty_seconds}s)"
@@ -816,6 +820,7 @@ class Penalty(Base):
             points tally.
         licence_points (int): Points to be subtracted from the driver's licence.
         warnings (int): Number of warnings received.
+        
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
@@ -845,6 +850,7 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
+    reprimands: Mapped[int] = mapped_column(SmallInteger, default=0)
     points: Mapped[float] = mapped_column(Float(precision=1), default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -1088,7 +1094,7 @@ class Driver(Base):
     roles: Mapped[list[DriverRole]] = relationship(back_populates="driver")
 
     def __repr__(self) -> str:
-        return f"Driver(psn_id={self.psn_id}, driver_id={self.id})"
+        return f"Driver(full_name={self.full_name}, driver_id={self.id})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Driver):
@@ -1096,7 +1102,7 @@ class Driver(Base):
         return self.id == other.id
 
     def __key(self) -> tuple[int, str]:
-        return self.id, self.psn_id
+        return self.id, self.full_name
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -1440,8 +1446,8 @@ class Team(Base):
         filename = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
         return IMAGE_DIR_URL + filename
 
-    def current_championship(self) -> TeamChampionship | None:
-        """Returns the championship which is still underway."""
+    def current_championship(self) -> TeamChampionship:
+        """Returns the most recent championship."""
         return self.championships[-1]
 
 
@@ -1594,6 +1600,7 @@ class DriverCategory(Base):
     left_on: Mapped[datetime.date] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
+    reprimands: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(
         SmallInteger, default=10, nullable=False
     )
