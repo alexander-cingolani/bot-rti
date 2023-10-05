@@ -318,13 +318,13 @@ def _update_ratings(results: list[RaceResult]) -> None:
 
         if result.participated:
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
-            ranks.append(result.position)
+            ranks.append(result.position)  # type: ignore
             race_results.append(result)
 
-    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)
+    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)  # type: ignore
 
-    for rating_group, result in zip(rating_groups, race_results):
-        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
+    for rating_group, result in zip(rating_groups, race_results):  # type: ignore
+        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))  # type: ignore
         result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
@@ -463,8 +463,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
 
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
-
-    delta = float(previous_points) - float(penalised_race_result.points_earned)
+    delta = float(previous_points) - float(penalised_race_result.points_earned)  # type: ignore
     team_championship: TeamChampionship = penalty.team.current_championship()  # type: ignore
     team_championship.points -= delta
     driver_category: DriverCategory = penalty.driver.current_category()  # type: ignore
