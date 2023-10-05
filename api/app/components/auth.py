@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import logging
 import os
 from typing import Annotated, Any
 
@@ -58,8 +57,6 @@ def get_user(username: str):
 
 def authenticate_user(username: str, password: str):
     user = get_user(username)
-    logging.info(user.username)
-    logging.info(user.hashed_password)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -74,7 +71,6 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    logging.info(to_encode)
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
