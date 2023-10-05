@@ -487,9 +487,9 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             diff_text = ""
 
         if driver == user_driver:
-            driver_name = f"<b>{driver.psn_id}</b>"
+            driver_name = f"<b>{driver.abbreviated_full_name}</b>"
         else:
-            driver_name = driver.psn_id
+            driver_name = driver.abbreviated_full_name
         message += f"{pos} - {driver_name} <i>{points:g}{diff_text} </i>\n"
 
     await update.message.reply_text(text=message)
@@ -532,9 +532,9 @@ async def complete_championship_standings(
                 team_name = ""
 
             if driver == user_driver:
-                driver_name = f"<b>{driver.psn_id}</b>"
+                driver_name = f"<b>{driver.abbreviated_full_name}</b>"
             else:
-                driver_name = driver.psn_id
+                driver_name = driver.abbreviated_full_name
 
             message += (
                 f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
@@ -724,7 +724,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     drivers = category.active_drivers()
-    drivers.sort(key=lambda d: d.driver.psn_id.lower())
+    drivers.sort(key=lambda d: d.driver.full_name.lower())
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
         f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
@@ -742,7 +742,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         participants.append(participant)
         sqla_session.add(participant)
 
-        text += f"\n{driver.driver.psn_id}"
+        text += f"\n{driver.driver.abbreviated_full_name}"
 
     sqla_session.commit()
 
@@ -804,7 +804,7 @@ async def update_participation_list(
 
     if not chat_data.get("participants"):
         participants = get_participants_from_round(session, rnd.id)
-        participants.sort(key=lambda p: p.driver.psn_id.lower())
+        participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
     if not chat_data.get("participation_list_text"):
@@ -871,7 +871,7 @@ async def update_participation_list(
             case Participation.NO:
                 text_status = "❌"
 
-        text += f"\n{participant.driver.psn_id} {text_status}"
+        text += f"\n{participant.driver.abbreviated_full_name} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
@@ -905,7 +905,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         if not rnd:
             return
         participants = get_participants_from_round(session, rnd.id)
-        participants.sort(key=lambda p: p.driver.psn_id.lower())
+        participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
@@ -923,7 +923,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
                 continue
 
             mentions.append(
-                f"{User(participant.driver.telegram_id, participant.driver.psn_id, is_bot=False).mention_html()}"
+                f"{User(participant.driver.telegram_id, participant.driver.abbreviated_full_name, is_bot=False).mention_html()}"
             )
 
     text = ""
@@ -1048,7 +1048,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
 
     await update.message.reply_text(
-        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+        f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name.upper()}</b></i>\n\n"
         + driver_rating_text
         + f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
@@ -1080,7 +1080,7 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     message = "Top 10 Piloti per Driver Rating:\n\n"
     for driver in drivers[:n]:
-        message += f"<b>{driver.psn_id}</b> <i>{driver.rating:.2f}</i>\n"
+        message += f"<b>{driver.abbreviated_full_name}</b> <i>{driver.rating:.2f}</i>\n"
 
     await update.message.reply_text(message)
 
