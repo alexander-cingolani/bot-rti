@@ -28,6 +28,7 @@ engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
+
 async def driver_registration_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:

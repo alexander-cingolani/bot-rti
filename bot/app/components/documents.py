@@ -22,9 +22,13 @@ class PenaltyDocument:
         penalty: Penalty,
     ) -> None:
         if not penalty.time_penalty and not penalty.points:
-            self.filename = f"{penalty.number} - Decisione {penalty.driver.full_name}.pdf"
+            self.filename = (
+                f"{penalty.number} - Decisione {penalty.driver.full_name}.pdf"
+            )
         else:
-            self.filename = f"{penalty.number} - Penalità {penalty.driver.full_name}.pdf"
+            self.filename = (
+                f"{penalty.number} - Penalità {penalty.driver.full_name}.pdf"
+            )
 
         self.penalty: Penalty = penalty
         self.canvas = canvas.Canvas(filename=self.filename)

@@ -373,7 +373,11 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         driver = driver_contract.driver
         driver_alias = f"d{i}"
         user_data["drivers"][driver_alias] = driver
-        buttons.append(InlineKeyboardButton(driver.abbreviated_full_name, callback_data=driver_alias))
+        buttons.append(
+            InlineKeyboardButton(
+                driver.abbreviated_full_name, callback_data=driver_alias
+            )
+        )
 
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
@@ -422,7 +426,9 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if driver.current_team() != user_data["reporting_team"]:
             user_data["drivers"][driver_alias] = driver
             buttons.append(
-                InlineKeyboardButton(driver.abbreviated_full_name, callback_data=driver_alias)
+                InlineKeyboardButton(
+                    driver.abbreviated_full_name, callback_data=driver_alias
+                )
             )
 
     chunked_buttons = list(chunked(buttons, 2))

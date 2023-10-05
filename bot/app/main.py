@@ -370,14 +370,13 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     for driver in championship.driver_list:
-        
         match = False
         if driver.psn_id:
             if query in driver.psn_id.lower():
                 match = True
         elif query in driver.full_name.lower():
             match = True
-            
+
         if match:
             statistics = driver.stats()
 

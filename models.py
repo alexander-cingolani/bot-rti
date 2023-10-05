@@ -475,7 +475,7 @@ class Category(Base):
             reverse=True,
         )
         results: dict[Driver, tuple[float, int]] = {}
-        
+
         for driver in self.drivers:
             delta = 0
             if driver.driver in driver_positions_up_to_last_round:
@@ -820,7 +820,7 @@ class Penalty(Base):
             points tally.
         licence_points (int): Points to be subtracted from the driver's licence.
         warnings (int): Number of warnings received.
-        
+
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
@@ -1169,19 +1169,19 @@ class Driver(Base):
             if not driver_category.left_on:
                 return driver_category.licence_points
         return 0
-    
+
     @property
     def full_name(self) -> str:
         if self.name and self.surname:
             return f"{self.name} {self.surname}"
         return self.psn_id
-        
+
     @property
     def abbreviated_full_name(self) -> str:
         if self.name and self.surname:
             return f"{self.name[0]}. {self.surname}"
         return self.psn_id
-    
+
     @property
     def warnings(self) -> int:
         """Returns the warnings received by the driver in the category he is
