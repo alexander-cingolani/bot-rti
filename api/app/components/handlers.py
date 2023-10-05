@@ -262,6 +262,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
                     category_id=current_category.id,
                     gap_to_first=gap_to_first,
                     laptime=laptime,
+                    position=position,
                     driver_id=driver.id,
                     driver=driver,
                     participated=True,

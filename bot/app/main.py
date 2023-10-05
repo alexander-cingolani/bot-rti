@@ -978,26 +978,12 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
 
     command_given = update.message.text[1:]  # Remove the '/' in from the message.
 
-    team_leader_commands = [i[0] for i in config.LEADER_ONLY_COMMANDS]
     all_commands = [i[0] for i in config.ADMIN_COMMANDS]
     if matches := get_close_matches(
         command_given, possibilities=all_commands, cutoff=0.5
     ):
         closest_match = matches[0]
         text = f"""Quel comando non esiste. Forse intendevi /{closest_match}?"""
-        telegram_id = update.effective_user.id
-
-        if telegram_id not in config.ADMINS:
-            await update.message.reply_text(text)
-            return
-
-        session = DBSession()
-        driver = get_driver(session, telegram_id=telegram_id)
-
-        if not driver:
-            text = "Quel comando non esiste"
-        elif not driver.is_leader and closest_match in team_leader_commands:
-            text = "Quel comando non esiste."
 
         await update.message.reply_text(text)
 
