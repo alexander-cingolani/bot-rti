@@ -5,3 +5,5 @@ psycopg==3.1.12
 python-multipart
 cachetools
 trueskill
+python-jose[cryptography]
+passlib

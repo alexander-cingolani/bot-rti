@@ -1,5 +1,7 @@
 fastapi==0.103.2
 hypercorn==0.14.4
+python-jose[cryptography]
+passlib
 
 SQLAlchemy==2.0.21
 psycopg==3.1.12
