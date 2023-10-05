@@ -10,7 +10,6 @@ from io import BytesIO
 from typing import Any, cast
 
 from app import config
-from app.components.driver_ranking import update_ratings
 from app.components.results_processing import (
     Result,
     image_to_results,
@@ -40,7 +39,7 @@ from models import (
     Round,
     Session,
 )
-from queries import get_championship, save_results
+from queries import get_championship, get_driver, save_results
 
 engine = create_engine(os.environ["DB_URL"])
 DBSession = sessionmaker(bind=engine, autoflush=False)
@@ -62,16 +61,16 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data = cast(dict[str, Any], context.user_data)
     user_data.clear()
 
-    # Checks that the user is part of the admin team, if not, tells the
-    # user he can't use this command and returns.
-    if update.effective_user.id not in config.ADMINS:
+    sqla_session: SQLASession = DBSession()
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+
+    if not driver.has_permission(config.MANAGE_RESULTS):
         await update.message.reply_text(
             "Non sei autorizzato ad usare in questa funzione,"
-            f" se credi di doverlo essere, contatta {config.OWNER}"
+            f" se credi di doverlo essere, contatta un admin."
         )
         return ConversationHandler.END
 
-    sqla_session: SQLASession = DBSession()
     championship = get_championship(sqla_session)
 
     if not championship:
@@ -434,9 +433,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     penalty.is_applied = True
 
     user_data["round"].is_completed = True
-
-    for results in sessions_results.values():
-        update_ratings(results)
 
     save_results(user_data["sqla_session"], quali_results, sessions_results)
 

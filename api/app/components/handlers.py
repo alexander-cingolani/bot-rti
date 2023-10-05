@@ -1,20 +1,26 @@
+from datetime import datetime
+import json
 import os
+from collections import defaultdict
+from decimal import Decimal
 from typing import Any, cast
 
+from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, RaceResult
-from queries import get_category, get_championship, get_teams
+from models import Driver, QualifyingResult, RaceResult, Session
+from queries import get_category, get_championship, get_teams, save_results
 
 URL = os.environ["DB_URL"]
+RRE_GAME_ID = 3
 
 engine = create_engine(url=URL)
-Session = sessionmaker(engine)
+SQLASession = sessionmaker(engine)
 
 
-def get_categories(championship_id: int | str | None):
-    session = Session()
+def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
+    session = SQLASession()
 
     if championship_id == "latest":
         championship_id = None
@@ -42,8 +48,8 @@ def get_categories(championship_id: int | str | None):
     return categories
 
 
-def get_calendar(category_id: int):
-    session = Session()
+def get_calendar(category_id: int) -> list[dict[str, Any]] | None:
+    session = SQLASession()
 
     category = get_category(session=session, category_id=category_id)
 
@@ -128,8 +134,8 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
     return driv_res
 
 
-def get_standings_with_results(category_id: int):
-    session = Session()
+def get_standings_with_results(category_id: int) -> list[dict[str, Any]] | None:
+    session = SQLASession()
 
     category = get_category(session=session, category_id=category_id)
     if not category:
@@ -137,14 +143,13 @@ def get_standings_with_results(category_id: int):
 
     results = category.standings_with_results()
 
-    response = []
-
+    response: list[dict[str, Any]] = []
     if not results:
         for driver in category.active_drivers():
             team = driver.driver.current_team()
 
             if not team:
-                team = driver.teams[-1].team
+                team = driver.driver.contracts[-1].team
 
             response.append(
                 {
@@ -162,7 +167,7 @@ def get_standings_with_results(category_id: int):
         team = driver.current_team()
 
         if not team:
-            team = driver.teams[-1].team
+            team = driver.contracts[-1].team
 
         driver_summary = {
             "driver_id": driver.id,
@@ -181,9 +186,9 @@ def get_standings_with_results(category_id: int):
 
 
 def get_drivers_points(championship_id: int):
-    session = Session()
+    session = SQLASession()
 
-    result: dict[int, list[list]] = {}
+    result: dict[int, list[list[float]]] = {}
     championship = get_championship(session, championship_id=championship_id)
 
     if not championship:
@@ -195,15 +200,187 @@ def get_drivers_points(championship_id: int):
     return result
 
 
-def get_teams_list(championship_id: int):
+def get_teams_list(championship_id: int) -> list[dict[str, Any]]:
     """Returns the teams participating to the championship ordered by position."""
-    session = Session()
+    session = SQLASession()
     team_objs = get_teams(session, championship_id)
 
-    teams = []
+    teams: list[dict[str, Any]] = []
     for team in team_objs:
         teams.append(
             {"points": team.current_championship().points, "logo": team.logo_url}
         )
 
     return teams
+
+
+async def save_rre_results_file(file: UploadFile) -> None:
+    """Saves the results contained in the json file produced by the raceroom server."""
+
+    sqla_session = SQLASession()
+    current_championship = get_championship(sqla_session)
+
+    if not current_championship:
+        raise HTTPException(
+            500, "Championship was not configured correctly in the database."
+        )
+
+    json_str = await file.read()
+    data = json.loads(json_str)
+
+    date_round = {r.date: r for r in current_championship.rounds}
+    if not (
+        current_round := date_round[datetime.utcfromtimestamp(data["StartTime"]).date()]
+    ):
+        raise HTTPException(
+            500, "The date in the file does not match any date in the championship."
+        )
+
+    current_category = current_round.category
+    driver_objs = current_category.active_drivers()
+    drivers = {d.driver.rre_id: d.driver for d in driver_objs}
+
+    qualifying_results: list[QualifyingResult] = []
+    races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
+
+    qualifying_data = data["Sessions"][1]
+    pole_lap = Decimal(qualifying_data["Players"][0]["BestLapTime"]) / 1000
+
+    if session := current_round.qualifying_session:
+        for player in qualifying_data["Players"]:
+            rre_id = cast(int, player["UserId"])
+            position = cast(int, player["Position"])
+            laptime = Decimal(player["BestLapTime"]) / 1000
+            gap_to_first = laptime - pole_lap
+
+            driver = drivers[rre_id]
+
+            qualifying_results.append(
+                QualifyingResult(
+                    session=session,
+                    round_id=current_round.id,
+                    category_id=current_category.id,
+                    gap_to_first=gap_to_first,
+                    laptime=laptime,
+                    position=position,
+                    driver_id=driver.id,
+                    driver=driver,
+                    participated=True,
+                )
+            )
+        # Add qualifying results for drivers who didn't participate to quali
+        for driver in driver_objs:
+            for result in qualifying_results:
+                if result.driver_id == driver.driver_id:
+                    break
+            else:
+                qualifying_results.append(
+                    QualifyingResult(
+                        driver_id=driver.driver_id,
+                        driver=driver.driver,
+                        participated=False,
+                        round_id=current_round.id,
+                        session=session,
+                        category_id=current_category.id,
+                    )
+                )
+
+    for i, race_data in enumerate(data["Sessions"][2:]):
+        fastest_lap = float("inf")
+        driver_race_results: dict[int, RaceResult] = {}
+        fastest_lap_player_id = 0
+        winners_time = Decimal(race_data["Players"][0]["TotalTime"]) / 1000
+
+        if current_round.has_sprint_race and i == 0:
+            session = cast(Session, current_round.sprint_race)
+        else:
+            session = current_round.long_race
+
+        deferred_penalty_applied = False
+        # Create a RaceResult for every player in the session and check fastest lap
+
+        for player in race_data["Players"]:
+            gap_to_first = 0
+            for winners_lap, players_lap in zip(
+                race_data["Players"][0]["RaceSessionLaps"], player["RaceSessionLaps"]
+            ):
+                if players_lap["Time"] > 0:
+                    gap_to_first += (
+                        Decimal(players_lap["Time"] - winners_lap["Time"]) / 1000
+                    )
+                    continue
+                for winner_sector, player_sector in zip(
+                    reversed(winners_lap["SectorTimes"]),
+                    reversed(players_lap["SectorTimes"]),
+                ):
+                    if player_sector > 0:
+                        gap_to_first += Decimal(player_sector - winner_sector) / 1000
+                        break
+
+            rre_id = cast(int, player["UserId"])
+            position = cast(int, player["Position"])
+            total_racetime = (
+                Decimal(race_data["Players"][0]["TotalTime"]) / 1000
+            ) + gap_to_first
+
+            player_fastest_lap = cast(int, player["BestLapTime"]) / 1000
+            driver = drivers[rre_id]
+
+            if player_fastest_lap < fastest_lap:
+                fastest_lap = player_fastest_lap
+                fastest_lap_player_id = driver.id
+
+            # Apply any deferred penalties
+
+            for def_penalty in driver.deferred_penalties:
+                total_racetime += def_penalty.penalty.time_penalty
+                deferred_penalty_applied = True
+
+            race_res = RaceResult(
+                position=position,
+                driver_id=driver.id,
+                driver=driver,
+                total_racetime=total_racetime,
+                gap_to_first=gap_to_first,
+                participated=True,
+                round_id=current_round.id,
+                session=session,
+                category_id=current_category.id,
+            )
+
+            driver_race_results[driver.id] = race_res
+            races[session].append(race_res)
+
+        # If deferred penalty was applied, recalculate session results.
+        if deferred_penalty_applied:
+            races[session].sort(key=lambda rr: rr.total_racetime)  # type: ignore
+            winners_time = Decimal(0)
+            for pos, result in enumerate(races[session], start=1):
+                if pos == 1:
+                    winners_time = result.total_racetime
+
+                # RaceResults without total_racetime haven't been added yet
+                result.gap_to_first = result.total_racetime - winners_time  # type: ignore
+                result.position = pos
+
+        # Add raceresults for drivers who didn't participate to this session
+        for driver in driver_objs:
+            for result in races[session]:
+                if result.driver_id == driver.driver_id:
+                    break
+            else:
+                races[session].append(
+                    RaceResult(
+                        driver_id=driver.driver_id,
+                        driver=driver.driver,
+                        participated=False,
+                        round_id=current_round.id,
+                        session=session,
+                        category_id=current_category.id,
+                    )
+                )
+
+        driver_race_results[fastest_lap_player_id].fastest_lap = True
+
+    current_round.is_completed = True
+    save_results(sqla_session, qualifying_results, races)

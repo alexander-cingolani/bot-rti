@@ -13,14 +13,20 @@ REPORT_WINDOW_OPENING = time(0)
 PARTICIPANTS_LIST_CLOSURE = time(hour=21, minute=45)
 REPORT_WINDOW_CLOSURE = time(hour=23, minute=59, second=59)
 
+# Driver Permission IDs
+MANAGE_RESULTS = 3
+MANAGE_PENALTIES = 4
 
+# Team Permission IDs
+FILE_REPORT = 3
+
+# Fixed chats
 REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
 TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
 LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])
 GROUP_CHAT = int(os.environ["GROUP_CHAT"])
 DEVELOPER_CHAT = int(os.environ["DEVELOPER_CHAT"])
 TEAM_LEADER_CHAT = int(os.environ["TEAM_LEADER_CHAT"])
-
 
 GROUP_COMMANDS = (
     ("my_stats", "Le tue statistiche."),

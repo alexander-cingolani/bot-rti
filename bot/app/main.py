@@ -52,6 +52,7 @@ from telegram.ext import (
 from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
     delete_chat,
+    get_admins,
     get_all_drivers,
     get_championship,
     get_driver,
@@ -83,6 +84,7 @@ async def post_init(application: Application) -> None:
 
     session = DBSession()
     leaders = get_team_leaders(session)
+    admins = get_admins(session)
     session.close()
 
     # Set base user commands
@@ -103,10 +105,10 @@ async def post_init(application: Application) -> None:
                 pass
 
     # Set admin commands in group and private chats
-    for admin_id in config.ADMINS:
+    for admin in admins:
         try:
             await application.bot.set_my_commands(
-                config.ADMIN_COMMANDS, BotCommandScopeChat(admin_id)
+                config.ADMIN_COMMANDS, BotCommandScopeChat(admin.telegram_id)
             )
         except BadRequest:
             pass
@@ -120,7 +122,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.effective_user.send_message(
             text=(
                 "Problemi, problemi, problemi! 😓\n"
-                f"Si è verificato un errore inaspettato, {config.OWNER.mention_html()} "
+                f"Si è verificato un errore inaspettato, lo sviluppatore "
                 "è stato informato del problema e cercherà di risolverlo il prima possibile."
             )
         )
@@ -254,7 +256,7 @@ async def greet_new_chat_members(
                 f"Benvenuto {user.mention_html()}!\n\n"
                 "Sono il bot di Racing Team Italia, per sfruttare a pieno le mie funzionalità, "
                 "registrati scrivendomi /registrami in chat privata."
-                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a {config.OWNER.mention_html()}."
+                f"Prima di fare ciò però assicurati di aver scritto il tuo ID PSN a un admin."
             )
             button_row = [
                 InlineKeyboardButton(
@@ -320,7 +322,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message providing the developer's contact details for help."""
     text = (
-        f"Questo bot è gestito da {config.OWNER.mention_html()},"
+        f"Questo bot è gestito da @alex_cingolani,"
         " se stai riscontrando un problema non esitare a contattarlo."
     )
     await update.message.reply_text(text)
@@ -359,7 +361,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     of each of them.
     """
 
-    query = update.inline_query.query
+    query = update.inline_query.query.lower()
     session = DBSession()
     results: list[InlineQueryResultArticle] = []
     championship = get_championship(session)
@@ -368,10 +370,19 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     for driver in championship.driver_list:
-        if query.lower() in driver.psn_id.lower():
+        match = False
+        if driver.psn_id:
+            if query in driver.psn_id.lower():
+                match = True
+        elif query in driver.full_name.lower():
+            match = True
+
+        if match:
             statistics = driver.stats()
 
-            unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+            unique_teams = ",".join(
+                set(map(lambda team: team.team.name, driver.contracts))
+            )
             current_team = driver.current_team()
             if not current_team:
                 team_text = "/"
@@ -411,10 +422,10 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
-                title=driver.psn_id,
+                title=driver.full_name,
                 input_message_content=InputTextMessageContent(
                     (
-                        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+                        f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name}</b></i>\n\n"
                         + driver_rating_text
                         + f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
@@ -475,9 +486,9 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             diff_text = ""
 
         if driver == user_driver:
-            driver_name = f"<b>{driver.psn_id}</b>"
+            driver_name = f"<b>{driver.abbreviated_full_name}</b>"
         else:
-            driver_name = driver.psn_id
+            driver_name = driver.abbreviated_full_name
         message += f"{pos} - {driver_name} <i>{points:g}{diff_text} </i>\n"
 
     await update.message.reply_text(text=message)
@@ -520,9 +531,9 @@ async def complete_championship_standings(
                 team_name = ""
 
             if driver == user_driver:
-                driver_name = f"<b>{driver.psn_id}</b>"
+                driver_name = f"<b>{driver.abbreviated_full_name}</b>"
             else:
-                driver_name = driver.psn_id
+                driver_name = driver.abbreviated_full_name
 
             message += (
                 f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
@@ -712,7 +723,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     drivers = category.active_drivers()
-    drivers.sort(key=lambda d: d.driver.psn_id.lower())
+    drivers.sort(key=lambda d: d.driver.full_name.lower())
     text = (
         f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
         f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
@@ -730,7 +741,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         participants.append(participant)
         sqla_session.add(participant)
 
-        text += f"\n{driver.driver.psn_id}"
+        text += f"\n{driver.driver.abbreviated_full_name}"
 
     sqla_session.commit()
 
@@ -792,7 +803,7 @@ async def update_participation_list(
 
     if not chat_data.get("participants"):
         participants = get_participants_from_round(session, rnd.id)
-        participants.sort(key=lambda p: p.driver.psn_id.lower())
+        participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
     if not chat_data.get("participation_list_text"):
@@ -859,7 +870,7 @@ async def update_participation_list(
             case Participation.NO:
                 text_status = "❌"
 
-        text += f"\n{participant.driver.psn_id} {text_status}"
+        text += f"\n{participant.driver.abbreviated_full_name} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
@@ -893,7 +904,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
         if not rnd:
             return
         participants = get_participants_from_round(session, rnd.id)
-        participants.sort(key=lambda p: p.driver.psn_id.lower())
+        participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
     participants = cast(list[RoundParticipant], chat_data["participants"])
@@ -911,7 +922,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
                 continue
 
             mentions.append(
-                f"{User(participant.driver.telegram_id, participant.driver.psn_id, is_bot=False).mention_html()}"
+                f"{User(participant.driver.telegram_id, participant.driver.abbreviated_full_name, is_bot=False).mention_html()}"
             )
 
     text = ""
@@ -966,26 +977,12 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
 
     command_given = update.message.text[1:]  # Remove the '/' in from the message.
 
-    team_leader_commands = [i[0] for i in config.LEADER_ONLY_COMMANDS]
     all_commands = [i[0] for i in config.ADMIN_COMMANDS]
     if matches := get_close_matches(
         command_given, possibilities=all_commands, cutoff=0.5
     ):
         closest_match = matches[0]
         text = f"""Quel comando non esiste. Forse intendevi /{closest_match}?"""
-        telegram_id = update.effective_user.id
-
-        if telegram_id not in config.ADMINS:
-            await update.message.reply_text(text)
-            return
-
-        session = DBSession()
-        driver = get_driver(session, telegram_id=telegram_id)
-
-        if not driver:
-            text = "Quel comando non esiste"
-        elif not driver.is_leader and closest_match in team_leader_commands:
-            text = "Quel comando non esiste."
 
         await update.message.reply_text(text)
 
@@ -999,7 +996,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.teams)))
+    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.contracts)))
     current_team = driver.current_team()
     if not current_team:
         team_text = "/"
@@ -1036,7 +1033,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
 
     await update.message.reply_text(
-        f"<i><b>PROFILO PILOTA: {driver.psn_id.upper()}</b></i>\n\n"
+        f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name.upper()}</b></i>\n\n"
         + driver_rating_text
         + f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
@@ -1068,7 +1065,7 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     message = "Top 10 Piloti per Driver Rating:\n\n"
     for driver in drivers[:n]:
-        message += f"<b>{driver.psn_id}</b> <i>{driver.rating:.2f}</i>\n"
+        message += f"<b>{driver.abbreviated_full_name}</b> <i>{driver.rating:.2f}</i>\n"
 
     await update.message.reply_text(message)
 

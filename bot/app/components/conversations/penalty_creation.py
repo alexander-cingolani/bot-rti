@@ -27,6 +27,7 @@ from telegram.ext import (
 from models import Category, Championship, Driver, Penalty, Report
 from queries import (
     get_championship,
+    get_driver,
     get_last_penalty_number,
     get_reports,
     save_and_apply_penalty,
@@ -40,13 +41,15 @@ from queries import (
     ASK_INFRACTION,
     ASK_CATEGORY,
     ASK_FACT,
-    ASK_SECONDS,
+    ASK_TIME_PENALTY,
+    ASK_POINTS_PENALTY,
     ASK_LICENCE_POINTS,
     ASK_WARNINGS,
+    ASK_REPRIMANDS,
     ASK_PENALTY_REASON,
     ASK_QUEUE_OR_SEND,
     ASK_IF_NEXT,
-) = range(13, 26)
+) = range(13, 28)
 
 
 engine = create_engine(os.environ["DB_URL"])
@@ -57,11 +60,20 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Allows admins to create penalties without a pre-existing report made by a leader."""
 
-    if update.effective_user.id not in config.ADMINS:
-        await update.message.reply_text(text="Questo comando è riservato agli admin.")
+    sqla_session = DBSession()
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    if not driver:
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
+        )
         return ConversationHandler.END
 
-    sqla_session = DBSession()
+    if not driver.has_permission(config.MANAGE_PENALTIES):
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
+        )
+        return ConversationHandler.END
+
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
 
@@ -208,7 +220,7 @@ async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     buttons: list[InlineKeyboardButton] = []
     for i, driver in enumerate(user_data["penalty"].session.participating_drivers()):
-        buttons.append(InlineKeyboardButton(driver.psn_id, callback_data=f"D{i}"))
+        buttons.append(InlineKeyboardButton(driver.full_name, callback_data=f"D{i}"))
 
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
@@ -247,7 +259,7 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         [
             InlineKeyboardButton("« Pilota colpevole", callback_data=str(ASK_DRIVER)),
             InlineKeyboardButton(
-                "Secondi di penalità »", callback_data=str(ASK_SECONDS)
+                "Secondi di penalità »", callback_data=str(ASK_TIME_PENALTY)
             ),
         ]
     )
@@ -257,7 +269,7 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         text, reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-    return ASK_SECONDS
+    return ASK_TIME_PENALTY
 
 
 async def report_processing_entry_point(
@@ -278,15 +290,17 @@ async def report_processing_entry_point(
         user_data.clear()
         return ConversationHandler.END
 
-    if update.effective_user.id not in config.ADMINS:
-        text = "Questa funzione è riservata agli admin di RTI.\n"
-        button = InlineKeyboardButton(
-            text="Chiedi l'autorizzazione", url=f"tg://user?id={config.OWNER_ID}"
+    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    if not driver:
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
         )
-        reply_markup = InlineKeyboardMarkup([[button]])
-        await update.message.reply_text(text, reply_markup=reply_markup)
-        sqla_session.close()
-        user_data.clear()
+        return ConversationHandler.END
+
+    if not driver.has_permission(config.MANAGE_PENALTIES):
+        await update.message.reply_text(
+            text="Non hai il permesso per usare questa funzione."
+        )
         return ConversationHandler.END
 
     reports = get_reports(sqla_session, is_reviewed=False)
@@ -353,8 +367,8 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
         text = (
             f"<b>{report.category.name}</b> - Segnalazione no.{report.number}\n\n"
-            f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
-            f"{report.reporting_driver.psn_id}\n"
+            f"<b>Piloti coinvolti</b>: {report.reported_driver.full_name}, "
+            f"{report.reporting_driver.full_name}\n"
             f"<b>Sessione</b>: {report.session.name}\n"
             f"<b>Minuto incidente</b>: {report.incident_time}\n"
             f"<b>Motivo segnalazione</b>: {report.reason}"
@@ -406,12 +420,12 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     chunked_buttons = list(chunked(buttons, 4))
 
     if report.session.is_quali:
-        next_step = ASK_LICENCE_POINTS
+        next_step = ASK_POINTS_PENALTY
         next_step_button = InlineKeyboardButton(
-            "Punti licenza »", callback_data=str(next_step)
+            "Punti penalità »", callback_data=str(next_step)
         )
     else:
-        next_step = ASK_SECONDS
+        next_step = ASK_TIME_PENALTY
         next_step_button = InlineKeyboardButton(
             "Secondi »", callback_data=str(next_step)
         )
@@ -430,7 +444,7 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return next_step
 
 
-async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def ask_time_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Saves the fact an asks user for the decision, after a valid fact has been entered."""
     user_data = cast(dict[str, Any], context.user_data)
 
@@ -467,7 +481,11 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     chunked_buttons = list(chunked(buttons, 3))
     chunked_buttons.append(
-        [InlineKeyboardButton("Nessuna penalità in tempo", callback_data="no_penalty")]
+        [
+            InlineKeyboardButton(
+                "Nessuna penalità in secondi", callback_data="no_penalty"
+            )
+        ]
     )
 
     previous_step = (
@@ -476,6 +494,69 @@ async def ask_seconds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     chunked_buttons.append(
         [
             InlineKeyboardButton("« Fatto", callback_data=str(previous_step)),
+            InlineKeyboardButton(
+                "Punti Penalità »", callback_data=str(ASK_POINTS_PENALTY)
+            ),
+        ]
+    )
+    reply_markup = InlineKeyboardMarkup(chunked_buttons)
+
+    await send_or_edit_message(update, text, reply_markup)
+
+    return ASK_POINTS_PENALTY
+
+
+async def ask_point_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Saves the time penalty and asks user for the decision, after a valid fact has been entered."""
+    user_data = cast(dict[str, Any], context.user_data)
+
+    if update.callback_query:
+        if (
+            not update.callback_query.data.isdigit()
+            and "qf" not in update.callback_query.data
+        ):
+            if "no_penalty" in update.callback_query.data:
+                user_data["penalty"].time_penalty = 0
+                user_data["time_penalty_text"] = None
+            else:
+                time_penalty = int(update.callback_query.data.split()[0])
+                user_data["penalty"].time_penalty = time_penalty
+                user_data[
+                    "time_penalty_text"
+                ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+
+    else:
+        time_penalty = int(update.message.text.split()[0])
+        user_data["penalty"].time_penalty = time_penalty
+        user_data[
+            "time_penalty_text"
+        ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+
+    text = "Seleziona i punti di penalità inflitti:"
+    buttons: list[InlineKeyboardButton] = []
+    for points in ("1", "2", "3", "4", "5", "7"):
+        buttons.append(
+            InlineKeyboardButton(
+                f"{points}",
+                callback_data=f"pp{points}",
+            )
+        )
+
+    chunked_buttons = list(chunked(buttons, 3))
+    chunked_buttons.append(
+        [InlineKeyboardButton("Nessuna penalità in punti", callback_data="no_penalty")]
+    )
+
+    previous_step = (
+        ASK_TIME_PENALTY
+        if not user_data.get("alternative_entry_point")
+        else ASK_INFRACTION
+    )
+    chunked_buttons.append(
+        [
+            InlineKeyboardButton(
+                "« Penalità Secondi", callback_data=str(previous_step)
+            ),
             InlineKeyboardButton(
                 "Punti licenza »", callback_data=str(ASK_LICENCE_POINTS)
             ),
@@ -500,21 +581,18 @@ async def ask_licence_points(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ):
             if "no_penalty" in update.callback_query.data:
                 user_data["penalty"].time_penalty = 0
-                user_data["penalty"].penalty = None
                 user_data["time_penalty_text"] = None
             else:
-                time_penalty = int(update.callback_query.data.split()[0])
-                user_data["penalty"].time_penalty = time_penalty
+                points = int(update.callback_query.data.removeprefix("pp"))
+                user_data["penalty"].points = points
                 user_data[
                     "time_penalty_text"
-                ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+                ] = f"{points} secondi aggiunti sul tempo di gara"
 
     else:
-        time_penalty = int(update.message.text.split()[0])
-        user_data["penalty"].time_penalty = time_penalty
-        user_data[
-            "time_penalty_text"
-        ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+        points = int(update.message.text.split()[0])
+        user_data["penalty"].points = points
+        user_data["time_penalty_text"] = f"{points} secondi aggiunti sul tempo di gara"
 
     buttons: list[InlineKeyboardButton] = []
     for licence_points in range(5):
@@ -537,7 +615,7 @@ async def ask_licence_points(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     else:
         previous_step_button = InlineKeyboardButton(
-            "« Torna indietro", callback_data=str(ASK_SECONDS)
+            "« Torna indietro", callback_data=str(ASK_TIME_PENALTY)
         )
 
     chunked_buttons.append(
@@ -597,6 +675,46 @@ async def ask_warnings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             InlineKeyboardButton(
                 "« Punti patente", callback_data=str(ASK_LICENCE_POINTS)
             ),
+            InlineKeyboardButton("Motivazione »", callback_data=str(ASK_REPRIMANDS)),
+        ],
+    )
+
+    reply_markup = InlineKeyboardMarkup(chunked_buttons)
+
+    await send_or_edit_message(update, text, reply_markup)
+
+    return ASK_REPRIMANDS
+
+
+async def ask_reprimands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Saves warnings (if given) and asks if any reprimands are to be given."""
+
+    user_data = cast(dict[str, Any], context.user_data)
+    penalty: Penalty = user_data["penalty"]
+
+    if update.callback_query:
+        if not update.callback_query.data.isnumeric():
+            warnings = int(update.callback_query.data.removeprefix("w"))
+            penalty.warnings = warnings
+            if warnings > 0:
+                user_data["warnings_text"] = (
+                    f"{warnings} warning" f" ({warnings + penalty.driver.warnings}/12)"
+                )
+            else:
+                user_data["warnings_text"] = ""
+
+    text = "Quanti richiami sono stati dati?"
+
+    buttons: list[InlineKeyboardButton] = []
+    for i in range(1, 5):
+        buttons.append(InlineKeyboardButton(str(i), callback_data=f"rep{i}"))
+    chunked_buttons = list(chunked(buttons, 4))
+    chunked_buttons.append(
+        [InlineKeyboardButton("Nessuno", callback_data="rep0")],
+    )
+    chunked_buttons.append(
+        [
+            InlineKeyboardButton("« Warning", callback_data=str(ASK_WARNINGS)),
             InlineKeyboardButton(
                 "Motivazione »", callback_data=str(ASK_PENALTY_REASON)
             ),
@@ -614,23 +732,19 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Saves warnings given (if any) and asks for the penalty reason."""
 
     user_data = cast(dict[str, Any], context.user_data)
-
-    penalty: Penalty = user_data["penalty"]
-
     if update.callback_query:
         if not update.callback_query.data.isnumeric():
-            warnings = int(update.callback_query.data.removeprefix("w"))
-            penalty.warnings = warnings
-            if warnings > 0:
-                user_data["warnings_text"] = (
-                    f"{warnings} warning" f" ({warnings + penalty.driver.warnings}/12)"
-                )
+            reprimands = int(update.callback_query.data.removeprefix("rep"))
+            user_data["penalty"].reprimands = reprimands
+            if reprimands > 0:
+                user_data["reprimands_text"] = f"{reprimands} richiami"
             else:
-                user_data["warnings_text"] = ""
+                user_data["reprimands_text"] = ""
+
     reply_markup = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("« Warning", callback_data=str(ASK_WARNINGS)),
+                InlineKeyboardButton("« Richiami", callback_data=str(ASK_REPRIMANDS)),
                 InlineKeyboardButton(
                     "Controlla »", callback_data=str(ASK_QUEUE_OR_SEND)
                 ),
@@ -662,6 +776,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 user_data.get("time_penalty_text", None),
                 user_data.get("warnings_text", None),
                 user_data.get("licence_points_text", None),
+                user_data.get("reprimands_text", None),
             ),
         )
     )
@@ -673,7 +788,7 @@ async def ask_queue_or_send(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"<b>Segnalazione no.{penalty.number}</b> - Recap dati inseriti\n\n"
         f"<b>Tappa</b>: {penalty.round.number if penalty.round else '-'}\n"
         f"<b>Sessione</b>: {penalty.session.name}\n"
-        f"<b>Pilota</b>: {penalty.driver.psn_id if penalty.driver else '-'}\n"
+        f"<b>Pilota</b>: {penalty.driver.full_name if penalty.driver else '-'}\n"
         f"<b>Fatto</b>: {penalty.fact if penalty.fact else '-'}\n"
         f"<b>Decisione</b>: {penalty.decision if penalty.decision else '-'}\n"
         f"<b>Motivazione</b>: {penalty.reason if penalty.reason else '-'}"
@@ -749,9 +864,11 @@ async def go_back_handler_report_processing(
         ASK_INFRACTION: ask_infraction,
         ASK_CATEGORY: ask_category,
         ASK_FACT: ask_fact,
-        ASK_SECONDS: ask_seconds,
+        ASK_TIME_PENALTY: ask_time_penalty,
+        ASK_POINTS_PENALTY: ask_point_penalty,
         ASK_LICENCE_POINTS: ask_licence_points,
         ASK_WARNINGS: ask_warnings,
+        ASK_REPRIMANDS: ask_reprimands,
         ASK_PENALTY_REASON: ask_penalty_reason,
         ASK_QUEUE_OR_SEND: ask_queue_or_send,
     }
@@ -797,23 +914,27 @@ penalty_creation = ConversationHandler(
             )
         ],
         ASK_FACT: [CallbackQueryHandler(ask_fact, r"^continue$")],
-        ASK_SECONDS: [
+        ASK_TIME_PENALTY: [
             CallbackQueryHandler(
-                ask_seconds, r"^f[0-9]{1,}$|^i[0-9]{1,}$|^qf[0-9]{1,}$"
+                ask_time_penalty, r"^f[0-9]{1,}$|^i[0-9]{1,}$|^qf[0-9]{1,}$"
             ),
-            MessageHandler(filters.Regex(r"^[^/]{2,}$"), ask_seconds),
+            MessageHandler(filters.Regex(r"^[^/]{2,}$"), ask_time_penalty),
         ],
-        ASK_LICENCE_POINTS: [
+        ASK_POINTS_PENALTY: [
             CallbackQueryHandler(
-                ask_licence_points, r"^\d{1,3} secondi aggiunti|^no_penalty$"
+                ask_point_penalty, r"^\d{1,3} secondi aggiunti|^no_penalty$"
             ),
             MessageHandler(
                 filters.Regex(r"secondi|punti di penalità|sospensione"),
-                ask_licence_points,
+                ask_point_penalty,
             ),
         ],
+        ASK_LICENCE_POINTS: [
+            CallbackQueryHandler(ask_licence_points, r"^pp[0-9]{1,}$|^no_penalty$")
+        ],
         ASK_WARNINGS: [CallbackQueryHandler(ask_warnings, r"lp[0-9]{1,}")],
-        ASK_PENALTY_REASON: [CallbackQueryHandler(ask_penalty_reason, r"w[0-9]{1,}")],
+        ASK_REPRIMANDS: [CallbackQueryHandler(ask_reprimands, r"w[0-9]{1,}")],
+        ASK_PENALTY_REASON: [CallbackQueryHandler(ask_penalty_reason, r"rep[0-9]{1,}")],
         ASK_QUEUE_OR_SEND: [
             MessageHandler(filters.Regex(r"^[^/]{20,}$"), ask_queue_or_send)
         ],

@@ -22,9 +22,13 @@ class PenaltyDocument:
         penalty: Penalty,
     ) -> None:
         if not penalty.time_penalty and not penalty.points:
-            self.filename = f"{penalty.number} - Decisione {penalty.driver.psn_id}.pdf"
+            self.filename = (
+                f"{penalty.number} - Decisione {penalty.driver.full_name}.pdf"
+            )
         else:
-            self.filename = f"{penalty.number} - Penalità {penalty.driver.psn_id}.pdf"
+            self.filename = (
+                f"{penalty.number} - Penalità {penalty.driver.full_name}.pdf"
+            )
 
         self.penalty: Penalty = penalty
         self.canvas = canvas.Canvas(filename=self.filename)
@@ -99,7 +103,7 @@ class PenaltyDocument:
         self.canvas.drawString(
             135,
             499,
-            f"{driver.current_race_number} / {driver.psn_id}",
+            f"{driver.current_race_number} / {driver.full_name}",
         )
 
         reported_team = driver.current_team()
@@ -141,7 +145,7 @@ class ReportDocument:
     def __init__(self, report: Report) -> None:
         self.report: Report = report
         self.reporting_driver: Driver = report.reporting_driver
-        self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.psn_id}.pdf"
+        self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.full_name}.pdf"
         self.subtitle: str = (
             f"{report.round.number}° Round | {report.round.circuit.name}"
         )
@@ -206,12 +210,12 @@ class ReportDocument:
         self.canvas.drawString(
             155,
             499,
-            f"{reporting_driver.current_race_number} / {reporting_driver.psn_id}",
+            f"{reporting_driver.current_race_number} / {reporting_driver.full_name}",
         )
         self.canvas.drawString(
             155,
             474,
-            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.psn_id}",
+            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.full_name}",
         )
 
         reported_team = reported_driver.current_team()

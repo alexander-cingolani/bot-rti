@@ -4,8 +4,10 @@ such as Reports, Categories and Drivers.
 """
 
 from collections import defaultdict
+from decimal import Decimal
 
 import sqlalchemy as sa
+import trueskill as ts
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc, select, update
 from sqlalchemy.exc import MultipleResultsFound
@@ -18,8 +20,9 @@ from models import (
     Chat,
     DeferredPenalty,
     Driver,
-    DriverAssignment,
     DriverCategory,
+    DriverContract,
+    DriverRole,
     Penalty,
     QualifyingResult,
     RaceResult,
@@ -28,6 +31,10 @@ from models import (
     Session,
     Team,
     TeamChampionship,
+)
+
+TrueSkillEnv = ts.TrueSkill(
+    draw_probability=0,
 )
 
 
@@ -59,7 +66,7 @@ def get_championship(
 
 def get_team_leaders(
     session: SQLASession, championship_id: int | None = None
-) -> list[Driver] | None:
+) -> list[Driver]:
     """Returns a list of the team leaders in the championship specified by championship_id.
     If championship_id is not given, the function defaults to the latest championship.
 
@@ -75,13 +82,13 @@ def get_team_leaders(
         if championship:
             championship_id = championship.id
         else:
-            return None
+            return []
 
     statement = (
         select(Driver)
-        .join(DriverAssignment, DriverAssignment.driver_id == Driver.id)
-        .join(Team, DriverAssignment.team_id == Team.id)
-        .where(DriverAssignment.is_leader is True)  # type: ignore
+        .join(DriverContract, DriverContract.driver_id == Driver.id)
+        .join(Team, DriverContract.team_id == Team.id)
+        .where(DriverContract.role_id == 1)
         .join(TeamChampionship, TeamChampionship.team_id == Team.id)
         .where(TeamChampionship.championship_id == championship_id)
     )
@@ -89,7 +96,21 @@ def get_team_leaders(
     result = session.execute(statement).all()
     if result:
         return [row[0] for row in result]
-    return None
+    return []
+
+
+def get_admins(session: SQLASession) -> list[Driver]:
+    statement = (
+        select(Driver)
+        .join(DriverRole, Driver.id == DriverRole.driver_id)
+        .where(DriverRole.role_id == 4)
+    )
+
+    result = session.execute(statement).all()
+
+    if result:
+        return [row[0] for row in result]
+    return []
 
 
 def get_reports(
@@ -277,14 +298,29 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     if not result:
         raise ValueError("QualifyingResult not in database.")
 
-    for driver_category in penalty.driver.categories:
-        if driver_category.category_id == penalty.category.id:
-            driver_category.licence_points -= penalty.licence_points
-            driver_category.warnings += penalty.warnings
-
     # penalty.reported_driver_id = penalty.driver.driver_id
     session.add(penalty)
     session.commit()
+
+
+def _update_ratings(results: list[RaceResult]) -> None:
+    """Updates the driver ratings"""
+    ranks: list[int] = []
+    rating_groups: list[tuple[ts.Rating]] = []
+    race_results: list[RaceResult] = []
+    for result in results:
+        driver: Driver = result.driver
+
+        if result.participated:
+            rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
+            ranks.append(result.position)  # type: ignore
+            race_results.append(result)
+
+    rating_groups = TrueSkillEnv.rate(rating_groups, ranks)  # type: ignore
+
+    for rating_group, result in zip(rating_groups, race_results):  # type: ignore
+        result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))  # type: ignore
+        result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
 def save_results(
@@ -308,9 +344,10 @@ def save_results(
         team_championship.points += points_earned
 
     # Calculates points earned across all race sessions by each driver.
-    for race_session in races:
-        session.add_all(race_session.race_results)
-        for race_result in race_session.race_results:
+    for _, race_results in races.items():
+        session.add_all(race_results)
+        _update_ratings(race_results)
+        for race_result in race_results:
             points_earned = race_result.points_earned
             driver_points[race_result.driver] += points_earned
 
@@ -349,6 +386,17 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         if driver_category.category_id == penalty.category.id:
             driver_category.licence_points -= penalty.licence_points
             driver_category.warnings += penalty.warnings
+            driver_category.points -= penalty.points
+
+            if penalty.points:
+                if team := driver_category.driver.current_team():
+                    team_championship = team.current_championship()
+                    team_championship.points -= penalty.points
+                # Sort drivers in case standings changed
+                drivers = [d for d in driver_category.category.drivers]
+                drivers.sort(key=lambda d: d.points, reverse=True)
+                for pos, driver in enumerate(drivers):
+                    driver.position = pos
 
     # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
     if not penalty.time_penalty:
@@ -356,7 +404,6 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         sqla_session.commit()
         return
 
-    # Penalties handed out in qualifying sessions need to be treated differently.
     if penalty.session.is_quali:
         save_qualifying_penalty(sqla_session, penalty)
         return
@@ -421,8 +468,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
 
     # Gets the penalised driver's team, then deducts any points lost due to the penalty
     # from the team's points tally.
-
-    delta = float(previous_points) - float(penalised_race_result.points_earned)
+    delta = float(previous_points) - float(penalised_race_result.points_earned)  # type: ignore
     team_championship: TeamChampionship = penalty.team.current_championship()  # type: ignore
     team_championship.points -= delta
     driver_category: DriverCategory = penalty.driver.current_category()  # type: ignore
