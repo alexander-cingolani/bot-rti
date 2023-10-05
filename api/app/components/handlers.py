@@ -17,7 +17,7 @@ engine = create_engine(url=URL)
 SQLASession = sessionmaker(engine)
 
 
-def get_categories(championship_id: int | str | None):
+def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
     session = SQLASession()
 
     if championship_id == "latest":
@@ -46,7 +46,7 @@ def get_categories(championship_id: int | str | None):
     return categories
 
 
-def get_calendar(category_id: int):
+def get_calendar(category_id: int) -> list[dict[str, Any]] | None:
     session = SQLASession()
 
     category = get_category(session=session, category_id=category_id)
@@ -132,7 +132,7 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
     return driv_res
 
 
-def get_standings_with_results(category_id: int):
+def get_standings_with_results(category_id: int) -> list[dict[str, Any]] | None:
     session = SQLASession()
 
     category = get_category(session=session, category_id=category_id)
@@ -141,14 +141,13 @@ def get_standings_with_results(category_id: int):
 
     results = category.standings_with_results()
 
-    response = []
-
+    response: list[dict[str, Any]] = []
     if not results:
         for driver in category.active_drivers():
             team = driver.driver.current_team()
 
             if not team:
-                team = driver.teams[-1].team
+                team = driver.driver.contracts[-1].team
 
             response.append(
                 {
@@ -199,12 +198,12 @@ def get_drivers_points(championship_id: int):
     return result
 
 
-def get_teams_list(championship_id: int):
+def get_teams_list(championship_id: int) -> list[dict[str, Any]]:
     """Returns the teams participating to the championship ordered by position."""
     session = SQLASession()
     team_objs = get_teams(session, championship_id)
 
-    teams = []
+    teams: list[dict[str, Any]] = []
     for team in team_objs:
         teams.append(
             {"points": team.current_championship().points, "logo": team.logo_url}
@@ -213,7 +212,7 @@ def get_teams_list(championship_id: int):
     return teams
 
 
-async def save_rre_results_file(file: UploadFile):
+async def save_rre_results_file(file: UploadFile) -> None:
     """Saves the results contained in the file."""
 
     sqla_session = SQLASession()
@@ -285,7 +284,7 @@ async def save_rre_results_file(file: UploadFile):
     for i, race_data in enumerate(data["Sessions"][2:]):
         fastest_lap = float("inf")
         driver_race_results: dict[int, RaceResult] = {}
-        fastest_lap_player_id: int
+        fastest_lap_player_id = 0
         winners_time = Decimal(race_data["Players"][0]["TotalTime"]) / 1000
 
         if current_round.has_sprint_race and i == 0:
@@ -350,13 +349,14 @@ async def save_rre_results_file(file: UploadFile):
 
         # If deferred penalty was applied, recalculate session results.
         if deferred_penalty_applied:
-            races[session].sort(key=lambda rr: rr.total_racetime)
+            races[session].sort(key=lambda rr: rr.total_racetime)  # type: ignore
             winners_time = Decimal(0)
             for pos, result in enumerate(races[session], start=1):
                 if pos == 1:
                     winners_time = result.total_racetime
 
-                result.gap_to_first = result.total_racetime - winners_time
+                # RaceResults without total_racetime haven't been added yet
+                result.gap_to_first = result.total_racetime - winners_time  # type: ignore
                 result.position = pos
 
         # Add raceresults for drivers who didn't participate to this session
@@ -380,7 +380,3 @@ async def save_rre_results_file(file: UploadFile):
 
     current_round.is_completed = True
     save_results(sqla_session, qualifying_results, races)
-
-    if not current_round:
-        raise HTTPException(500, "No race expected.")
-    return 200
