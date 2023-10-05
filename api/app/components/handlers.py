@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 from collections import defaultdict
@@ -8,10 +9,11 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, QualifyingResult, RaceResult, Round, Session
+from models import Driver, QualifyingResult, RaceResult, Session
 from queries import get_category, get_championship, get_teams, save_results
 
 URL = os.environ["DB_URL"]
+RRE_GAME_ID = 3
 
 engine = create_engine(url=URL)
 SQLASession = sessionmaker(engine)
@@ -213,10 +215,9 @@ def get_teams_list(championship_id: int) -> list[dict[str, Any]]:
 
 
 async def save_rre_results_file(file: UploadFile) -> None:
-    """Saves the results contained in the file."""
+    """Saves the results contained in the json file produced by the raceroom server."""
 
     sqla_session = SQLASession()
-
     current_championship = get_championship(sqla_session)
 
     if not current_championship:
@@ -224,16 +225,18 @@ async def save_rre_results_file(file: UploadFile) -> None:
             500, "Championship was not configured correctly in the database."
         )
 
-    current_category = current_championship.current_racing_category()
-    if not current_category:
-        raise HTTPException(500, "No race was scheduled for today.")
-
-    # current_round can't be None, current_racing_category() already checks for that.
-    current_round = cast(Round, current_category.first_non_completed_round())
-
     json_str = await file.read()
     data = json.loads(json_str)
 
+    date_round = {r.date: r for r in current_championship.rounds}
+    if not (
+        current_round := date_round[datetime.utcfromtimestamp(data["StartTime"]).date()]
+    ):
+        raise HTTPException(
+            500, "The date in the file does not match any date in the championship."
+        )
+
+    current_category = current_round.category
     driver_objs = current_category.active_drivers()
     drivers = {d.driver.rre_id: d.driver for d in driver_objs}
 
