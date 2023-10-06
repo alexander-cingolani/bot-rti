@@ -9,11 +9,11 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 SECRET_KEY = os.environ.get("SECRET_API_KEY")
-HASHED_USER_PASSWORD = os.environ.get("HASHED_USER_PASSWORD")
+
 USERNAME = os.environ.get("RRE_SERVER_USERNAME")
 ALGORITHM = "HS256"
 
-if not HASHED_USER_PASSWORD or not SECRET_KEY or not USERNAME:
+if not SECRET_KEY or not USERNAME:
     raise RuntimeError("Environment variables not set correctly")
 
 
@@ -36,6 +36,8 @@ class UserInDB(User):
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+HASHED_USER_PASSWORD = pwd_context.hash(os.environ.get("RRE_SERVER_PASSWORD"))
 
 app = FastAPI()
 
