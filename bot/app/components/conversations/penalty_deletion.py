@@ -178,7 +178,7 @@ async def __ask_penalty(update: Update, rnd: Round):
 
     buttons: list[InlineKeyboardButton] = []
     for i, penalty in enumerate(rnd.penalties):
-        text += f"{penalty.number} - {penalty.driver.psn_id}, {penalty.time_penalty}s\n"
+        text += f"{penalty.number} - {penalty.driver.abbreviated_full_name}, {penalty.time_penalty}s\n"
         buttons.append(
             InlineKeyboardButton(text=str(penalty.number), callback_data=f"P{i}")
         )
@@ -219,7 +219,7 @@ async def __ask_confirmation(update: Update, penalty: Penalty):
     text = (
         "<u>Sei sicuro</u> di voler annullare questa penalità?\n\n"
         f"N° Documento: {penalty.number}\n"
-        f"Pilota: {penalty.driver.psn_id}\n"
+        f"Pilota: {penalty.driver.abbreviated_full_name}\n"
         f"Decisione: {penalty.time_penalty}s, {penalty.warnings} warning, {penalty.licence_points} p. licenza"
     )
 
