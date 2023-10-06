@@ -376,7 +376,7 @@ def save_results(
             )
             sqla_session.add(dc)
             drivers.append(dc)
-            
+
     drivers.sort(key=lambda d: d.points, reverse=True)
 
     for p, driver in enumerate(drivers, 1):

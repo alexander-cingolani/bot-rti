@@ -323,7 +323,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
             session = current_round.long_race
 
         deferred_penalty_applied = False
-        
+
         for player in race_data["Players"]:
             gap_to_first = 0
             for winners_lap, players_lap in zip(
