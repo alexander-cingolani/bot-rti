@@ -9,7 +9,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, QualifyingResult, RaceResult, Session
+from models import Driver, DriverContract, QualifyingResult, RaceResult, Session
 from queries import get_category, get_championship, get_teams, save_results
 
 URL = os.environ["DB_URL"]
@@ -214,6 +214,19 @@ def get_teams_list(championship_id: int) -> list[dict[str, Any]]:
     return teams
 
 
+def remove_wild_cards(
+    expected_player_ids: list[int], results: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    players: list[dict[str, Any]] = []
+    for player in results:
+        if player["UserId"] in expected_player_ids:
+            players.append(player)
+
+    for pos, player in enumerate(players):
+        player["Position"] = pos
+    return players
+
+
 async def save_rre_results_file(file: UploadFile) -> None:
     """Saves the results contained in the json file produced by the raceroom server."""
 
@@ -241,6 +254,17 @@ async def save_rre_results_file(file: UploadFile) -> None:
     current_category = current_round.category
     driver_objs = current_category.active_drivers()
     drivers = {d.driver.rre_id: d.driver for d in driver_objs}
+    reserves: list[int] = []
+
+    for team in current_championship.teams:
+        for reserve in team.team.reserves():
+            if reserve.driver.rre_id:
+                reserves.append(reserve.driver.rre_id)
+    expected_player_ids = reserves + list(drivers.keys())
+
+    for session in data["Sessions"]:
+        players = remove_wild_cards(expected_player_ids, session["Players"])
+        session["Players"] = players
 
     qualifying_results: list[QualifyingResult] = []
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
@@ -299,8 +323,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
             session = current_round.long_race
 
         deferred_penalty_applied = False
-        # Create a RaceResult for every player in the session and check fastest lap
-
+        
         for player in race_data["Players"]:
             gap_to_first = 0
             for winners_lap, players_lap in zip(
@@ -333,7 +356,6 @@ async def save_rre_results_file(file: UploadFile) -> None:
                 fastest_lap_player_id = driver.id
 
             # Apply any deferred penalties
-
             for def_penalty in driver.deferred_penalties:
                 total_racetime += def_penalty.penalty.time_penalty
                 deferred_penalty_applied = True

@@ -1595,7 +1595,6 @@ class DriverCategory(Base):
 
         driver (Driver): Driver joining the category.
         category (Category): Category being joined by the driver.
-        car_class (CarClass): CarClass the driver is in.
     """
 
     __tablename__ = "drivers_categories"

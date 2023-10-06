@@ -368,14 +368,15 @@ def save_results(
     if driver_points:
         current_category = qualifying_results[0].category
         for driver, points in driver_points.items():
-            sqla_session.add(
-                DriverCategory(
-                    driver=driver,
-                    category=current_category,
-                    race_number=0,
-                    points=points,
-                )
+            dc = DriverCategory(
+                driver=driver,
+                category=current_category,
+                race_number=0,
+                points=points,
             )
+            sqla_session.add(dc)
+            drivers.append(dc)
+            
     drivers.sort(key=lambda d: d.points, reverse=True)
 
     for p, driver in enumerate(drivers, 1):
