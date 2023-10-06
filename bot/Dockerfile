@@ -1,4 +1,4 @@
-FROM python:3.11-bullseye as base
+FROM python:3.12-bullseye as base
 
 # Keeps Python from generating .pyc files in the container
 ENV PYTHONDONTWRITEBYTECODE 1
