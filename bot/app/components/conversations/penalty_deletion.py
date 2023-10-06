@@ -25,7 +25,7 @@ engine = create_engine(os.environ["DB_URL"])
 
 DBSession = sessionmaker(bind=engine, autoflush=False)
 
-SAVE_CATEGORY, SAVE_ROUND, SAVE_PENALTY, CONFIRM, DELETE_PENALTY = range(26, 31)
+SAVE_CATEGORY, SAVE_ROUND, SAVE_PENALTY, CONFIRM, DELETE_PENALTY = range(28, 33)
 EXIT = "e"
 BACK = "b"
 YES = "y"
