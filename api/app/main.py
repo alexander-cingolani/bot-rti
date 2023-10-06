@@ -54,7 +54,6 @@ async def rti(
     championship_id: str | int | None = Form(default="latest"),
     category_id: int | None = Form(default=None),
 ):
-    logging.info(f"{action}, {championship_id}, {category_id}")
     match action:
         case "get_teams":
             if championship_id is None:
