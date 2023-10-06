@@ -233,8 +233,10 @@ async def save_rre_results_file(file: UploadFile) -> None:
         current_round := date_round[datetime.utcfromtimestamp(data["StartTime"]).date()]
     ):
         raise HTTPException(
-            500, "The date in the file does not match any date in the championship."
+            400, "The date in the file does not match any date in the championship."
         )
+    if current_round.is_completed:
+        raise HTTPException(500, "This file has already been saved.")
 
     current_category = current_round.category
     driver_objs = current_category.active_drivers()
