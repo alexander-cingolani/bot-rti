@@ -20,6 +20,7 @@ from models import (
     Chat,
     DeferredPenalty,
     Driver,
+    DriverContract,
     DriverCategory,
     DriverContract,
     DriverRole,
