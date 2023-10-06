@@ -1450,6 +1450,12 @@ class Team(Base):
         """Returns the most recent championship."""
         return self.championships[-1]
 
+    def reserves(self) -> list[DriverContract]:
+        """Returns all drivers who are currently contracted as reserves."""
+        return [
+            d for d in self.contracted_drivers if d.role.name == "reserve" and not d.end
+        ]
+
 
 class TeamPermission(Base):
     """Represents a permission within a team.
@@ -1589,7 +1595,6 @@ class DriverCategory(Base):
 
         driver (Driver): Driver joining the category.
         category (Category): Category being joined by the driver.
-        car_class (CarClass): CarClass the driver is in.
     """
 
     __tablename__ = "drivers_categories"

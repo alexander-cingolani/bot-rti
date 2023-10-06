@@ -121,10 +121,10 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/upload-rre-results/", response_model=User)
+@app.post("/upload-rre-results/", response_model=Token)
 async def upload_rre_results(
     current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File()
 ):
     await save_rre_results_file(file)
     access_token = create_access_token({"sub": current_user.username})
-    return {"access_token": access_token, "token_type_bearer": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer"}

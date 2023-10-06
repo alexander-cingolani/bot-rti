@@ -324,7 +324,7 @@ def _update_ratings(results: list[RaceResult]) -> None:
 
 
 def save_results(
-    session: SQLASession,
+    sqla_session: SQLASession,
     qualifying_results: list[QualifyingResult],
     races: dict[Session, list[RaceResult]],
 ) -> None:
@@ -333,19 +333,19 @@ def save_results(
     driver_points: defaultdict[Driver, float] = defaultdict(float)
 
     # Calculates points earned in qualifying by each driver.
-    session.add_all(qualifying_results)
+    sqla_session.add_all(qualifying_results)
     for quali_result in qualifying_results:
         points_earned = quali_result.points_earned
         driver_points[quali_result.driver] += points_earned
 
         # Should never be None, since every driver who takes part in a race/qualifying session
-        # must also be part of a team. No wild cards are allowed.
+        # must also be part of a team.
         team_championship: TeamChampionship = quali_result.driver.current_team().current_championship()  # type: ignore
         team_championship.points += points_earned
 
     # Calculates points earned across all race sessions by each driver.
     for _, race_results in races.items():
-        session.add_all(race_results)
+        sqla_session.add_all(race_results)
         _update_ratings(race_results)
         for race_result in race_results:
             points_earned = race_result.points_earned
@@ -362,13 +362,27 @@ def save_results(
 
     for driver in drivers:
         driver.points += driver_points[driver.driver]
+        driver_points.pop(driver.driver)
+
+    # Remaining drivers are reserves who are covering in this category for the first time
+    if driver_points:
+        current_category = qualifying_results[0].category
+        for driver, points in driver_points.items():
+            dc = DriverCategory(
+                driver=driver,
+                category=current_category,
+                race_number=0,
+                points=points,
+            )
+            sqla_session.add(dc)
+            drivers.append(dc)
 
     drivers.sort(key=lambda d: d.points, reverse=True)
 
     for p, driver in enumerate(drivers, 1):
         driver.position = p
 
-    session.commit()
+    sqla_session.commit()
 
 
 def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
