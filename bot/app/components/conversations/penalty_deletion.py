@@ -288,14 +288,14 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     delete_penalty(sqla_session, penalty)
-
+    p = penalty
     text = (
         "Penalità rimossa con successo!\n"
-        f"\n<b>{penalty.warnings}</b> warning rimosso/i"
-        f"\n<b>{penalty.licence_points}</b> punto/i licenza restituiti"
-        f"\n<b>{penalty.points}</b> punto/i di penalità rimosso/i"
-        f"\n<b>{penalty.time_penalty}s</b> tolti dal tempo di gara"
-        
+        f"\n<b>{p.warnings}</b> warning rimoss{'o' if p.warnings == 1 else 'i'}"
+        f"\n<b>{p.reprimands}</b> richiam{'o' if p.reprimands == 1 else 'i'} rimoss{'o' if p.reprimands == 1 else 'i'}"
+        f"\n<b>{p.licence_points}</b> punt{'o' if p.licence_points == 1 else 'i'} licenza restituit{'o' if p.licence_points == 1 else 'i'}"
+        f"\n<b>{p.points}</b> punt{'o' if p.points == 1 else 'i'} restituit{'o' if p.points == 1 else 'i'}"
+        f"\n<b>{p.time_penalty}s</b> tolti dal tempo di gara"
     )
     if penalty.time_penalty:
         text += "\n\nStatistiche e classifiche sono state aggiornate di conseguenza."
