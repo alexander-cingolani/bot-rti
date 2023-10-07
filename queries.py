@@ -624,22 +624,33 @@ def delete_penalty(session: SQLASession, penalty: Penalty):
     """Reverses and deletes the given penalty."""
 
     delete_penalty_stmt = delete(Penalty).where(
-        Penalty.penalty_id == penalty.penalty_id
+        Penalty.id == penalty.id
     )
     category = penalty.category
     drivers = category.active_drivers()
 
-    # Applies licence points and warnings to the penalised driver's record.
+    # Gives back licence points, championship points, removes reprimands
+    # and warnings to the penalised driver's record.
     for driver_category in penalty.driver.categories:
-        if driver_category.category_id == penalty.category.category_id:
+        if driver_category.category_id == penalty.category_id:
             driver_category.licence_points += penalty.licence_points
             driver_category.warnings -= penalty.warnings
+            driver_category.reprimands += penalty.reprimands
+            driver_category.points += penalty.points
             break
     else:
         raise RuntimeError()
 
-    # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
+    # If no time penalty was issued, give back points to team (if any), save and return.
     if not penalty.time_penalty:
+        driver_team = penalty.reporting_driver.current_team()
+        if driver_team and penalty.points:
+            teams: list[TeamChampionship] = []
+            for team in category.championship.teams:
+                teams.append(team)
+                if driver_team.id == team.team_id:
+                    team.points += penalty.points               
+
         session.execute(delete_penalty_stmt)
         session.commit()
         return
@@ -654,9 +665,9 @@ def delete_penalty(session: SQLASession, penalty: Penalty):
     # Gets the race results from the relevant session ordered by finishing position.
     rows = session.execute(
         select(RaceResult)
-        .where(RaceResult.session_id == penalty.session.session_id)
+        .where(RaceResult.session_id == penalty.session_id)
         .where(RaceResult.participated == True)
-        .order_by(RaceResult.finishing_position)
+        .order_by(RaceResult.position)
     ).all()
 
     race_results: list[RaceResult] = []
@@ -670,7 +681,7 @@ def delete_penalty(session: SQLASession, penalty: Penalty):
         ] = race_result.points_earned
 
         # Remove the penalty from the driver's result
-        if race_result.driver_id == penalty.driver.driver_id:
+        if race_result.driver_id == penalty.driver_id:
             race_result.total_racetime -= penalty.time_penalty  # type: ignore
             race_result.gap_to_first -= penalty.time_penalty  # type: ignore
 
@@ -689,7 +700,7 @@ def delete_penalty(session: SQLASession, penalty: Penalty):
     driver_points_after_penalty_deletion: dict[Driver, float] = {}
     for position, result in enumerate(race_results, start=1):
         result.gap_to_first = result.total_racetime - best_time  # type: ignore
-        result.finishing_position = position
+        result.position = position
         driver_points_after_penalty_deletion[result.driver] = result.points_earned
 
     # Apply championships standings changes
