@@ -295,7 +295,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
                     participated=True,
                 )
             )
-        
+
         # Add qualifying results for drivers who didn't participate to quali
         for driver in driver_objs:
             for result in qualifying_results:
@@ -313,7 +313,6 @@ async def save_rre_results_file(file: UploadFile) -> None:
                     )
                 )
         sqla_session.add_all(qualifying_results)
-                
 
     for i, race_data in enumerate(data["Sessions"][2:]):
         fastest_lap = float("inf")
@@ -410,11 +409,12 @@ async def save_rre_results_file(file: UploadFile) -> None:
                         category_id=current_category.id,
                     )
                 )
-                
+
         driver_race_results[fastest_lap_player_id].fastest_lap = True
         sqla_session.add_all(races[session])
     from pprint import pformat
     import logging
+
     logging.info(pformat(races))
     current_round.is_completed = True
     save_results(sqla_session, qualifying_results, races)
