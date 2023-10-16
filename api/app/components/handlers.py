@@ -9,7 +9,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, DriverContract, QualifyingResult, RaceResult, Session
+from models import Driver, QualifyingResult, RaceResult, Session
 from queries import get_category, get_championship, get_teams, save_results
 
 URL = os.environ["DB_URL"]
@@ -218,12 +218,13 @@ def remove_wild_cards(
     expected_player_ids: list[int], results: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     players: list[dict[str, Any]] = []
+    wild_card_counter = 0
     for player in results:
         if player["UserId"] in expected_player_ids:
+            player["Position"] -= wild_card_counter
             players.append(player)
-
-    for pos, player in enumerate(players):
-        player["Position"] = pos
+        else:
+            wild_card_counter += 1
     return players
 
 
@@ -249,7 +250,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
             400, "The date in the file does not match any date in the championship."
         )
     if current_round.is_completed:
-        raise HTTPException(500, "This file has already been saved.")
+        raise HTTPException(422, "This file has already been saved.")
 
     current_category = current_round.category
     driver_objs = current_category.active_drivers()
@@ -294,6 +295,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
                     participated=True,
                 )
             )
+
         # Add qualifying results for drivers who didn't participate to quali
         for driver in driver_objs:
             for result in qualifying_results:
@@ -310,6 +312,7 @@ async def save_rre_results_file(file: UploadFile) -> None:
                         category_id=current_category.id,
                     )
                 )
+        sqla_session.add_all(qualifying_results)
 
     for i, race_data in enumerate(data["Sessions"][2:]):
         fastest_lap = float("inf")
@@ -325,6 +328,9 @@ async def save_rre_results_file(file: UploadFile) -> None:
         deferred_penalty_applied = False
 
         for player in race_data["Players"]:
+            if status := player.get("FinishStatus"):
+                if status != "Finished":
+                    continue
             gap_to_first = 0
             for winners_lap, players_lap in zip(
                 race_data["Players"][0]["RaceSessionLaps"], player["RaceSessionLaps"]
@@ -405,6 +411,10 @@ async def save_rre_results_file(file: UploadFile) -> None:
                 )
 
         driver_race_results[fastest_lap_player_id].fastest_lap = True
+        sqla_session.add_all(races[session])
+    from pprint import pformat
+    import logging
 
+    logging.info(pformat(races))
     current_round.is_completed = True
     save_results(sqla_session, qualifying_results, races)
