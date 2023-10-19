@@ -435,29 +435,29 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
 
     penalised_race_result: RaceResult | None = None
     race_results: list[RaceResult] = []
-    previous_points = 0.0
+    driver_points: dict[Driver, float] = {}
     # Finds the race result belonging to the penalised driver and applies the time penalty
     for row in rows:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
+        driver_points[race_result.driver] = race_result.points_earned
         if race_result.driver_id == penalty.driver.id and race_result.participated:
-            previous_points = race_result.points_earned
             race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
 
-        # Defers the time penalty in case the penalised driver did not complete the race
+    # Defers the time penalty in case the penalised driver did not complete the race
     if not penalised_race_result:
         if penalty.session.name == "Gara 1":
-            # Finds the race result belonging to the penalised driver and applies the time penalty
+            driver_points.clear()
+            # If penalty was applied in first race, check if driver completed the second race and apply it there
             race_results = penalty.round.long_race.race_results
-
             for race_result in race_results:
                 race_results.append(race_result)
+                driver_points[race_result.driver] = race_result.points_earned
                 if (
                     race_result.driver_id == penalty.driver.id
                     and race_result.participated
                 ):
-                    previous_points = race_result.points_earned
                     race_result.total_racetime += penalty.time_penalty  # type: ignore
                     penalised_race_result = race_result
 
@@ -483,18 +483,26 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         result.gap_to_first = result.total_racetime - best_time  # type: ignore
         result.position = position
 
-    # Gets the penalised driver's team, then deducts any points lost due to the penalty
-    # from the team's points tally.
-    delta = float(previous_points) - float(penalised_race_result.points_earned)  # type: ignore
-    team_championship: TeamChampionship = penalty.team.current_championship()  # type: ignore
-    team_championship.points -= delta
-    driver_category: DriverCategory = penalty.driver.current_category()  # type: ignore
-    driver_category.points -= delta
+    # Remove points earned before the penalty and add the points after the penalty.
+    drivers: list[DriverCategory] = []
+    for race_result in race_results:
+        driver = race_result.driver
 
-    drivers = driver_category.category.drivers
+        driver_category: DriverCategory = driver.current_category()  # type: ignore
+        team: TeamChampionship = driver.current_team().current_championship()  # type: ignore
+
+        drivers.append(driver_category)
+
+        driver_category.points -= driver_points[driver]
+        team.points -= driver_points[driver]
+
+        points_earned = race_result.points_earned
+        driver_category.points += points_earned
+        team.points += points_earned
+
     drivers.sort(key=lambda d: d.points, reverse=True)
 
-    # Apply correct positions.
+    # Apply correct championship positions.
     for pos, driver in enumerate(drivers, start=1):
         driver.position = pos
         if driver.driver_id == penalty.driver_id:

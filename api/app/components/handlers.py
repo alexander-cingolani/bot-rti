@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from collections import defaultdict
@@ -36,11 +36,18 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
     for i, category in enumerate(championship.categories):
         provisional_results = False
         last_round = category.last_completed_round()
-        if last_round:
+
+        if not last_round:
+            continue
+
+        if (datetime.now().date() - last_round.date) < timedelta(days=1):
+            provisional_results = True
+        else:
             for report in last_round.reports:
                 if not report.is_reviewed:
                     provisional_results = True
                     break
+
         categories.append(
             {
                 "category_id": category.id,
