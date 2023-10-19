@@ -132,7 +132,10 @@ def get_reports(
         statement = statement.where(Report.is_reviewed == is_reviewed)
 
     result = session.execute(statement.order_by(Report.number)).all()
-    return [res[0] for res in result]
+    reports: list[Report] = [res[0] for res in result]
+
+    reports.sort(key=lambda r: r.round.date)
+    return reports
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore

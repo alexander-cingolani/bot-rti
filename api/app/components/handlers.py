@@ -34,12 +34,20 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
 
     categories: list[dict[str, Any]] = []
     for i, category in enumerate(championship.categories):
+        provisional_results = False
+        last_round = category.last_completed_round()
+        if last_round:
+            for report in last_round.reports:
+                if not report.is_reviewed:
+                    provisional_results = True
+                    break
         categories.append(
             {
                 "category_id": category.id,
                 "category_name": category.name,
                 "championship": category.championship_id,
                 "order": i,
+                "provisional": provisional_results,
             }
         )
 
