@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import enum
+import json
 import os
 from collections import defaultdict
 from datetime import datetime as dt
@@ -16,7 +17,6 @@ from typing import Any, DefaultDict, Optional
 
 from cachetools import TTLCache, cached
 from sqlalchemy import (
-    ARRAY,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -27,14 +27,26 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Interval,
+    MetaData,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    column,
+    create_engine,
     func,
+    insert,
+    select,
+    table,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 
 DOMAIN = os.environ.get("ZONE")
 SUBDOMAIN = os.environ.get("SUBDOMAIN")
@@ -69,7 +81,7 @@ class Championship(Base):
     id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    end: Mapped[datetime.date] = mapped_column(Date)
+    end: Mapped[datetime.date] = mapped_column(Date, nullable=True)
 
     categories: Mapped[list[Category]] = relationship(
         back_populates="championship", order_by="Category.id"
@@ -154,13 +166,17 @@ class PointSystem(Base):
     __tablename__ = "point_systems"
 
     id: Mapped[int] = mapped_column("point_system_id", SmallInteger, primary_key=True)
-    point_system: Mapped[list[float]] = mapped_column(ARRAY(Float), nullable=False)
+    _point_system: Mapped[str] = mapped_column("point_system", String(100), nullable=False)
 
     def __repr__(self) -> str:
         return (
             f"PointSystem(point_system_id={self.id}, "
             f"point_system={self.point_system})"
         )
+
+    @property
+    def point_system(self) -> list[float]:
+        return json.loads(self._point_system)
 
 
 class Permission(Base):
@@ -172,8 +188,8 @@ class Permission(Base):
 
     __tablename__ = "permissions"
 
-    id: Mapped[int] = mapped_column("privilige_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    id: Mapped[int] = mapped_column("permission_id", Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
 
 class Role(Base):
@@ -186,7 +202,7 @@ class Role(Base):
     __tablename__ = "roles"
 
     id: Mapped[int] = mapped_column("role_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
     permissions: Mapped[list[RolePermission]] = relationship(back_populates="role")
 
@@ -232,7 +248,7 @@ class CarClass(Base):
     __tablename__ = "car_classes"
 
     id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
     in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
@@ -270,7 +286,7 @@ class Car(Base):
     __tablename__ = "cars"
 
     id: Mapped[int] = mapped_column("car_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
     in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
@@ -294,7 +310,7 @@ class Circuit(Base):
     __tablename__ = "circuits"
 
     id: Mapped[int] = mapped_column("circuit_id", SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
     abbreviated_name: Mapped[str] = mapped_column(String(20), nullable=False)
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
@@ -330,7 +346,7 @@ class CircuitConfiguration(Base):
 
     id: Mapped[int] = mapped_column("configuration_id", primary_key=True)
     circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), primary_key=True)
-    name: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String(50))
     circuit: Mapped[Circuit] = relationship(back_populates="configurations")
 
 
@@ -361,7 +377,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column("category_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), nullable=False)
-    tag: Mapped[str] = mapped_column(String(7), nullable=False)
+    tag: Mapped[str] = mapped_column(String(8), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     split_point: Mapped[int] = mapped_column(SmallInteger)
     fastest_lap_points: Mapped[str] = mapped_column(String(15))
@@ -694,8 +710,8 @@ class Session(Base):
     )
     fuel_consumption: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     tyre_degradation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    time_of_day: Mapped[str] = mapped_column(String, nullable=False)
-    weather: Mapped[str] = mapped_column(String(60))
+    time_of_day: Mapped[str] = mapped_column(String(30), nullable=False)
+    weather: Mapped[str] = mapped_column(String(20))
     laps: Mapped[int] = mapped_column(SmallInteger)
     duration: Mapped[datetime.timedelta] = mapped_column(Interval)
     round_id: Mapped[int] = mapped_column(ForeignKey(Round.id))
@@ -974,11 +990,11 @@ class Report(Base):
 
     id: Mapped[int] = mapped_column("report_id", Integer, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    incident_time: Mapped[str] = mapped_column(String(12), nullable=False)
-    reason: Mapped[str] = mapped_column(String(2000), nullable=False)
+    incident_time: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason: Mapped[str] = mapped_column(Text(2000), nullable=False)
     is_reviewed: Mapped[str] = mapped_column(Boolean, nullable=False, default=False)
     report_time: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, server_default="current_timestamp"
+        DateTime, nullable=False, server_default=func.now()
     )
     channel_message_id: Mapped[int] = mapped_column(BigInteger)
 
@@ -1063,13 +1079,19 @@ class Driver(Base):
     __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
     id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    surname: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String(30), nullable=False)
+    surname: Mapped[str] = mapped_column(String(30), nullable=False)
     rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
-    mu: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
-    sigma: Mapped[Decimal] = mapped_column(Numeric(precision=6), nullable=False)
-    _telegram_id: Mapped[str | None] = mapped_column("telegram_id", Text, unique=True)
+    mu: Mapped[Decimal] = mapped_column(
+        Numeric(precision=6), nullable=False, default=25
+    )
+    sigma: Mapped[Decimal] = mapped_column(
+        Numeric(precision=6), nullable=False, default=25
+    )
+    _telegram_id: Mapped[str | None] = mapped_column(
+        "telegram_id", String(21), unique=True
+    )
 
     contracts: Mapped[list[DriverContract]] = relationship(
         back_populates="driver",
@@ -1466,7 +1488,7 @@ class TeamPermission(Base):
     __tablename__ = "team_permissions"
 
     id: Mapped[int] = mapped_column("team_permission_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
 
 class TeamRole(Base):
@@ -1479,7 +1501,7 @@ class TeamRole(Base):
     __tablename__ = "team_roles"
 
     id: Mapped[int] = mapped_column("team_role_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
     permissions: Mapped[list[TeamRolePermission]] = relationship(
         back_populates="team_role"
@@ -1529,7 +1551,7 @@ class DriverContract(Base):
     __table_args__ = (UniqueConstraint("start", "driver_id", "team_id"),)
 
     start: Mapped[datetime.date] = mapped_column(
-        Date, server_default=func.now(), default=False, nullable=False
+        Date, default=datetime.datetime.now().date(), nullable=False
     )
     end: Mapped[datetime.date | None] = mapped_column(Date)
     acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
@@ -1600,7 +1622,7 @@ class DriverCategory(Base):
 
     __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
-    joined_on: Mapped[datetime.date] = mapped_column(Date, server_default=func.now())
+    joined_on: Mapped[datetime.date] = mapped_column(Date, default=dt.now().date())
     left_on: Mapped[datetime.date] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -1841,7 +1863,7 @@ class Chat(Base):
 
     id: Mapped[int] = mapped_column("chat_id", BigInteger, primary_key=True)
     is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    name: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String(255))
     user_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
@@ -1871,3 +1893,8 @@ class DeferredPenalty(Base):
 
     penalty: Mapped[Penalty] = relationship()
     driver: Mapped[Driver] = relationship(back_populates="deferred_penalties")
+    
+    
+if __name__ == '__main__':
+    Base.metadata.create_all(bind=create_engine("mysql+mysqlconnector://alexander:alexander@172.18.0.03:3306/rti-dev"))
+    
