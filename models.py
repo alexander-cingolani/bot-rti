@@ -1080,10 +1080,10 @@ class Driver(Base):
     rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
     mu: Mapped[Decimal] = mapped_column(
-        Numeric(precision=6), nullable=False, default=25
+        Numeric(precision=7, scale=5), nullable=False, default=25
     )
     sigma: Mapped[Decimal] = mapped_column(
-        Numeric(precision=6), nullable=False, default=25 / 3
+        Numeric(precision=7, scale=5), nullable=False, default=25 / 3
     )
     _telegram_id: Mapped[str | None] = mapped_column(
         "telegram_id", String(21), unique=True
