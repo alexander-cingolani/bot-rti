@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, insert, select
 from sqlalchemy.orm import sessionmaker
 from sshtunnel import SSHTunnelForwarder
 import models
+
 server = SSHTunnelForwarder(
     ("192.168.0.21", 22),
     ssh_username="alex",

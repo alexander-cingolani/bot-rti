@@ -1665,7 +1665,9 @@ class QualifyingResult(Base):
 
     __table_args__ = (
         UniqueConstraint("driver_id", "session_id", "round_id"),
-        UniqueConstraint("position", "session_id", "category_id", name="position_session_category_uq"),
+        UniqueConstraint(
+            "position", "session_id", "category_id", name="position_session_category_uq"
+        ),
     )
 
     id: Mapped[int] = mapped_column(
