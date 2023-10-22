@@ -41,6 +41,7 @@ __pycache__
 **/*.db
 **/postgres-data
 **/*.env
+rti-db-dev
 
 # vercel
 **/.vercel
