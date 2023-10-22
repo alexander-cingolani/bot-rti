@@ -27,25 +27,19 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Interval,
-    MetaData,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
-    column,
     create_engine,
     func,
-    insert,
-    select,
-    table,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
     mapped_column,
     relationship,
-    sessionmaker,
 )
 
 DOMAIN = os.environ.get("ZONE")
@@ -81,7 +75,7 @@ class Championship(Base):
     id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    end: Mapped[datetime.date] = mapped_column(Date, nullable=True)
+    end: Mapped[datetime.date | None] = mapped_column(Date)
 
     categories: Mapped[list[Category]] = relationship(
         back_populates="championship", order_by="Category.id"
@@ -147,7 +141,7 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column("game_id", Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
 
     def __repr__(self) -> str:
         return f"Game(game_id={self.id}, name={self.name})"
@@ -166,7 +160,9 @@ class PointSystem(Base):
     __tablename__ = "point_systems"
 
     id: Mapped[int] = mapped_column("point_system_id", SmallInteger, primary_key=True)
-    _point_system: Mapped[str] = mapped_column("point_system", String(100), nullable=False)
+    _point_system: Mapped[str] = mapped_column(
+        "point_system", String(100), nullable=False
+    )
 
     def __repr__(self) -> str:
         return (
@@ -249,7 +245,7 @@ class CarClass(Base):
 
     id: Mapped[int] = mapped_column("car_class_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
-    in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    in_game_id: Mapped[int | None] = mapped_column(Integer)
 
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
 
@@ -287,7 +283,7 @@ class Car(Base):
 
     id: Mapped[int] = mapped_column("car_id", Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    in_game_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    in_game_id: Mapped[int | None] = mapped_column(Integer)
 
     car_class_id: Mapped[int] = mapped_column(ForeignKey(CarClass.id), nullable=False)
 
@@ -346,7 +342,7 @@ class CircuitConfiguration(Base):
 
     id: Mapped[int] = mapped_column("configuration_id", primary_key=True)
     circuit_id: Mapped[int] = mapped_column(ForeignKey(Circuit.id), primary_key=True)
-    name: Mapped[str] = mapped_column(String(50))
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
     circuit: Mapped[Circuit] = relationship(back_populates="configurations")
 
 
@@ -379,8 +375,8 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     tag: Mapped[str] = mapped_column(String(8), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    split_point: Mapped[int] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[str] = mapped_column(String(15))
+    split_point: Mapped[int | None] = mapped_column(SmallInteger)
+    fastest_lap_points: Mapped[str | None] = mapped_column(String(15))
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), nullable=False
@@ -711,10 +707,10 @@ class Session(Base):
     fuel_consumption: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     tyre_degradation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     time_of_day: Mapped[str] = mapped_column(String(30), nullable=False)
-    weather: Mapped[str] = mapped_column(String(20))
-    laps: Mapped[int] = mapped_column(SmallInteger)
-    duration: Mapped[datetime.timedelta] = mapped_column(Interval)
-    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id))
+    weather: Mapped[str | None] = mapped_column(String(20))
+    laps: Mapped[int | None] = mapped_column(SmallInteger)
+    duration: Mapped[datetime.timedelta | None] = mapped_column(Interval)
+    round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
     point_system_id: Mapped[int] = mapped_column(
         ForeignKey(PointSystem.id), nullable=False
     )
@@ -996,7 +992,7 @@ class Report(Base):
     report_time: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
-    channel_message_id: Mapped[int] = mapped_column(BigInteger)
+    channel_message_id: Mapped[int | None] = mapped_column(BigInteger)
 
     category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
     round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
@@ -1079,15 +1075,15 @@ class Driver(Base):
     __table_args__ = (UniqueConstraint("driver_id", "telegram_id"),)
 
     id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(30), nullable=False)
-    surname: Mapped[str] = mapped_column(String(30), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(30))
+    surname: Mapped[str | None] = mapped_column(String(30))
     rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
     mu: Mapped[Decimal] = mapped_column(
         Numeric(precision=6), nullable=False, default=25
     )
     sigma: Mapped[Decimal] = mapped_column(
-        Numeric(precision=6), nullable=False, default=25
+        Numeric(precision=6), nullable=False, default=25 / 3
     )
     _telegram_id: Mapped[str | None] = mapped_column(
         "telegram_id", String(21), unique=True
@@ -1555,7 +1551,7 @@ class DriverContract(Base):
     )
     end: Mapped[datetime.date | None] = mapped_column(Date)
     acquisition_fee: Mapped[Optional[int]] = mapped_column(SmallInteger)
-    length: Mapped[int] = mapped_column(Integer, nullable=False)
+    length: Mapped[int | None] = mapped_column(Integer)
     role_id: Mapped[int] = mapped_column(
         "team_role_id", ForeignKey(TeamRole.id), nullable=False
     )
@@ -1623,7 +1619,7 @@ class DriverCategory(Base):
     __table_args__ = (UniqueConstraint("driver_id", "category_id"),)
 
     joined_on: Mapped[datetime.date] = mapped_column(Date, default=dt.now().date())
-    left_on: Mapped[datetime.date] = mapped_column(Date)
+    left_on: Mapped[datetime.date | None] = mapped_column(Date)
     race_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     reprimands: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -1669,7 +1665,7 @@ class QualifyingResult(Base):
 
     __table_args__ = (
         UniqueConstraint("driver_id", "session_id", "round_id"),
-        UniqueConstraint("position", "session_id", name="position_session_uq"),
+        UniqueConstraint("position", "session_id", "category_id", name="position_session_category_uq"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -1765,7 +1761,7 @@ class RaceResult(Base):
     )
 
     id: Mapped[int] = mapped_column("result_id", Integer, primary_key=True)
-    position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    position: Mapped[int | None] = mapped_column(SmallInteger)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
@@ -1893,8 +1889,11 @@ class DeferredPenalty(Base):
 
     penalty: Mapped[Penalty] = relationship()
     driver: Mapped[Driver] = relationship(back_populates="deferred_penalties")
-    
-    
-if __name__ == '__main__':
-    Base.metadata.create_all(bind=create_engine("mysql+mysqlconnector://alexander:alexander@172.18.0.03:3306/rti-dev"))
-    
+
+
+if __name__ == "__main__":
+    Base.metadata.create_all(
+        bind=create_engine(
+            "mysql+mysqlconnector://alexander:alexander@172.18.0.03:3306/rti-dev"
+        )
+    )
