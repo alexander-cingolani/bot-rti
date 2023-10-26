@@ -15,7 +15,7 @@ services:
 
     volumes:
       - ./rti-db-dev:/var/lib/mysql/
-      - ./sql/create_mysql.sql:/docker-entrypoint-initdb.d/create_db.sql
+      - ./sql/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
 
     networks:
       - backend
