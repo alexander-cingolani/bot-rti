@@ -843,10 +843,16 @@ async def update_participation_list(
 
     match received_status:
         case "participating":
+            if participant.participating == Participation.YES:
+                return
             participant.participating = Participation.YES
         case "not_participating":
+            if participant.participating == Participation.NO:
+                return
             participant.participating = Participation.NO
         case "not_sure":
+            if participant.participating == Participation.UNCERTAIN:
+                return
             participant.participating = Participation.UNCERTAIN
         case _:
             pass
