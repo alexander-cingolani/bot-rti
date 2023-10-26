@@ -71,7 +71,7 @@ if not TOKEN:
     raise RuntimeError("No bot token found in environment variables.")
 
 if os.environ.get("DB_URL"):
-    engine = create_engine(os.environ["DB_URL"])
+    engine = create_engine(os.environ["DB_URL"], pool_pre_ping=True)
 else:
     raise RuntimeError("No DB_URL in environment variables, can't connect to database.")
 
@@ -706,6 +706,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
     sqla_session = DBSession()
+
     championship = get_championship(sqla_session)
     chat_data = cast(dict[str, Any], context.chat_data)
     chat_data["participation_list_sqlasession"] = sqla_session
