@@ -71,7 +71,7 @@ if not TOKEN:
     raise RuntimeError("No bot token found in environment variables.")
 
 if os.environ.get("DB_URL"):
-    engine = create_engine(os.environ["DB_URL"])
+    engine = create_engine(os.environ["DB_URL"], pool_pre_ping=True)
 else:
     raise RuntimeError("No DB_URL in environment variables, can't connect to database.")
 
@@ -145,7 +145,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     file = StringIO(message)
-    file.name = "Traceback"
+    file.name = "Traceback.txt"
     await context.bot.send_document(chat_id=config.DEVELOPER_CHAT, document=file)
 
 
@@ -706,6 +706,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of drivers supposed to participate to a race."""
 
     sqla_session = DBSession()
+
     championship = get_championship(sqla_session)
     chat_data = cast(dict[str, Any], context.chat_data)
     chat_data["participation_list_sqlasession"] = sqla_session
@@ -715,6 +716,10 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not (category := championship.current_racing_category()):
+        sqla_session.close()
+        return
+
+    if not category.game.name == "rre":
         sqla_session.close()
         return
 
@@ -839,10 +844,16 @@ async def update_participation_list(
 
     match received_status:
         case "participating":
+            if participant.participating == Participation.YES:
+                return
             participant.participating = Participation.YES
         case "not_participating":
+            if participant.participating == Participation.NO:
+                return
             participant.participating = Participation.NO
         case "not_sure":
+            if participant.participating == Participation.UNCERTAIN:
+                return
             participant.participating = Participation.UNCERTAIN
         case _:
             pass
