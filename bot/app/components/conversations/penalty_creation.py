@@ -323,7 +323,7 @@ async def report_processing_entry_point(
     if total == 1:
         text = f"C'è solo una segnalazione in {reports[0].category.name}"
     elif len(report_categories) == 1:
-        text = f"Ci {total} sono segnalazioni in {reports.pop().round.category.name}."
+        text = f"Ci sono {total} segnalazioni in {reports.pop().round.category.name}."
     else:
         text = f"Hai {total} segnalazioni da processare, di cui:\n"
         for category, number in report_categories.items():

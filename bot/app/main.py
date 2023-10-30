@@ -62,7 +62,7 @@ from queries import (
 )
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.ERROR
 )
 logger = logging.getLogger(__name__)
 
@@ -719,7 +719,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if not category.game.name == "rre":
+    if category.game.name == "rre":
         sqla_session.close()
         return
 
