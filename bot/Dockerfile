@@ -10,13 +10,16 @@ RUN apt-get update -y && apt-get upgrade -y
 RUN apt-get install tesseract-ocr -y
 RUN pip install pip --upgrade
 
+COPY ./bot/requirements.txt ./bot/requirements.txt
+
+WORKDIR /bot
+
+RUN pip install -r requirements.txt --no-cache
+
 COPY ./models.py /bot/models.py
 COPY ./queries.py /bot/queries.py
-WORKDIR /bot
 COPY ./bot/app /bot/app
 
-ADD ./bot/requirements.txt /bot/requirements.txt
-RUN pip install -r requirements.txt --no-cache
 
 # DEBUGGER ############################
 FROM base as debugger

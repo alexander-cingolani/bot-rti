@@ -10,13 +10,14 @@ RUN apt-get update -y && apt-get upgrade -y
 RUN pip install pip --upgrade
 
 
+COPY ./api/requirements.txt /api/requirements.txt
+
+WORKDIR /api
+
+RUN pip install --upgrade -r requirements.txt --no-cache
+
 COPY ./models.py /api/models.py
 COPY ./queries.py /api/queries.py
-WORKDIR /api
 COPY ./api/app /api/app
-
-ADD ./api/requirements.txt /api/requirements.txt
-RUN pip install --upgrade -r /api/requirements.txt --no-cache
-
 
 CMD ["hypercorn", "--bind", "0.0.0.0:80", "app.main:app"]
