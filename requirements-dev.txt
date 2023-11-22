@@ -1,10 +1,10 @@
-fastapi==0.103.2
-hypercorn==0.14.4
+fastapi==0.104.1
+hypercorn==0.15.0
 python-jose[cryptography]
 passlib
 
-SQLAlchemy==2.0.21
-psycopg==3.1.12
+SQLAlchemy==2.0.23
+mysql-connector-python
 
 cachetools==5.3.0
 more-itertools==9.1.0

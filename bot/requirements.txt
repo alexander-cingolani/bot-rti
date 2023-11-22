@@ -1,5 +1,5 @@
 python-telegram-bot[job-queue]==20.6
-SQLAlchemy==2.0.21
+SQLAlchemy==2.0.23
 cachetools==5.3.0
 mysql-connector-python
 more-itertools
