@@ -45,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 20400
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 * 2 + 240  # 2 weeks and 4 hours
 
 
 @app.post("/api")
