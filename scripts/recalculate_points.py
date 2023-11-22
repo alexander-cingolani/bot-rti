@@ -9,8 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from models import Driver, Team
 from queries import get_championship
 
-
-DB_URL = ""
+DB_URL = "mysql+mysqlconnector://alexander:alexander@172.18.0.2:3306/rti-dev"
 if not DB_URL:
     raise RuntimeError("DB_URL not found.")
 
@@ -33,6 +32,8 @@ def recalculate_points():
         print("\n\n\n")
         driver_points: defaultdict[Driver, float] = defaultdict(float)
         for round in category.rounds:
+            for penalty in round.penalties:
+                driver_points[penalty.driver] -= penalty.points
             for session in round.sessions:
                 if session.is_quali:
                     for result in session.qualifying_results:
