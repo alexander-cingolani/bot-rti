@@ -1,9 +1,7 @@
 {
     "editor.formatOnSave": true,
-    "python.formatting.provider": "none",
     "python.terminal.activateEnvironment": true,
     "python.terminal.activateEnvInCurrentTerminal": true,
-    "python.linting.pylintArgs": ["--rcfile=${env:HOME}/python_projects/pylintrc"],
     "python.analysis.typeCheckingMode": "strict",
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
