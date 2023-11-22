@@ -49,3 +49,5 @@ rti-db-dev
 # typescript
 **/*.tsbuildinfo/*
 next-env.d.ts
+
+**db
