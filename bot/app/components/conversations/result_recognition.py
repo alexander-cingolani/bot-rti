@@ -125,7 +125,7 @@ async def __ask_session(
             completed_sessions += 1
 
     chunked_session_buttons = list(chunked(session_buttons, 3))
-    text = "Scegli la sessione dove vuoi inserire o controllare i risultati."
+    text = f"{round.category.name}\n{round.number}^ Tappa ({round.circuit.abbreviated_name})\n\nScegli la sessione dove vuoi inserire i risultati."
 
     if completed_sessions == len(round.sessions):
         chunked_session_buttons.append(
