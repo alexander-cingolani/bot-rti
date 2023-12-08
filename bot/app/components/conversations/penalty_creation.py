@@ -367,7 +367,8 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             continue
 
         text = (
-            f"<b>{report.category.name}</b> - Segnalazione no.{report.number}\n\n"
+            f"<b>{report.category.name}</b>\n"
+            f"<i>Tappa {report.round.number}</i> ({report.round.circuit.abbreviated_name}) - Segnalazione no.{report.number}\n\n"
             f"<b>Piloti coinvolti</b>: {report.reported_driver.full_name}, "
             f"{report.reporting_driver.full_name}\n"
             f"<b>Sessione</b>: {report.session.name}\n"
