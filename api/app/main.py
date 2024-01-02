@@ -1,6 +1,8 @@
 from datetime import timedelta
 import logging
 from typing import Annotated
+from fastapi import Body
+import json
 
 from fastapi.security import OAuth2PasswordRequestForm
 from app.components.auth import (
@@ -18,6 +20,7 @@ from app.components.handlers import (
     get_standings_with_results,
     get_teams_list,
     save_rre_results_file,
+    save_rre_results,
 )
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,6 +108,7 @@ async def rti(
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ):
+    logger.info("La funzione login è stata chiamata.")
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -124,6 +128,22 @@ async def login_for_access_token(
 async def upload_rre_results(
     current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File()
 ):
+    logger.info("La funzione upload_rre_results è stata chiamata.")
     await save_rre_results_file(file)
+    access_token = create_access_token({"sub": current_user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/upload-rre-results-json/", response_model=Token)
+async def upload_rre_results(
+    current_user: Annotated[User, Depends(get_current_user)], 
+    json_data: dict = Body(...)
+):
+    logger.info("La funzione upload_rre_results_json è stata chiamata.")
+     # Converti il dizionario in una stringa JSON
+    json_data_str = json.dumps(json_data)
+    # Stampa la stringa JSON nel log
+    logger.info("json_data: " + json_data_str)
+    await save_rre_results(json_data_str)
     access_token = create_access_token({"sub": current_user.username})
     return {"access_token": access_token, "token_type": "bearer"}

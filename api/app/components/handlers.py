@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 import json
 import os
 from collections import defaultdict
@@ -18,6 +19,10 @@ RRE_GAME_ID = 3
 engine = create_engine(url=URL)
 SQLASession = sessionmaker(engine)
 
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
     session = SQLASession()
@@ -243,9 +248,10 @@ def remove_wild_cards(
     return players
 
 
-async def save_rre_results_file(file: UploadFile) -> None:
-    """Saves the results contained in the json file produced by the raceroom server."""
-
+async def save_rre_results(json_str: str) -> None:
+    logger.info("La funzione save_rre_results per i json string è stata chiamata.")
+    data = json.loads(json_str)
+    logger.info("Created data from json")
     sqla_session = SQLASession()
     current_championship = get_championship(sqla_session)
 
@@ -253,9 +259,6 @@ async def save_rre_results_file(file: UploadFile) -> None:
         raise HTTPException(
             500, "Championship was not configured correctly in the database."
         )
-
-    json_str = await file.read()
-    data = json.loads(json_str)
 
     date_round = {r.date: r for r in current_championship.rounds}
     if not (
@@ -428,8 +431,17 @@ async def save_rre_results_file(file: UploadFile) -> None:
         driver_race_results[fastest_lap_player_id].fastest_lap = True
         sqla_session.add_all(races[session])
     from pprint import pformat
-    import logging
 
     logging.info(pformat(races))
     current_round.is_completed = True
+    logger.info("Fine operazione json. Save results")
     save_results(sqla_session, qualifying_results, races)
+    
+
+async def save_rre_results_file(file: UploadFile) -> None:
+    """Saves the results contained in the json file produced by the raceroom server."""
+    logger.info("La funzione save_rre_results_file è stata chiamata.")
+    
+    json_str = await file.read()
+    logger.info("Chiamo la funzione di caricamento gia' con il json")
+    await save_rre_results(json_str)
