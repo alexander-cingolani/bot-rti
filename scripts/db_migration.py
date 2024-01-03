@@ -5,9 +5,9 @@ import models
 
 server = SSHTunnelForwarder(
     ("192.168.0.21", 22),
-    ssh_username="alex",
-    ssh_password="1q1q",
-    remote_bind_address=("172.23.0.2", 5432),
+    ssh_username="rti",
+    ssh_password="Gx75[0pC|#G]}O[",
+    remote_bind_address=("172.30.0.2", 3306),
 )
 server.start()
 a = server.local_bind_port  # type: ignore
@@ -23,9 +23,9 @@ mysql = sessionmaker(bind=mysql_engine)
 
 pg_session = pg()
 mysql_session = mysql()
-print("A")
+
 models.Base.metadata.create_all(mysql_engine)
-print("HERE")
+
 
 for table in models.Base.metadata.sorted_tables:
     src_table = models.Base.metadata.tables[table.name]
