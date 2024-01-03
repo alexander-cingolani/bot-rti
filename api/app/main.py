@@ -136,11 +136,11 @@ async def upload_rre_results(
 
 @app.post("/upload-rre-results-json/", response_model=Token)
 async def upload_rre_results(
-    current_user: Annotated[User, Depends(get_current_user)], 
-    json_data: dict = Body(...)
+    current_user: Annotated[User, Depends(get_current_user)],
+    json_data: dict = Body(...),
 ):
     logger.info("La funzione upload_rre_results_json è stata chiamata.")
-     # Converti il dizionario in una stringa JSON
+    # Converti il dizionario in una stringa JSON
     json_data_str = json.dumps(json_data)
     # Stampa la stringa JSON nel log
     logger.info("json_data: " + json_data_str)

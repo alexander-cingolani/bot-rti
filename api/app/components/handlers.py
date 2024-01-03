@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
     session = SQLASession()
 
@@ -436,12 +437,12 @@ async def save_rre_results(json_str: str) -> None:
     current_round.is_completed = True
     logger.info("Fine operazione json. Save results")
     save_results(sqla_session, qualifying_results, races)
-    
+
 
 async def save_rre_results_file(file: UploadFile) -> None:
     """Saves the results contained in the json file produced by the raceroom server."""
     logger.info("La funzione save_rre_results_file è stata chiamata.")
-    
+
     json_str = await file.read()
     logger.info("Chiamo la funzione di caricamento gia' con il json")
     await save_rre_results(json_str)
