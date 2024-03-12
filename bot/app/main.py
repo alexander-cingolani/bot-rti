@@ -835,7 +835,7 @@ async def update_participation_list(
     else:
         await update.callback_query.answer(
             "Non risulti come partecipante a questa categoria. Se si tratta di un errore, "
-            f"contatta @gino_pincopallo",
+            f"contatta @alex_cingolani",
             show_alert=True,
         )
         return
@@ -901,6 +901,9 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
     """Sends a message in the group chat mentioning drivers who forgot to reply to the
     participants list message."""
     chat_data = cast(dict[str, Any], context.chat_data)
+    session: SQLASession | None = chat_data.get("participation_list_sqlasession")
+    if not session:
+        session = DBSession()
 
     if not chat_data.get("participants"):
         championship = get_championship(session)
