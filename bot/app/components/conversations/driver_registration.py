@@ -1,6 +1,7 @@
 """
 This module contains all the callbacks necessary to register drivers to the database.
 """
+
 import os
 from typing import Any, cast
 

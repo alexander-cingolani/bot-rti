@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue]==20.6
+python-telegram-bot[job-queue]==20.7
 SQLAlchemy==2.0.23
 cachetools==5.3.0
 mysql-connector-python

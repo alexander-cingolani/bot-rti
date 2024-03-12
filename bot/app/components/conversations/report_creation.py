@@ -384,9 +384,9 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         [
             InlineKeyboardButton(
                 "« Sessione",
-                callback_data=str(SESSION)
-                if chat_data.get("late_report")
-                else "create_report",
+                callback_data=(
+                    str(SESSION) if chat_data.get("late_report") else "create_report"
+                ),
             )
         ]
     )

@@ -2,6 +2,7 @@
 This module contains the necessary SQLAlchemy models to keep track of
 RacingTeamItalia's championships and drivers.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -773,9 +774,11 @@ class Session(Base):
             results.extend(
                 sorted(
                     self.race_results,
-                    key=lambda x: x.total_racetime  # type: ignore
-                    if x.total_racetime is not None  # type: ignore
-                    else float("inf"),
+                    key=lambda x: (
+                        x.total_racetime  # type: ignore
+                        if x.total_racetime is not None  # type: ignore
+                        else float("inf")
+                    ),
                 )
             )
 

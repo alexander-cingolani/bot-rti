@@ -2,6 +2,7 @@
 This module contains the PenaltyDocument and ReportDocument classes, which generate a pdf
 file given a Penalty or Report object.
 """
+
 from datetime import datetime
 from textwrap import wrap
 
@@ -145,7 +146,9 @@ class ReportDocument:
     def __init__(self, report: Report) -> None:
         self.report: Report = report
         self.reporting_driver: Driver = report.reporting_driver
-        self.filename: str = f"{self.report.number} - Segnalazione {self.report.reported_driver.full_name}.pdf"
+        self.filename: str = (
+            f"{self.report.number} - Segnalazione {self.report.reported_driver.full_name}.pdf"
+        )
         self.subtitle: str = (
             f"{report.round.number}° Round | {report.round.circuit.name}"
         )

@@ -1,6 +1,7 @@
 """
 This module is for recalculating ratings in the database from scratch.
 """
+
 from collections import defaultdict
 
 from sqlalchemy import create_engine

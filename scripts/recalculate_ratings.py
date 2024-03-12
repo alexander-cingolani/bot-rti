@@ -1,6 +1,7 @@
 """
 This module is for recalculating ratings in the database from scratch.
 """
+
 from decimal import Decimal
 import os
 
@@ -51,8 +52,8 @@ def recalculate_ratings():
                         initial_ratings.append(rtg)
                         finishing_positions.append(result.position)
                         race_results.append(result)
-                    result.driver_mu = rtg[0].mu
-                    result.sigma = rtg[0].sigma
+                        result.mu = rtg[0].mu
+                        result.sigma = rtg[0].sigma
                 print(initial_ratings)
                 print(finishing_positions)
                 if initial_ratings:
