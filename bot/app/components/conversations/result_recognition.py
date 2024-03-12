@@ -420,9 +420,9 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                             race_result.total_racetime += penalty.penalty.time_penalty
 
                     race_results.sort(
-                        key=lambda rr: rr.gap_to_first
-                        if rr.gap_to_first
-                        else float("inf")
+                        key=lambda rr: (
+                            rr.gap_to_first if rr.gap_to_first else float("inf")
+                        )
                     )
                     best_time = race_results[0].total_racetime
                     # Applies the correct finishing position, recalculates the gap_to_first.

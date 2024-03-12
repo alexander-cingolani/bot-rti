@@ -1,6 +1,7 @@
 """
 This module is for recalculating ratings in the database from scratch.
 """
+
 from decimal import Decimal
 import os
 

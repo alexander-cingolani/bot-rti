@@ -523,16 +523,16 @@ async def ask_point_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             else:
                 time_penalty = int(update.callback_query.data.split()[0])
                 user_data["penalty"].time_penalty = time_penalty
-                user_data[
-                    "time_penalty_text"
-                ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+                user_data["time_penalty_text"] = (
+                    f"{time_penalty} secondi aggiunti sul tempo di gara"
+                )
         logging.info(user_data["penalty"].time_penalty)
     else:
         time_penalty = int(update.message.text.split()[0])
         user_data["penalty"].time_penalty = time_penalty
-        user_data[
-            "time_penalty_text"
-        ] = f"{time_penalty} secondi aggiunti sul tempo di gara"
+        user_data["time_penalty_text"] = (
+            f"{time_penalty} secondi aggiunti sul tempo di gara"
+        )
 
     text = "Seleziona i punti di penalità inflitti:"
     buttons: list[InlineKeyboardButton] = []
@@ -587,9 +587,9 @@ async def ask_licence_points(update: Update, context: ContextTypes.DEFAULT_TYPE)
             else:
                 points = int(update.callback_query.data.removeprefix("pp"))
                 user_data["penalty"].points = points
-                user_data[
-                    "point_penalty_text"
-                ] = f"{points} punti aggiunti sul tempo di gara"
+                user_data["point_penalty_text"] = (
+                    f"{points} punti aggiunti sul tempo di gara"
+                )
 
     else:
         points = int(update.message.text.split()[0])
