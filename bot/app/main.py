@@ -312,7 +312,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             id=update.message.chat_id,
             is_group=False,
             user_id=user.id,
-            name=user.username,
+            name=user.full_name,
         )
     )
     session.commit()
