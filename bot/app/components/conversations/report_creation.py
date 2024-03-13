@@ -103,16 +103,24 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data.clear()
         return ConversationHandler.END
 
+    today = datetime.now().date()
     buttons: list[InlineKeyboardButton] = []
     for i, category in enumerate(championship.categories):
-        championship_round = category.first_non_completed_round()
-        if championship_round:
-            if championship_round.date < datetime.now().date():
+        if datetime.now().weekday() == 6:
+            break
+
+        for championship_round in category.rounds:
+
+            if championship_round.date > today:
+                continue
+
+            if championship_round.date.isocalendar()[1] == today.isocalendar()[1]:
                 category_alias = f"c{i}"
                 buttons.append(
                     InlineKeyboardButton(category.name, callback_data=category_alias)
                 )
                 user_data["categories"][category_alias] = category
+                break
 
     if not buttons:
         text = (
@@ -190,10 +198,11 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Asks the user the session in which the accident happened."""
     user = update.effective_user
     user_data = cast(dict[str, Any], context.user_data)
+    chat_data = cast(dict[str, Any], context.chat_data)
     user_data.clear()
     sqla_session = DBSession()
     driver = get_driver(sqla_session, telegram_id=user.id)
-
+    chat_data["late_report"] = True
     if not driver:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"
