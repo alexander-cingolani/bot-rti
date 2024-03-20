@@ -427,20 +427,18 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     (
                         f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name}</b></i>\n\n"
                         + driver_rating_text
-                        + f"<b>Affidabilità</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
+                        + f"<b>Costanza</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
                         f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
                         f"<b>Passo gara</b>: <i>{race_pace if race_pace else 'Dati insufficienti.'}</i>\n\n"
+                        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
                         f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
                         f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
                         f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
                         f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
-                        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
-                        f"<b>Piazz. medio gara</b>: <i>{statistics['avg_race_position']}</i>\n"
-                        f"<b>Piazz. medio quali</b>: <i>{statistics['avg_quali_position']}</i>\n"
-                        f"<b>Punti licenza</b>: <i>{driver.licence_points}</i>\n"
-                        f"<b>Warning</b>: <i>{driver.warnings}</i>\n"
-                        f"<b>Team</b>: <i>{unique_teams}</i>"
+                        f"<b>P. media gara</b>: <i>{statistics['avg_race_position']}</i>\n"
+                        f"<b>P. media qualifica</b>: <i>{statistics['avg_quali_position']}</i>\n\n"
+                        f"<b>Scuderie</b>: <i>{unique_teams}</i>"
                     ),
                 ),
             )

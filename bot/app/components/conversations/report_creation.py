@@ -45,7 +45,7 @@ from queries import (
     REPORT_REASON,
     SEND,
     UNSEND,
-) = range(3, 12)
+) = range(5, 14)
 
 
 engine = create_engine(os.environ["DB_URL"])
@@ -105,6 +105,7 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     today = datetime.now().date()
     buttons: list[InlineKeyboardButton] = []
+    user_data["category_round"] = {}
     for i, category in enumerate(championship.categories):
         if datetime.now().weekday() == 6:
             break
@@ -120,11 +121,12 @@ async def create_late_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     InlineKeyboardButton(category.name, callback_data=category_alias)
                 )
                 user_data["categories"][category_alias] = category
+                user_data["category_round"][category_alias] = championship_round
                 break
 
     if not buttons:
         text = (
-            "Troppo tardi perfino per le segnalazioni ritardatarie..."
+            "Troppo tardi perfino per le segnalazioni ritardatarie.."
             "\nI risultati di gara sono già stati confermati."
         )
         await update.message.reply_text(text)
@@ -153,15 +155,11 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data["sessions"] = {}
     user_data["sessions"] = {}
+
     category: Category = user_data["category"]
-
-    championship_round = category.first_non_completed_round()
-
-    if not championship_round:
-        await update.callback_query.message.reply_text(
-            "Non sono stati salvati i risultati per il round di questa tappa."
-        )
-        return ConversationHandler.END
+    championship_round = cast(
+        Round, user_data["category_round"][update.callback_query.data]
+    )
 
     user_data["round"] = championship_round
     buttons: list[InlineKeyboardButton] = []
@@ -180,7 +178,7 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     round_number = championship_round.number
     text = f"""
-<b>{user_data["category"].name}</b> - Tappa {round_number} 
+<b>{category.name}</b> - Tappa {round_number} 
 Scegli la sessione dove è avvenuto l'incidente:"""
 
     if update.callback_query:
@@ -202,7 +200,7 @@ async def create_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_data.clear()
     sqla_session = DBSession()
     driver = get_driver(sqla_session, telegram_id=user.id)
-    chat_data["late_report"] = True
+    chat_data["late_report"] = False
     if not driver:
         await update.message.reply_text(
             "Non sei ancora registrato, puoi farlo tramite /registrami"
