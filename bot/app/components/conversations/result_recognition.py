@@ -5,7 +5,6 @@ by sending screenshots captured from the game or live stream.
 """
 
 import os
-from decimal import Decimal
 from io import BytesIO
 from typing import Any, cast
 
@@ -351,9 +350,9 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     for session, results in session_results.items():
         result_objects: list[Result] = results["result_objects"]
 
-        best_time = Decimal(0)
+        best_time = 0
         if result_objects:
-            best_time = cast(Decimal, result_objects[0].seconds)
+            best_time = cast(int, result_objects[0].seconds)
 
         if session.is_quali:
             for pos, result in enumerate(result_objects, start=1):

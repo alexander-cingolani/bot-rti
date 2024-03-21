@@ -50,7 +50,7 @@ from queries import (
     ASK_PENALTY_REASON,
     ASK_QUEUE_OR_SEND,
     ASK_IF_NEXT,
-) = range(13, 28)
+) = range(14, 29)
 
 
 engine = create_engine(os.environ["DB_URL"])

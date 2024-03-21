@@ -380,7 +380,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         if match:
             statistics = driver.stats()
 
-            unique_teams = ",".join(
+            unique_teams = ", ".join(
                 set(map(lambda team: team.team.name, driver.contracts))
             )
             current_team = driver.current_team()
@@ -425,7 +425,7 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 title=driver.full_name,
                 input_message_content=InputTextMessageContent(
                     (
-                        f"<i><b>PROFILO PILOTA: {driver.abbreviated_full_name}</b></i>\n\n"
+                        f"<i><b>PROFILO PILOTA {driver.abbreviated_full_name}</b></i>\n\n"
                         + driver_rating_text
                         + f"<b>Costanza</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
                         f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
