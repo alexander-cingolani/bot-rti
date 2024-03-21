@@ -366,9 +366,7 @@ async def save_rre_results(json_str: str) -> None:
 
             rre_id = cast(int, player["UserId"])
             position = cast(int, player["Position"])
-            total_racetime = (
-                race_data["Players"][0]["TotalTime"]
-            ) + gap_to_first
+            total_racetime = (race_data["Players"][0]["TotalTime"]) + gap_to_first
 
             player_fastest_lap = cast(int, player["BestLapTime"])
             driver = drivers[rre_id]

@@ -197,7 +197,9 @@ def seconds_to_text(seconds: int) -> str:
     """
     seconds, milliseconds = divmod(seconds, 100)
     minutes, seconds = divmod(seconds, 60)
-    return f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"
+    return (
+        f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"
+    )
 
 
 def string_to_seconds(string: str) -> int | None:
