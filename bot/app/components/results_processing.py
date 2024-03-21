@@ -2,6 +2,7 @@
 Contains functions used to operate on results or parts of results.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -195,7 +196,7 @@ def seconds_to_text(seconds: int) -> str:
     Returns:
         str: User-friendly string.
     """
-    seconds, milliseconds = divmod(seconds, 100)
+    seconds, milliseconds = divmod(seconds, 1000)
     minutes, seconds = divmod(seconds, 60)
     return (
         f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"

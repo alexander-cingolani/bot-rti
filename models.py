@@ -785,13 +785,13 @@ class Session(Base):
         for result in results:
             if result.gap_to_first:
                 position = str(result.position)
+                seconds, milliseconds = divmod(result.gap_to_first, 1000)
                 minutes, seconds = divmod(result.gap_to_first, 60)
-                milliseconds = (seconds % 1) * 1000
 
                 if not minutes:
-                    gap = f"+<i>{int(seconds):01}.{int(milliseconds):03}</i>"
+                    gap = f"+<i>{seconds:01}.{milliseconds:03}</i>"
                 else:
-                    gap = f"+<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
+                    gap = f"+<i>{minutes:01}:{seconds:02}.{milliseconds:03}</i>"
             elif result.gap_to_first == 0:
                 total = getattr(result, "total_racetime", 0)
                 if not total:
@@ -799,9 +799,7 @@ class Session(Base):
 
                 minutes, seconds = divmod(total, 60)
                 milliseconds = (seconds % 1) * 1000
-                gap = (
-                    f"<i>{int(minutes):01}:{int(seconds):02}.{int(milliseconds):03}</i>"
-                )
+                gap = f"<i>{minutes:01}:{seconds:02}.{milliseconds:03}</i>"
                 position = "1"
             else:
                 gap = "<i>assente</i>"
@@ -1264,7 +1262,6 @@ class Driver(Base):
                 total_gap_percentages += float(
                     quali_result.gap_to_first
                     / (quali_result.laptime - quali_result.gap_to_first)
-                    * 1000
                 )
 
         average_gap_percentage = pow(
@@ -1318,12 +1315,8 @@ class Driver(Base):
                 race_res.gap_to_first is not None
                 and race_res.total_racetime is not None
             ):
-                total_gap_percentages += (
-                    float(
-                        race_res.gap_to_first
-                        / (race_res.total_racetime - race_res.gap_to_first)
-                    )
-                    * 1000
+                total_gap_percentages += race_res.gap_to_first / (
+                    race_res.total_racetime - race_res.gap_to_first
                 )
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
@@ -1648,8 +1641,8 @@ class QualifyingResult(Base):
         id (int): Automatically generated unique ID assigned upon
             object creation.
         position (int): Position the driver qualified in.
-        laptime (Decimal): Best lap registered by the driver in the.
-        gap_to_first (Decimal): Seconds by which the laptime is off from the fastest lap
+        laptime (int): Best lap registered by the driver in the.
+        gap_to_first (int): Seconds by which the laptime is off from the fastest lap
             time in the driver's car class.
         participated (bool): True if the driver participated to the Qualifying session.
 
@@ -1677,8 +1670,8 @@ class QualifyingResult(Base):
         "qualifying_result_id", SmallInteger, primary_key=True
     )
     position: Mapped[int | None] = mapped_column(SmallInteger)
-    laptime: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
-    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
+    laptime: Mapped[int | None] = mapped_column(Integer)
+    gap_to_first: Mapped[int | None] = mapped_column(Integer)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
@@ -1743,9 +1736,9 @@ class RaceResult(Base):
         position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
         participated (bool): True if the driver participated to the race.
-        gap_to_first (Decimal): Difference between the driver's race time
+        gap_to_first (int): Difference between the driver's race time
             and the class winner's race time.
-        total_racetime (Decimal): Total time the driver took to complete the race.
+        total_racetime (int): Total time the driver took to complete the race.
 
         driver_id (int): Unique ID of the driver the result is registered to.
         round_id (int): Unique ID of the round the result is registered to.
@@ -1769,10 +1762,8 @@ class RaceResult(Base):
     position: Mapped[int | None] = mapped_column(SmallInteger)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    gap_to_first: Mapped[Decimal | None] = mapped_column(Numeric(precision=8, scale=3))
-    total_racetime: Mapped[Decimal | None] = mapped_column(
-        Numeric(precision=8, scale=3)
-    )
+    gap_to_first: Mapped[int | None] = mapped_column(Integer)
+    total_racetime: Mapped[Integer | None] = mapped_column(Integer)
     mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
     sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
