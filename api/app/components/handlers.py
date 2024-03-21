@@ -3,7 +3,6 @@ import logging
 import json
 import os
 from collections import defaultdict
-from decimal import Decimal
 from typing import Any, cast
 
 from fastapi import HTTPException, UploadFile
@@ -290,13 +289,13 @@ async def save_rre_results(json_str: str) -> None:
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
 
     qualifying_data = data["Sessions"][1]
-    pole_lap = Decimal(qualifying_data["Players"][0]["BestLapTime"]) / 1000
+    pole_lap = qualifying_data["Players"][0]["BestLapTime"]
 
     if session := current_round.qualifying_session:
         for player in qualifying_data["Players"]:
             rre_id = cast(int, player["UserId"])
             position = cast(int, player["Position"])
-            laptime = Decimal(player["BestLapTime"]) / 1000
+            laptime = cast(int, player["BestLapTime"])
             gap_to_first = laptime - pole_lap
 
             driver = drivers[rre_id]
@@ -337,7 +336,7 @@ async def save_rre_results(json_str: str) -> None:
         fastest_lap = float("inf")
         driver_race_results: dict[int, RaceResult] = {}
         fastest_lap_player_id = 0
-        winners_time = Decimal(race_data["Players"][0]["TotalTime"]) / 1000
+        winners_time = race_data["Players"][0]["TotalTime"]
 
         if current_round.has_sprint_race and i == 0:
             session = cast(Session, current_round.sprint_race)
@@ -355,25 +354,23 @@ async def save_rre_results(json_str: str) -> None:
                 race_data["Players"][0]["RaceSessionLaps"], player["RaceSessionLaps"]
             ):
                 if players_lap["Time"] > 0:
-                    gap_to_first += (
-                        Decimal(players_lap["Time"] - winners_lap["Time"]) / 1000
-                    )
+                    gap_to_first += players_lap["Time"] - winners_lap["Time"]
                     continue
                 for winner_sector, player_sector in zip(
                     reversed(winners_lap["SectorTimes"]),
                     reversed(players_lap["SectorTimes"]),
                 ):
                     if player_sector > 0:
-                        gap_to_first += Decimal(player_sector - winner_sector) / 1000
+                        gap_to_first += player_sector - winner_sector
                         break
 
             rre_id = cast(int, player["UserId"])
             position = cast(int, player["Position"])
             total_racetime = (
-                Decimal(race_data["Players"][0]["TotalTime"]) / 1000
+                race_data["Players"][0]["TotalTime"]
             ) + gap_to_first
 
-            player_fastest_lap = cast(int, player["BestLapTime"]) / 1000
+            player_fastest_lap = cast(int, player["BestLapTime"])
             driver = drivers[rre_id]
 
             if player_fastest_lap < fastest_lap:
@@ -403,7 +400,7 @@ async def save_rre_results(json_str: str) -> None:
         # If deferred penalty was applied, recalculate session results.
         if deferred_penalty_applied:
             races[session].sort(key=lambda rr: rr.total_racetime)  # type: ignore
-            winners_time = Decimal(0)
+            winners_time = 0
             for pos, result in enumerate(races[session], start=1):
                 if pos == 1:
                     winners_time = result.total_racetime

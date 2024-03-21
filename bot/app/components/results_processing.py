@@ -5,7 +5,6 @@ Contains functions used to operate on results or parts of results.
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from difflib import get_close_matches
 from io import BytesIO
 from pathlib import Path
@@ -35,7 +34,7 @@ class Result:
             )
         return f"(driver_name=None, position={self.position})"
 
-    def __init__(self, driver: DriverCategory, seconds: Decimal | None):
+    def __init__(self, driver: DriverCategory, seconds: int | None):
         self.driver = driver
         self.seconds = seconds
         self.position = 0
@@ -44,7 +43,7 @@ class Result:
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def prepare_result(self, best_time: Decimal, position: int):
+    def prepare_result(self, best_time: int, position: int):
         """Modifies Result to contain valid data for a RaceResult."""
         if self.seconds is None:
             self.position = None
@@ -103,7 +102,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
     # Add unrecognized drivers to the results list.
     for given_driver_name in driver_map:
         driver_category = driver_map[given_driver_name]
-        result = Result(driver_category, Decimal(0))
+        result = Result(driver_category, 0)
         results.append(result)
 
     return results
@@ -186,24 +185,22 @@ def results_to_text(results: list[Result]) -> str:
     return text
 
 
-def seconds_to_text(seconds: Decimal) -> str:
+def seconds_to_text(seconds: int) -> str:
     """Converts seconds to a user-friendly string format.
 
     Args:
-        seconds (Decimal): seconds to covert into string.
+        seconds (int): seconds to covert into string.
             Must contain at least one decimal number.
 
     Returns:
         str: User-friendly string.
     """
-
+    seconds, milliseconds = divmod(seconds, 100)
     minutes, seconds = divmod(seconds, 60)
-    seconds, milliseconds = divmod(seconds, 1)
-    milliseconds_int = round(milliseconds * 1000)
-    return f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds_int:0>3}"
+    return f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"
 
 
-def string_to_seconds(string: str) -> Decimal | None:
+def string_to_seconds(string: str) -> int | None:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     None is returned when the driver did not finish the race
@@ -222,7 +219,7 @@ def string_to_seconds(string: str) -> Decimal | None:
             or "1" in string
             or "2" in string
         ):
-            return Decimal(0)
+            return 0
         # if string is equals to "ASSENTE" None is retured.
         return None
 
@@ -240,9 +237,9 @@ def string_to_seconds(string: str) -> Decimal | None:
     elif "." in matched_string:
         t = datetime.strptime(matched_string, "%S.%f").time()
     else:
-        return Decimal(matched_string)
+        return int(matched_string * 1000)
 
-    seconds = Decimal((t.hour * 60 + t.minute) * 60 + t.second)
-    decimal_part = Decimal(t.microsecond) / Decimal(1_000_000)
+    seconds = (t.hour * 60 + t.minute) * 60 + t.second
+    decimal_part = t.microsecond / 1_000_000
 
-    return seconds + decimal_part
+    return int((seconds + decimal_part) * 1000)
