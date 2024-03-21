@@ -800,7 +800,7 @@ class Session(Base):
 
                 seconds, milliseconds = divmod(total, 1000)
                 minutes, seconds = divmod(seconds, 60)
-                
+
                 gap = f"<i>{minutes:01}:{seconds:02}.{milliseconds:03}</i>"
                 position = "1"
             else:
@@ -1261,10 +1261,13 @@ class Driver(Base):
                 quali_result.gap_to_first is not None
                 and quali_result.laptime is not None
             ):
-                total_gap_percentages += float(
-                    quali_result.gap_to_first
-                    / (quali_result.laptime - quali_result.gap_to_first) 
-                ) * 100
+                total_gap_percentages += (
+                    float(
+                        quali_result.gap_to_first
+                        / (quali_result.laptime - quali_result.gap_to_first)
+                    )
+                    * 100
+                )
                 logging.error(str(total_gap_percentages) + self.name)
 
         average_gap_percentage = pow(
@@ -1318,9 +1321,11 @@ class Driver(Base):
                 race_res.gap_to_first is not None
                 and race_res.total_racetime is not None
             ):
-                total_gap_percentages += race_res.gap_to_first / (
-                    race_res.total_racetime - race_res.gap_to_first
-                ) * 100
+                total_gap_percentages += (
+                    race_res.gap_to_first
+                    / (race_res.total_racetime - race_res.gap_to_first)
+                    * 100
+                )
 
         average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
         average_gap_percentage = min(average_gap_percentage, 60)
