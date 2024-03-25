@@ -592,7 +592,8 @@ def delete_chat(session: SQLASession, chat_id: int):
     session.execute(stmt)
     session.commit()
 
-@cached(cache=TTLCache(maxsize=50, ttl=20000)) # type: ignore
+
+@cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
 def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
     result = session.execute(select(Reprimand)).all()
 

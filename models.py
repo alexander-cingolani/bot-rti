@@ -864,10 +864,14 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    reprimands_legacy: Mapped[int] = mapped_column("reprimands", SmallInteger, default=0)
+    reprimands_legacy: Mapped[int] = mapped_column(
+        "reprimands", SmallInteger, default=0
+    )
     points: Mapped[float] = mapped_column(Float(precision=1), default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
-    date: Mapped[datetime.date] = mapped_column(Date, nullable=False, default=datetime.datetime.now().date())
+    date: Mapped[datetime.date] = mapped_column(
+        Date, nullable=False, default=datetime.datetime.now().date()
+    )
 
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="penalties")
@@ -879,7 +883,9 @@ class Penalty(Base):
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
-    reprimand_id: Mapped[int | None] = mapped_column(ForeignKey("reprimands.reprimand_id"))
+    reprimand_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reprimands.reprimand_id")
+    )
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
 
     driver: Mapped[Driver] = relationship(

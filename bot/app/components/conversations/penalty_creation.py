@@ -744,7 +744,9 @@ penalty_creation = ConversationHandler(
         ASK_REPRIMAND: [
             CallbackQueryHandler(ask_reprimand, r"^pp[0-9]{1,}$|^no_penalty$")
         ],
-        ASK_PENALTY_REASON: [CallbackQueryHandler(ask_penalty_reason, r"rep[0-9]{1,}|no_reprimand")],
+        ASK_PENALTY_REASON: [
+            CallbackQueryHandler(ask_penalty_reason, r"rep[0-9]{1,}|no_reprimand")
+        ],
         ASK_CONFIRMATION: [
             MessageHandler(filters.Regex(r"^[^/]{20,}$"), ask_confirmation)
         ],
