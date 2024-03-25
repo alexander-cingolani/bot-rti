@@ -65,8 +65,6 @@ class PenaltyDocument:
         self.canvas.drawString(410, 620, "Documento")
         self.canvas.drawString(410, 600, "Data")
         self.canvas.drawString(410, 580, "Orario")
-        self.canvas.drawString(75, 619, "Safety Commission")
-        self.canvas.drawString(75, 599, "Capo Scuderia,")
 
         self.canvas.setFont("arial", 11)
 
@@ -75,7 +73,9 @@ class PenaltyDocument:
             reported_team_name = "-"
         else:
             reported_team_name = reported_team.name
-
+            
+        self.canvas.drawString(75, 619, "Safety Commission")
+        self.canvas.drawString(75, 599, "Capo Scuderia,")
         self.canvas.drawString(75, 585, f"Scuderia {reported_team_name}")
         self.canvas.drawString(480, 619, str(self.penalty.number))
         self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
