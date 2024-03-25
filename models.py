@@ -864,9 +864,14 @@ class Penalty(Base):
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     licence_points: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
     warnings: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
-    reprimands: Mapped[int] = mapped_column(SmallInteger, default=0)
+    reprimands_legacy: Mapped[int] = mapped_column(
+        "reprimands", SmallInteger, default=0
+    )
     points: Mapped[float] = mapped_column(Float(precision=1), default=0, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(
+        Date, nullable=False, default=datetime.datetime.now().date()
+    )
 
     category: Mapped[Category] = relationship()
     round: Mapped[Round] = relationship(back_populates="penalties")
@@ -878,11 +883,15 @@ class Penalty(Base):
     driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
+    reprimand_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reprimands.reprimand_id")
+    )
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
 
     driver: Mapped[Driver] = relationship(
         back_populates="received_penalties", foreign_keys=[driver_id]
     )
+    reprimand: Mapped[Reprimand | None] = relationship()
     team: Mapped[Team] = relationship(
         back_populates="received_penalties", foreign_keys=[team_id]
     )
@@ -1895,9 +1904,14 @@ class DeferredPenalty(Base):
     driver: Mapped[Driver] = relationship(back_populates="deferred_penalties")
 
 
-if __name__ == "__main__":
-    Base.metadata.create_all(
-        bind=create_engine(
-            "mysql+mysqlconnector://alexander:alexander@172.18.0.03:3306/rti-dev"
-        )
-    )
+class Reprimand(Base):
+    """Represents a type reprimand that can be given to a driver in response to a report.
+
+    id (int): Unique ID for this object.
+    description (str): A brief description for the type of reprimand.
+    """
+
+    __tablename__ = "reprimands"
+
+    id: Mapped[int] = mapped_column("reprimand_id", SmallInteger, primary_key=True)
+    description: Mapped[str] = mapped_column(String(100))

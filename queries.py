@@ -27,6 +27,7 @@ from models import (
     QualifyingResult,
     RaceResult,
     Report,
+    Reprimand,
     RoundParticipant,
     Session,
     Team,
@@ -554,9 +555,7 @@ def get_all_drivers(session: SQLASession) -> list[Driver]:
 
     result = session.execute(select(Driver)).all()
 
-    drivers = [r[0] for r in result]
-
-    return drivers
+    return [r[0] for r in result]
 
 
 def get_participants_from_round(
@@ -571,9 +570,7 @@ def get_participants_from_round(
         select(RoundParticipant).where(RoundParticipant.round_id == round_id)
     ).all()
 
-    participants = [r[0] for r in result]
-
-    return participants
+    return [r[0] for r in result]
 
 
 def update_participant_status(session: SQLASession, participant: RoundParticipant):
@@ -594,3 +591,10 @@ def delete_chat(session: SQLASession, chat_id: int):
     stmt = delete(Chat).where(Chat.id == chat_id)
     session.execute(stmt)
     session.commit()
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
+def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
+    result = session.execute(select(Reprimand)).all()
+
+    return [r[0] for r in result]
