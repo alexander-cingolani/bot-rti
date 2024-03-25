@@ -73,7 +73,7 @@ class PenaltyDocument:
             reported_team_name = "-"
         else:
             reported_team_name = reported_team.name
-            
+
         self.canvas.drawString(75, 619, "Safety Commission")
         self.canvas.drawString(75, 599, "Capo Scuderia,")
         self.canvas.drawString(75, 585, f"Scuderia {reported_team_name}")
