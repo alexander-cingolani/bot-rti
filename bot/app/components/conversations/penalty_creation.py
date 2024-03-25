@@ -520,7 +520,7 @@ async def ask_reprimand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     text = "Se data, seleziona la reprimenda:"
     reprimand_types = get_reprimand_types(sqla_session)
-    user_data["reprimand_descriptions"] = {r.id: r.description for r in reprimand_types}
+    user_data["reprimand_types"] = {r.id: r for r in reprimand_types}
     buttons: list[list[InlineKeyboardButton]] = []
     for reprimand in reprimand_types:
         buttons.append(
@@ -562,9 +562,10 @@ async def ask_penalty_reason(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if update.callback_query.data == "no_reprimand":
                 user_data["reprimand_text"] = ""
             else:
-                description = user_data["reprimand_descriptions"][
-                    int(update.callback_query.data.removeprefix("rep"))
-                ]
+                reprimand_id = int(update.callback_query.data.removeprefix("rep"))
+                reprimand_type = user_data["reprimand_types"][reprimand_id]
+                description = reprimand_type.description
+                user_data["penalty"].reprimand = reprimand_type
                 user_data["reprimand_text"] = f"Reprimenda per {description}"
 
     reply_markup = InlineKeyboardMarkup(
