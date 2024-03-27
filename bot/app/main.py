@@ -371,7 +371,7 @@ async def inline_query_driver_search(
 
     if not championship:
         return
-    
+
     for driver in championship.driver_list:
         match = False
         if driver.psn_id:
