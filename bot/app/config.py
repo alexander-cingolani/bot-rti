@@ -93,6 +93,6 @@ INFRACTIONS = (
 )
 
 
-MU = 25
-SIGMA = Decimal(MU / 3)
-K = Decimal(MU / SIGMA)
+MU = Decimal(25)
+K = Decimal(3)
+SIGMA = MU / K

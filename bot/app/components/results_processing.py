@@ -2,7 +2,6 @@
 Contains functions used to operate on results or parts of results.
 """
 
-import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime

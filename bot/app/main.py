@@ -217,6 +217,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             f"Questo bot è riservato esclusivamente ai gruppi di {website_link}.\n\n"
             f"L'utente che mi ha aggiunto, {user.mention_html()}, non risulta "
             f"essere un membro registrato del team, pertanto procederò a rimuovermi dal gruppo.\n"
+            f"Questo errore potrebbe anche essere causato dal fatto che non sono stato aggiunto direttamente come admin del gruppo."
         )
         await chat.leave()
         return
@@ -355,7 +356,9 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     return
 
 
-async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+async def inline_query_driver_search(
+    update: Update, _: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Handles the inline query. This callback provides the user with a complete
     list of drivers saved in the database, and enables him to view the statistics
     of each of them.
@@ -378,68 +381,11 @@ async def inline_query(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             match = True
 
         if match:
-            statistics = driver.stats()
-
-            unique_teams = ", ".join(
-                set(map(lambda team: team.team.name, driver.contracts))
-            )
-            current_team = driver.current_team()
-            if not current_team:
-                team_text = "/"
-            else:
-                team_text = current_team.name
-
-            unique_teams = unique_teams.replace(team_text, f"{team_text} [Attuale]")
-
-            if not unique_teams:
-                unique_teams = "/"
-
-            current_category = driver.current_category()
-            rnd = current_category.category.penultimate_completed_round()
-            previous_rating = 0
-            if rnd:
-                for result in rnd.long_race.race_results:
-                    if result.driver_id == driver.id:
-                        if result.mu and result.sigma:
-                            previous_rating = result.mu - config.K * result.sigma
-                        break
-
-            if previous_rating:
-                diff = round(driver.rating - previous_rating, 2)
-                diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
-                driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
-            elif driver.rating:
-                driver_rating_text = (
-                    f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)}</i>\n"
-                )
-            else:
-                driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
-
-            consistency = driver.consistency()
-            speed = driver.speed()
-            sportsmanship = driver.sportsmanship()
-            race_pace = driver.race_pace()
-
             result_article = InlineQueryResultArticle(
                 id=str(uuid4()),
                 title=driver.full_name,
                 input_message_content=InputTextMessageContent(
-                    (
-                        f"<i><b>PROFILO PILOTA {driver.abbreviated_full_name}</b></i>\n\n"
-                        + driver_rating_text
-                        + f"<b>Costanza</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
-                        f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
-                        f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
-                        f"<b>Passo gara</b>: <i>{race_pace if race_pace else 'Dati insufficienti.'}</i>\n\n"
-                        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
-                        f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
-                        f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
-                        f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
-                        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
-                        f"<b>P. media gara</b>: <i>{statistics['avg_race_position']}</i>\n"
-                        f"<b>P. media qualifica</b>: <i>{statistics['avg_quali_position']}</i>\n\n"
-                        f"<b>Scuderie</b>: <i>{unique_teams}</i>"
-                    ),
+                    driver.stats_telegram_message()
                 ),
             )
             results.append(result_article)
@@ -484,9 +430,9 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
             diff_text = ""
 
         if driver == user_driver:
-            driver_name = f"<b>{driver.abbreviated_full_name}</b>"
+            driver_name = f"<b>{driver.abbreviated_name}</b>"
         else:
-            driver_name = driver.abbreviated_full_name
+            driver_name = driver.abbreviated_name
         message += f"{pos} - {driver_name} <i>{points:g}{diff_text} </i>\n"
 
     await update.message.reply_text(text=message)
@@ -529,9 +475,9 @@ async def complete_championship_standings(
                 team_name = ""
 
             if driver == user_driver:
-                driver_name = f"<b>{driver.abbreviated_full_name}</b>"
+                driver_name = f"<b>{driver.abbreviated_name}</b>"
             else:
-                driver_name = driver.abbreviated_full_name
+                driver_name = driver.abbreviated_name
 
             message += (
                 f"{pos} - {team_name} {driver_name} <i>{points:g}{diff_text}</i>\n"
@@ -691,10 +637,10 @@ async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     sqla_session.close()
 
 
-async def freeze_participation_list(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def freeze_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Freezes the participants list sent earlier during the day."""
     chat_data = cast(dict[str, Any], context.chat_data)
-    message: Message | None = chat_data.get("participation_list_message")
+    message: Message | None = chat_data.get("participants_list_message")
     if message:
         await message.edit_reply_markup()  # Deletes the buttons.
     chat_data.clear()
@@ -707,7 +653,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     championship = get_championship(sqla_session)
     chat_data = cast(dict[str, Any], context.chat_data)
-    chat_data["participation_list_sqlasession"] = sqla_session
+    chat_data["participants_list_sqlasession"] = sqla_session
 
     if not championship:
         sqla_session.close()
@@ -732,7 +678,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
     )
 
-    chat_data["participation_list_text"] = text
+    chat_data["participants_list_text"] = text
     text += f"\n0/{len(drivers)}\n"
 
     participants: list[RoundParticipant] = []
@@ -744,7 +690,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         participants.append(participant)
         sqla_session.add(participant)
 
-        text += f"\n{driver.driver.abbreviated_full_name}"
+        text += f"\n{driver.driver.abbreviated_name}"
 
     sqla_session.commit()
 
@@ -764,7 +710,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id=config.GROUP_CHAT, text=text, reply_markup=reply_markup
     )
 
-    chat_data["participation_list_message"] = message
+    chat_data["participants_list_message"] = message
 
     await context.bot.pin_chat_message(
         message_id=message.message_id,
@@ -773,13 +719,13 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def update_participation_list(
+async def update_participants_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Manages updates to the list of drivers supposed to participate to a race."""
     chat_data = cast(dict[str, Any], context.chat_data)
 
-    session: SQLASession | None = chat_data.get("participation_list_sqlasession")
+    session: SQLASession | None = chat_data.get("participants_list_sqlasession")
 
     if not session:
         session = DBSession()
@@ -809,14 +755,14 @@ async def update_participation_list(
         participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
-    if not chat_data.get("participation_list_text"):
-        chat_data["participation_list_text"] = (
+    if not chat_data.get("participants_list_text"):
+        chat_data["participants_list_text"] = (
             f"<b>{rnd.number}ᵃ Tappa {category.name}</b>\n"
             f"<b>{rnd.circuit.abbreviated_name} - {rnd.configuration.name}</b>"
         )
 
-    if not chat_data.get("participation_list_message"):
-        chat_data["participation_list_message"] = update.message
+    if not chat_data.get("participants_list_message"):
+        chat_data["participants_list_message"] = update.message
 
     driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
     if not driver:
@@ -860,7 +806,7 @@ async def update_participation_list(
 
     participants[i] = participant
 
-    text: str = chat_data["participation_list_text"]
+    text: str = chat_data["participants_list_text"]
     text += "\n{confirmed}/{total}\n"
 
     confirmed = 0
@@ -879,7 +825,7 @@ async def update_participation_list(
             case Participation.NO:
                 text_status = "❌"
 
-        text += f"\n{participant.driver.abbreviated_full_name} {text_status}"
+        text += f"\n{participant.driver.abbreviated_name} {text_status}"
 
     text = text.format(confirmed=confirmed, total=total_drivers)
     reply_markup = InlineKeyboardMarkup(
@@ -895,11 +841,11 @@ async def update_participation_list(
     return
 
 
-async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def participants_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message in the group chat mentioning drivers who forgot to reply to the
     participants list message."""
     chat_data = cast(dict[str, Any], context.chat_data)
-    session: SQLASession | None = chat_data.get("participation_list_sqlasession")
+    session: SQLASession | None = chat_data.get("participants_list_sqlasession")
     if not session:
         session = DBSession()
 
@@ -934,7 +880,7 @@ async def participation_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> Non
                 continue
 
             mentions.append(
-                f"{User(participant.driver.telegram_id, participant.driver.abbreviated_full_name, is_bot=False).mention_html()}"
+                f"{User(participant.driver.telegram_id, participant.driver.abbreviated_name, is_bot=False).mention_html()}"
             )
 
     text = ""
@@ -1008,58 +954,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    unique_teams = ",".join(set(map(lambda team: team.team.name, driver.contracts)))
-    current_team = driver.current_team()
-    if not current_team:
-        team_text = "/"
-    else:
-        team_text = current_team.name
-    unique_teams = unique_teams.replace(team_text, f"{team_text} [Attuale]")
-    if not unique_teams:
-        unique_teams = "/"
-
-    statistics = driver.stats()
-    consistency = driver.consistency()
-    speed = driver.speed()
-    sportsmanship = driver.sportsmanship()
-    race_pace = driver.race_pace()
-
-    current_category = driver.current_category()
-    rnd = current_category.category.penultimate_completed_round()
-    previous_rating = 0
-    if rnd:
-        for result in rnd.long_race.race_results:
-            if result.driver_id == driver.id:
-                if result.mu and result.sigma:
-                    previous_rating = result.mu - config.K * result.sigma
-                break
-    if previous_rating:
-        diff = round(driver.rating - previous_rating, 2)
-        diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
-        driver_rating_text = (
-            f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)} {diff_text}</i>\n"
-        )
-    elif driver.rating:
-        driver_rating_text = f"<b>Driver Rating</b>: <i>{round(driver.rating, 2)}</i>\n"
-    else:
-        driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
-
-    await update.message.reply_text(
-        f"<i><b>PROFILO PILOTA {driver.abbreviated_full_name}</b></i>\n\n"
-        + driver_rating_text
-        + f"<b>Costanza</b>: <i>{consistency if consistency else 'Dati insufficienti'}</i>\n"
-        f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else 'Dati insufficienti'}</i>\n"
-        f"<b>Qualifica</b>: <i>{speed if speed else 'Dati insufficienti'}</i>\n"
-        f"<b>Passo gara</b>: <i>{race_pace if race_pace else 'Dati insufficienti.'}</i>\n\n"
-        f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
-        f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
-        f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
-        f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
-        f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
-        f"<b>P. media gara</b>: <i>{statistics['avg_race_position']}</i>\n"
-        f"<b>P. media qualifica</b>: <i>{statistics['avg_quali_position']}</i>\n\n"
-        f"<b>Scuderie</b>: <i>{unique_teams}</i>"
-    )
+    await update.message.reply_text(driver.stats_telegram_message())
 
 
 async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1075,7 +970,7 @@ async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     message = "Top 10 Piloti per Driver Rating:\n\n"
     for driver in drivers[:n]:
-        message += f"<b>{driver.abbreviated_full_name}</b> <i>{driver.rating:.2f}</i>\n"
+        message += f"<b>{driver.abbreviated_name}</b> <i>{driver.rating:.2f}</i>\n"
 
     await update.message.reply_text(message)
 
@@ -1117,12 +1012,12 @@ def main() -> None:
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(  # type: ignore
-        callback=freeze_participation_list,
+        callback=freeze_participants_list,
         time=config.PARTICIPANTS_LIST_CLOSURE,
         chat_id=config.REPORT_CHANNEL,
     )
     application.job_queue.run_daily(  # type: ignore
-        callback=participation_list_reminder,
+        callback=participants_list_reminder,
         time=config.PARTICIPATION_LIST_REMINDER,
         chat_id=config.GROUP_CHAT,
     )
@@ -1142,14 +1037,14 @@ def main() -> None:
 
     application.add_handler(
         CallbackQueryHandler(
-            update_participation_list, r"participating|not_participating|not_sure"
+            update_participants_list, r"participating|not_participating|not_sure"
         )
     )
     application.add_handler(
         MessageHandler(filters.IS_AUTOMATIC_FORWARD, unpin_auto_forward)
     )
     application.add_handler(CommandHandler("start", start, filters=ChatType.PRIVATE))  # type: ignore
-    application.add_handler(InlineQueryHandler(inline_query))
+    application.add_handler(InlineQueryHandler(inline_query_driver_search))
     application.add_handler(CommandHandler("prossima_gara", next_event))
     application.add_handler(CommandHandler("classifica_piloti", championship_standings))
     application.add_handler(CommandHandler("calendario", calendar))

@@ -339,7 +339,7 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                 user_data["drivers"][driver_alias] = driver
                 buttons.append(
                     InlineKeyboardButton(
-                        driver.abbreviated_full_name, callback_data=driver_alias
+                        driver.psn_id, callback_data=driver_alias
                     )
                 )
     chunked_buttons = list(chunked(buttons, 2))
@@ -381,9 +381,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         driver_alias = f"d{i}"
         user_data["drivers"][driver_alias] = driver
         buttons.append(
-            InlineKeyboardButton(
-                driver.abbreviated_full_name, callback_data=driver_alias
-            )
+            InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
         )
 
     chunked_buttons = list(chunked(buttons, 2))
@@ -434,7 +432,7 @@ async def reporting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             user_data["drivers"][driver_alias] = driver
             buttons.append(
                 InlineKeyboardButton(
-                    driver.abbreviated_full_name, callback_data=driver_alias
+                    driver.psn_id, callback_data=driver_alias
                 )
             )
 
@@ -501,8 +499,8 @@ async def save_minute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     for i, reason in enumerate(config.REASONS):
         i += 1
         reason = reason.format(
-            a=user_data["report"].reporting_driver.abbreviated_full_name,
-            b=user_data["report"].reported_driver.abbreviated_full_name,
+            a=user_data["report"].reporting_driver.abbreviated_name_and_psn_id,
+            b=user_data["report"].reported_driver.abbreviated_name_and_psn_id,
         )
         text += f"\n{i} - <i>{reason}</i>"
         buttons[0].append(InlineKeyboardButton(text=str(i), callback_data=f"r{i}"))
@@ -533,8 +531,8 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             user_data["report"].reason = config.REASONS[
                 int(update.callback_query.data.removeprefix("r")) - 1
             ].format(
-                a=user_data["report"].reporting_driver.abbreviated_full_name,
-                b=user_data["report"].reported_driver.abbreviated_full_name,
+                a=user_data["report"].reporting_driver.abbreviated_name_and_psn_id,
+                b=user_data["report"].reported_driver.abbreviated_name_and_psn_id,
             )
     else:
         user_data["report"].reason = update.message.text
@@ -544,8 +542,8 @@ async def save_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         '"conferma e invia" per inviare la segnalazione.\n'
         "Se cambi idea o noti un errore, hai comunque la possibilità di ritirarla entro 45 min."
         f"\n\n<b>Sessione</b>: <i>{report.session.name}</i>"
-        f"\n<b>Pilota Vittima</b>: <i>{report.reporting_driver.abbreviated_full_name}</i>"
-        f"\n<b>Pilota Colpevole</b>: <i>{report.reported_driver.abbreviated_full_name}</i>"
+        f"\n<b>Vittima</b>: <i>{report.reporting_driver.abbreviated_name_and_psn_id}</i>"
+        f"\n<b>Colpevole</b>: <i>{report.reported_driver.abbreviated_name_and_psn_id}</i>"
         f"\n<b>Minuto Incidente</b>: <i>{report.incident_time}</i>"
         f"\n<b>Motivo Segnalazione</b>: <i>{report.reason}</i>"
         f"\n{f'<b>Video</b>: <i>{report.video_link}</i>' if report.video_link else ''}"

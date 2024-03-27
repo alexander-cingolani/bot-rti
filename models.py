@@ -8,7 +8,6 @@ from __future__ import annotations
 import datetime
 import enum
 import json
-import logging
 import os
 from collections import defaultdict
 from datetime import datetime as dt
@@ -34,7 +33,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    create_engine,
     func,
 )
 from sqlalchemy.orm import (
@@ -50,6 +48,7 @@ IMAGE_DIR_URL = f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/
 CIRCUIT_LOGO_DIR_URL = (
     f"https://{SUBDOMAIN + '.' if SUBDOMAIN else ''}{DOMAIN}/images/circuit_logos/"
 )
+K = Decimal("3")
 
 
 class Base(DeclarativeBase):
@@ -808,7 +807,7 @@ class Session(Base):
                 position = "/"
 
             penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
-            message += f"{position} - {result.driver.abbreviated_full_name} {gap}"
+            message += f"{position} - {result.driver.abbreviated_name} {gap}"
 
             if penalty_seconds:
                 message += f" (+{penalty_seconds}s)"
@@ -1206,10 +1205,26 @@ class Driver(Base):
         return self.psn_id
 
     @property
-    def abbreviated_full_name(self) -> str:
+    def abbreviated_name(self) -> str:
         if self.name and self.surname:
             return f"{self.name[0]}. {self.surname}"
         return self.psn_id
+
+    @property
+    def name_and_psn_id(self) -> str:
+        if self.psn_id:
+            if self.full_name != self.psn_id:
+                return f"{self.full_name} ({self.psn_id})"
+            return self.psn_id
+        return self.full_name
+
+    @property
+    def abbreviated_name_and_psn_id(self):
+        if self.psn_id:
+            if self.full_name != self.psn_id:
+                return f"{self.abbreviated_name} ({self.psn_id})"
+            return self.psn_id
+        return self.abbreviated_name
 
     @property
     def warnings(self) -> int:
@@ -1277,7 +1292,6 @@ class Driver(Base):
                     )
                     * 100
                 )
-                logging.error(str(total_gap_percentages) + self.name)
 
         average_gap_percentage = pow(
             total_gap_percentages / len(qualifying_results), 1.18
@@ -1406,6 +1420,53 @@ class Driver(Base):
                 if permission.permission_id == permission_id:
                     return True
         return False
+
+    def stats_telegram_message(self) -> str:
+
+        statistics = self.stats()
+        consistency = self.consistency()
+        speed = self.speed()
+        sportsmanship = self.sportsmanship()
+        race_pace = self.race_pace()
+
+        current_category = self.current_category()
+        rnd = current_category.category.penultimate_completed_round()
+        previous_rating = 0
+        if rnd:
+            for result in rnd.long_race.race_results:
+                if result.driver_id == self.id:
+                    if result.mu and result.sigma:
+                        previous_rating = result.mu - K * result.sigma
+                    break
+
+        if previous_rating:
+            diff = round(self.rating - previous_rating, 2)
+            diff_text = f"↓{abs(diff)}" if diff < 0 else f"↑{abs(diff)}"
+            driver_rating_text = (
+                f"<b>Driver Rating</b>: <i>{round(self.rating, 2)} {diff_text}</i>\n"
+            )
+        elif self.rating:
+            driver_rating_text = (
+                f"<b>Driver Rating</b>: <i>{round(self.rating, 2)}</i>\n"
+            )
+        else:
+            driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
+        insufficient_data = 'Dati insufficienti'
+        return (
+            f"<i><b>PROFILO PILOTA {self.abbreviated_name}</b></i>\n\n"
+            + driver_rating_text
+            + f"<b>Costanza</b>: <i>{consistency if consistency else insufficient_data}</i>\n"
+            f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else insufficient_data}</i>\n"
+            f"<b>Qualifica</b>: <i>{speed if speed else insufficient_data}</i>\n"
+            f"<b>Passo gara</b>: <i>{race_pace if race_pace else insufficient_data}</i>\n\n"
+            f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
+            f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
+            f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
+            f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
+            f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
+            f"<b>P. media gara</b>: <i>{statistics['avg_race_position']}</i>\n"
+            f"<b>P. media qualifica</b>: <i>{statistics['avg_quali_position']}</i>\n\n"
+        )
 
 
 class Team(Base):
