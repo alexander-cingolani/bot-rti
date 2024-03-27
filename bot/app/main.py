@@ -389,6 +389,8 @@ async def inline_query_driver_search(
                 ),
             )
             results.append(result_article)
+            if len(results) > 3:
+                break
 
     await update.inline_query.answer(results)
 
