@@ -1281,6 +1281,8 @@ class Driver(Base):
 
         total_gap_percentages = 0.0
         for quali_result in qualifying_results:
+            if quali_result.gap_to_first == 0:
+                continue
             if (
                 quali_result.gap_to_first is not None
                 and quali_result.laptime is not None
