@@ -42,7 +42,7 @@ TrueSkillEnv = ts.TrueSkill(
 def get_championship(
     session: SQLASession, championship_id: int | None = None
 ) -> Championship | None:
-    """If not given a specific championship_id, returns the most recent one.
+    """If not given a championship_id, returns the most recent one.
 
     Args:
         session (SQLASession): Session to execute the query with.

@@ -3,7 +3,6 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
-import logging
 import os
 from collections import defaultdict
 from typing import Any, DefaultDict, cast
@@ -219,7 +218,8 @@ async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     buttons: list[InlineKeyboardButton] = []
     for i, driver in enumerate(user_data["penalty"].session.participating_drivers()):
-        buttons.append(InlineKeyboardButton(driver.full_name, callback_data=f"D{i}"))
+        driver_name = driver.psn_id if driver.psn_id else driver.full_name
+        buttons.append(InlineKeyboardButton(driver_name, callback_data=f"D{i}"))
 
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
@@ -367,8 +367,8 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         text = (
             f"<b>{report.category.name}</b>\n"
             f"<i>Tappa {report.round.number}</i> ({report.round.circuit.abbreviated_name}) - Segnalazione no.{report.number}\n\n"
-            f"<b>Piloti coinvolti</b>: {report.reported_driver.full_name}, "
-            f"{report.reporting_driver.full_name}\n"
+            f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
+            f"{report.reporting_driver.psn_id}\n"
             f"<b>Sessione</b>: {report.session.name}\n"
             f"<b>Minuto incidente</b>: {report.incident_time}\n"
             f"<b>Motivo segnalazione</b>: {report.reason}"
@@ -613,7 +613,7 @@ async def ask_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"<b>Segnalazione no.{penalty.number}</b> - Recap dati inseriti\n\n"
         f"<b>Tappa</b>: {penalty.round.number if penalty.round else '-'}\n"
         f"<b>Sessione</b>: {penalty.session.name}\n"
-        f"<b>Pilota</b>: {penalty.driver.full_name if penalty.driver else '-'}\n"
+        f"<b>Pilota</b>: {penalty.driver.name_and_psn_id if penalty.driver else '-'}\n"
         f"<b>Fatto</b>: {penalty.fact if penalty.fact else '-'}\n"
         f"<b>Decisione</b>: {penalty.decision if penalty.decision else '-'}\n"
         f"<b>Motivazione</b>: {penalty.reason if penalty.reason else '-'}"

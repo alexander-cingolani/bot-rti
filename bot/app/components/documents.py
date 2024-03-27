@@ -104,7 +104,7 @@ class PenaltyDocument:
         self.canvas.drawString(
             135,
             499,
-            f"{driver.current_race_number} / {driver.full_name}",
+            f"{driver.current_race_number} / {driver.name_and_psn_id}",
         )
 
         reported_team = driver.current_team()
@@ -213,12 +213,12 @@ class ReportDocument:
         self.canvas.drawString(
             155,
             499,
-            f"{reporting_driver.current_race_number} / {reporting_driver.full_name}",
+            f"{reporting_driver.current_race_number} / {reporting_driver.name_and_psn_id}",
         )
         self.canvas.drawString(
             155,
             474,
-            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.full_name}",
+            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.name_and_psn_id}",
         )
 
         reported_team = reported_driver.current_team()

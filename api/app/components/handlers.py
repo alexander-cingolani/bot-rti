@@ -174,7 +174,7 @@ def get_standings_with_results(category_id: int) -> list[dict[str, Any]] | None:
             response.append(
                 {
                     "driver_id": driver.driver_id,
-                    "driver_name": driver.driver.abbreviated_full_name,
+                    "driver_name": driver.driver.abbreviated_name,
                     "points": 0,
                     "team": team.name,
                     "info": [],
@@ -191,7 +191,7 @@ def get_standings_with_results(category_id: int) -> list[dict[str, Any]] | None:
 
         driver_summary = {
             "driver_id": driver.id,
-            "driver_name": driver.abbreviated_full_name,
+            "driver_name": driver.abbreviated_name,
             "points": points_tally,
             "team": team.name,
             "info": _create_driver_result_list(
