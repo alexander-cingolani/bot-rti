@@ -1451,7 +1451,7 @@ class Driver(Base):
             )
         else:
             driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
-        insufficient_data = 'Dati insufficienti'
+        insufficient_data = "Dati insufficienti"
         return (
             f"<i><b>PROFILO PILOTA {self.abbreviated_name}</b></i>\n\n"
             + driver_rating_text
