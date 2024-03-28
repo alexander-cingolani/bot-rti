@@ -1308,7 +1308,9 @@ class Driver(Base):
             statistics["avg_race_position"] = round(
                 positions / statistics["races_completed"], 2
             )
-            statistics["race_avg_gap_perc"] = round(race_gaps / statistics["races_completed"], 2)
+            statistics["race_avg_gap_perc"] = round(
+                race_gaps / statistics["races_completed"], 2
+            )
 
         quali_sessions_completed = len(self.qualifying_results) - missed_qualis
         if quali_positions:
