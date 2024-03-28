@@ -1253,6 +1253,8 @@ class Driver(Base):
             "races_completed",
             "avg_race_position",
             "avg_quali_position",
+            "race_avg_gap_perc",
+            "quali_avg_gap_perc",
         )
 
         statistics: dict[str, int | float] = dict.fromkeys(keys, 0)
@@ -1261,6 +1263,7 @@ class Driver(Base):
             return statistics
 
         positions = 0
+        race_gaps = 0
         missed_races = 0
         for race_result in self.race_results:
             if not race_result.participated:
@@ -1270,21 +1273,34 @@ class Driver(Base):
             statistics["fastest_laps"] += race_result.fastest_lap_points
             if race_result.position:
                 positions += race_result.position
+                race_gaps += (
+                    race_result.gap_to_first / race_result.total_racetime
+                    - race_result.gap_to_first
+                ) * 100
             if race_result.position <= 3:
                 statistics["podiums"] += 1
                 if race_result.position == 1:
                     statistics["wins"] += 1
 
         quali_positions = 0
+        quali_gaps = 0
         missed_qualis = 0
+
         for quali_result in self.qualifying_results:
-            if quali_result:
-                if quali_result.position == 1:
-                    statistics["poles"] += 1
-                if quali_result.participated:
-                    quali_positions += quali_result.position
-                else:
-                    missed_qualis = +1
+            if not quali_result:
+                continue
+
+            if quali_result.position == 1:
+                statistics["poles"] += 1
+            if quali_result.participated:
+                quali_positions += quali_result.position
+                quali_gaps += (
+                    quali_result.gap_to_first
+                    / (quali_result.laptime - quali_result.gap_to_first)
+                    * 100
+                )
+            else:
+                missed_qualis += 1
 
         statistics["races_completed"] = len(self.race_results) - missed_races
 
@@ -1292,11 +1308,17 @@ class Driver(Base):
             statistics["avg_race_position"] = round(
                 positions / statistics["races_completed"], 2
             )
+            statistics["race_avg_gap_perc"] = round(
+                race_gaps / statistics["races_completed"], 2
+            )
 
         quali_sessions_completed = len(self.qualifying_results) - missed_qualis
         if quali_positions:
             statistics["avg_quali_position"] = round(
                 quali_positions / quali_sessions_completed, 2
+            )
+            statistics["quali_avg_gap_perc"] = round(
+                quali_gaps / quali_sessions_completed, 2
             )
 
         return statistics
@@ -1347,6 +1369,8 @@ class Driver(Base):
             f"<b>Giri veloci</b>: <i>{statistics['fastest_laps']:g}</i>\n"
             f"<b>P. media gara</b>: <i>{statistics['avg_race_position']}</i>\n"
             f"<b>P. media qualifica</b>: <i>{statistics['avg_quali_position']}</i>\n\n"
+            f"<b>Gap medio gara</b>: <i>{statistics['race_avg_gap_perc']}%</i>\n"
+            f"<b>Gap medio qualifica</b>: <i>{statistics['quali_avg_gap_perc']}%</i>\n\n"
         )
 
 
