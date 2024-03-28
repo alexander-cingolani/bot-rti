@@ -1242,121 +1242,6 @@ class Driver(Base):
         return not self.categories[-1].left_on
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
-    def consistency(self) -> int:
-        """Number 40-100 calculated based on the
-        standard deviation of the set of relative finishing positions and the number
-        of absences.
-        """
-
-        completed_races: list[RaceResult] = list(
-            filter(lambda x: x.participated, self.race_results)
-        )
-        if len(completed_races) < 2:
-            return 0
-
-        positions = [race_result.position for race_result in completed_races]
-        participation_ratio = len(completed_races) / len(self.race_results)
-        participation_ratio = min(participation_ratio, 1)
-        result = round(100 * participation_ratio - 3 * stdev(positions))
-        return max(result, 40)
-
-    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
-    def speed(self) -> int:
-        """Statistic calculated on the average gap between
-        the driver's qualifying times and the poleman's.
-
-        Args:
-            driver (Driver): The Driver to calculate the speed rating of.
-
-        Returns:
-            int: Speed rating. (40-100)
-        """
-
-        qualifying_results = list(
-            filter(lambda x: x.participated, self.qualifying_results)
-        )
-
-        if not qualifying_results:
-            return 0
-
-        total_gap_percentages = 0.0
-        for quali_result in qualifying_results:
-            if quali_result.gap_to_first == 0:
-                continue
-            if (
-                quali_result.gap_to_first is not None
-                and quali_result.laptime is not None
-            ):
-                total_gap_percentages += (
-                    float(
-                        quali_result.gap_to_first
-                        / (quali_result.laptime - quali_result.gap_to_first)
-                    )
-                    * 100
-                )
-
-        average_gap_percentage = pow(
-            total_gap_percentages / len(qualifying_results), 1.18
-        )
-
-        speed_score = round(100 - average_gap_percentage)
-        return max(speed_score, 40)  # Lower bound is 40
-
-    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
-    def sportsmanship(self) -> int:
-        """Based on the seriousness and number of reports received.
-
-        Returns:
-            int: Sportsmanship rating. (0-100)
-        """
-
-        if len(self.race_results) < 2:
-            return 0
-
-        if not self.received_penalties:
-            return 100
-
-        penalties = (
-            (penalty.time_penalty / 1.5)
-            + penalty.warnings
-            + (penalty.licence_points * 4)
-            + float(penalty.points)
-            for penalty in self.received_penalties
-        )
-
-        return round(100 - sum(penalties) * 3 / len(self.race_results))
-
-    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
-    def race_pace(self) -> int:
-        """Based on the average gap from the race winner in all of the races
-        completed by the driver.
-
-        Return:
-            int: Race pace score. (40-100)
-                0 if there isn't enough data.
-
-        """
-        completed_races = list(filter(lambda x: x.participated, self.race_results))
-        if not completed_races:
-            return 0
-
-        total_gap_percentages = 0.0
-        for race_res in completed_races:
-            if (
-                race_res.gap_to_first is not None
-                and race_res.total_racetime is not None
-            ):
-                total_gap_percentages += (
-                    race_res.gap_to_first
-                    / (race_res.total_racetime - race_res.gap_to_first)
-                    * 100
-                )
-
-        average_gap_percentage = pow(total_gap_percentages / len(completed_races), 1.1)
-        average_gap_percentage = min(average_gap_percentage, 60)
-        return round(100 - average_gap_percentage)
-
-    @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def stats(self) -> dict[str, int | float]:
         """Calculates the number of wins, podiums and poles achieved by the driver."""
 
@@ -1398,6 +1283,8 @@ class Driver(Base):
                     statistics["poles"] += 1
                 if quali_result.participated:
                     quali_positions += quali_result.position
+                else:
+                    missed_qualis = +1
 
         statistics["races_completed"] = len(self.race_results) - missed_races
 
@@ -1426,10 +1313,6 @@ class Driver(Base):
     def stats_telegram_message(self) -> str:
 
         statistics = self.stats()
-        consistency = self.consistency()
-        speed = self.speed()
-        sportsmanship = self.sportsmanship()
-        race_pace = self.race_pace()
 
         current_category = self.current_category()
         rnd = current_category.category.penultimate_completed_round()
@@ -1453,15 +1336,11 @@ class Driver(Base):
             )
         else:
             driver_rating_text = f"<b>Driver Rating</b>: <i>N.D.</i>\n"
-        insufficient_data = "Dati insufficienti"
+
         return (
             f"<i><b>PROFILO PILOTA {self.abbreviated_name}</b></i>\n\n"
             + driver_rating_text
-            + f"<b>Costanza</b>: <i>{consistency if consistency else insufficient_data}</i>\n"
-            f"<b>Sportività</b>: <i>{sportsmanship if sportsmanship else insufficient_data}</i>\n"
-            f"<b>Qualifica</b>: <i>{speed if speed else insufficient_data}</i>\n"
-            f"<b>Passo gara</b>: <i>{race_pace if race_pace else insufficient_data}</i>\n\n"
-            f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
+            + f"<b>Gare disputate</b>: <i>{statistics['races_completed']}</i>\n"
             f"<b>Vittorie</b>: <i>{statistics['wins']}</i>\n"
             f"<b>Podi</b>: <i>{statistics['podiums']}</i>\n"
             f"<b>Pole</b>: <i>{statistics['poles']}</i>\n"
