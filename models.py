@@ -1273,8 +1273,8 @@ class Driver(Base):
             if race_result.participated:
                 positions += race_result.position
                 race_gaps += (
-                    race_result.gap_to_first / (race_result.total_racetime
-                    - race_result.gap_to_first)
+                    race_result.gap_to_first
+                    / (race_result.total_racetime - race_result.gap_to_first)
                 ) * 100
             if race_result.position <= 3:
                 statistics["podiums"] += 1
@@ -1319,7 +1319,7 @@ class Driver(Base):
             statistics["quali_avg_gap_perc"] = round(
                 quali_gaps / quali_sessions_completed, 2
             )
-        
+
         return statistics
 
     def has_permission(self, permission_id: int) -> bool:
