@@ -95,7 +95,9 @@ async def set_commands(application: Application) -> None:
     )
 
     # Set group chat commands for regular drivers.
-    await application.bot.set_my_commands(config.GROUP_COMMANDS, BotCommandScopeAllGroupChats())
+    await application.bot.set_my_commands(
+        config.GROUP_COMMANDS, BotCommandScopeAllGroupChats()
+    )
 
     # Set private chat commands for team leaders.
     if leaders:
@@ -113,7 +115,7 @@ async def set_commands(application: Application) -> None:
     for admin in admins:
         try:
             await application.bot.set_my_commands(
-            config.ADMIN_COMMANDS, BotCommandScopeChat(admin.telegram_id)
+                config.ADMIN_COMMANDS, BotCommandScopeChat(admin.telegram_id)
             )
         except BadRequest:
             continue
@@ -124,7 +126,6 @@ async def set_commands(application: Application) -> None:
 async def post_init(application: Application) -> None:
     """Sets commands for every user."""
     await set_commands(application)
-    
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
