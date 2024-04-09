@@ -40,24 +40,9 @@ GROUP_COMMANDS = (
     ("prossima_gara", "Info sulla tua prossima gara."),
     ("ultima_gara", "Risultati della tua scorsa gara."),
     ("ultime_gare", "Risultati delle ultime gare."),
-    ("aiuto", "Ottieni assistenza sull'uso del bot."),
 )
 
-BASE_COMMANDS = (
-    ("my_stats", "Le tue statistiche."),
-    ("classifica_piloti", "Classifica piloti della tua categoria."),
-    (
-        "classifiche_piloti",
-        "Classifiche piloti del campionato in corso.",
-    ),
-    ("classifica_costruttori", "Classifica costruttori del campionato in corso"),
-    ("calendario", "Calendario della categoria a cui partecipi."),
-    ("prossima_gara", "Info sulla tua prossima gara."),
-    ("ultima_gara", "Risultati della tua scorsa gara."),
-    ("ultime_gare", "Risultati delle ultime gare."),
-    ("aiuto", "Ottieni assistenza sull'uso del bot."),
-    ("registrami", "Registrati al bot."),
-)
+DRIVER_COMMANDS = GROUP_COMMANDS
 
 LEADER_ONLY_COMMANDS = (
     ("segnala", "Crea una nuova segnalazione."),
@@ -66,7 +51,7 @@ LEADER_ONLY_COMMANDS = (
         "Segnala dopo il periodo consentito.",
     ),
 )
-LEADER_COMMANDS = BASE_COMMANDS + LEADER_ONLY_COMMANDS
+LEADER_COMMANDS = DRIVER_COMMANDS + LEADER_ONLY_COMMANDS
 
 ADMIN_ONLY_COMMANDS = (
     ("segnalazioni", "Giudica le segnalazioni in coda."),

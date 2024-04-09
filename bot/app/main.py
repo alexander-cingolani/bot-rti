@@ -21,7 +21,11 @@ from app.components.conversations.result_recognition import save_results_conv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker
-from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
+from telegram import (
+    BotCommandScopeAllPrivateChats,
+    BotCommandScopeChat,
+    BotCommandScopeAllGroupChats,
+)
 from telegram import Chat as TGChat
 from telegram import (
     ChatMember,
@@ -79,20 +83,23 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 session = DBSession()
 
 
-async def post_init(application: Application) -> None:
-    """Sets commands for every user."""
-
+async def set_commands(application: Application) -> None:
     session = DBSession()
     leaders = get_team_leaders(session)
     admins = get_admins(session)
     session.close()
 
-    # Set base user commands
+    # Set private chat commands for regular drivers.
     await application.bot.set_my_commands(
-        config.BASE_COMMANDS, BotCommandScopeAllPrivateChats()
+        config.DRIVER_COMMANDS, BotCommandScopeAllPrivateChats()
     )
 
-    # Set leader commands
+    # Set group chat commands for regular drivers.
+    await application.bot.set_my_commands(
+        config.GROUP_COMMANDS, BotCommandScopeAllGroupChats()
+    )
+
+    # Set private chat commands for team leaders.
     if leaders:
         for driver in leaders:
             if not driver.telegram_id:
@@ -104,14 +111,21 @@ async def post_init(application: Application) -> None:
             except BadRequest:
                 pass
 
-    # Set admin commands in group and private chats
+    # Set private chat commands for admins.
     for admin in admins:
         try:
             await application.bot.set_my_commands(
                 config.ADMIN_COMMANDS, BotCommandScopeChat(admin.telegram_id)
             )
         except BadRequest:
-            pass
+            continue
+
+    return
+
+
+async def post_init(application: Application) -> None:
+    """Sets commands for every user."""
+    await set_commands(application)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
