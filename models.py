@@ -13,7 +13,6 @@ from collections import defaultdict
 from datetime import datetime as dt
 from datetime import time, timedelta
 from decimal import Decimal
-from statistics import stdev
 from typing import Any, DefaultDict, Optional
 
 from cachetools import TTLCache, cached
@@ -1271,11 +1270,11 @@ class Driver(Base):
                 continue
 
             statistics["fastest_laps"] += race_result.fastest_lap_points
-            if race_result.position:
+            if race_result.participated:
                 positions += race_result.position
                 race_gaps += (
-                    race_result.gap_to_first / race_result.total_racetime
-                    - race_result.gap_to_first
+                    race_result.gap_to_first / (race_result.total_racetime
+                    - race_result.gap_to_first)
                 ) * 100
             if race_result.position <= 3:
                 statistics["podiums"] += 1
@@ -1320,7 +1319,7 @@ class Driver(Base):
             statistics["quali_avg_gap_perc"] = round(
                 quali_gaps / quali_sessions_completed, 2
             )
-
+        
         return statistics
 
     def has_permission(self, permission_id: int) -> bool:
