@@ -30,16 +30,14 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     text = "Ciao! Mandami pure la/le foto a cui devo aggiungere il watermark, quando hai finito di caricarle, scrivi /fine."
     await update.message.reply_text(text)
-    
+
     context.chat_data["images"] = []
-    
+
     return RECEIVE_IMAGE
 
 
 async def receive_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Sends back the received image with the watermark."""
-
-    
 
     original_filename = update.message.effective_attachment.file_name
     if original_filename:
@@ -53,22 +51,22 @@ async def receive_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     file = await update.message.effective_attachment.get_file()
     binary_io = BytesIO()
     await file.download_to_memory(binary_io)
-    
+
     context.chat_data["images"].append((binary_io, filename))
 
     return RECEIVE_IMAGE
 
 
 async def finish_receiving(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    
+
     for stream, filename in context.chat_data["images"]:
-        
+
         await update.message.reply_document(
-        document=add_water(stream), filename=filename
-    )
-        
+            document=add_water(stream), filename=filename
+        )
+
     await update.message.reply_text("Ecco qua!")
-        
+
     return ConversationHandler.END
 
 

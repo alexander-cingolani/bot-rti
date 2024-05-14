@@ -1,6 +1,7 @@
 from PIL import Image
 import io
 
+
 def add_watermark(
     stream: io.BytesIO, watermark_image_path: str = "./app/assets/images/rti.png"
 ) -> io.BytesIO:
@@ -17,9 +18,9 @@ def add_watermark(
     Raises:
         ValueError: If the watermark image is larger than the input image.
     """
-    
+
     input_image = Image.open(stream)
-    
+
     watermark = Image.open(watermark_image_path)
     watermark.resize((750, 253))
     # Ensure the watermark isn't larger than the base image
@@ -37,10 +38,9 @@ def add_watermark(
         input_image.size[1] - watermark.size[1] - 75,
     )
     input_image.paste(watermark, position, watermark)
-    
-    
+
     output_stream = io.BytesIO()
-    input_image.save(output_stream, format='PNG')
+    input_image.save(output_stream, format="PNG")
     output_stream.seek(0)
-    
+
     return output_stream
