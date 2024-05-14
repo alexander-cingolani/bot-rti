@@ -18,6 +18,7 @@ from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
 from app.components.conversations.report_creation import report_creation
 from app.components.conversations.result_recognition import save_results_conv
+from app.components.conversations.add_watermark import add_watermark_conv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SQLASession
 from sqlalchemy.orm import sessionmaker
@@ -94,7 +95,7 @@ async def set_commands(application: Application) -> None:
         config.DRIVER_COMMANDS, BotCommandScopeAllPrivateChats()
     )
 
-    # Set group chat commands for regular drivers.
+    # Set group chat commands.
     await application.bot.set_my_commands(
         config.GROUP_COMMANDS, BotCommandScopeAllGroupChats()
     )
@@ -1050,6 +1051,7 @@ def main() -> None:
     application.add_handler(penalty_creation)
     application.add_handler(report_creation)
     application.add_handler(save_results_conv)
+    application.add_handler(add_watermark_conv)
 
     application.add_handler(
         CallbackQueryHandler(
