@@ -58,6 +58,7 @@ ADMIN_ONLY_COMMANDS = (
     ("salva_risultati", "Salva i risultati delle ultime gare."),
     ("penalizza", "Applica una penalità per un'infrazione commessa da un pilota."),
     ("aggiungi_watermark", "Aggiungi il logo RTI alle foto."),
+    ("annulla_penalita", "Annulla una penalità."),
 )
 ADMIN_COMMANDS = LEADER_COMMANDS + ADMIN_ONLY_COMMANDS
 

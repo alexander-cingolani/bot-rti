@@ -598,7 +598,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     report.reported_team = report.reported_driver.current_team()  # type: ignore
     report.reporting_team = user_data["reporting_team"]
     report.number = (
-        get_last_report_number(sqla_session, category.id, report.round.id) + 1
+        get_last_report_number(sqla_session, category.id, report.round_id) + 1
     )
     channel = (
         config.LATE_REPORT_CHAT
