@@ -885,6 +885,7 @@ class Penalty(Base):
         ForeignKey("reprimands.reprimand_id")
     )
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
+    report_id: Mapped[int] = mapped_column(ForeignKey("reports.report_id"))
 
     driver: Mapped[Driver] = relationship(
         back_populates="received_penalties", foreign_keys=[driver_id]
@@ -893,6 +894,7 @@ class Penalty(Base):
     team: Mapped[Team] = relationship(
         back_populates="received_penalties", foreign_keys=[team_id]
     )
+    report: Mapped[Report | None] = relationship()
 
     @classmethod
     def from_report(
@@ -998,7 +1000,7 @@ class Report(Base):
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(50), nullable=False)
     reason: Mapped[str] = mapped_column(Text(2000), nullable=False)
-    is_reviewed: Mapped[str] = mapped_column(Boolean, nullable=False, default=False)
+    is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     report_time: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
