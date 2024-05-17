@@ -1,6 +1,7 @@
 """
 This module contains the driver ranking function.
 """
+
 from decimal import Decimal
 
 
@@ -11,6 +12,7 @@ from models import Driver, RaceResult
 TrueSkillEnv = ts.TrueSkill(
     draw_probability=0,
 )
+
 
 def update_ratings(results: list[RaceResult]) -> None:
     """Updates the driver ratings"""
@@ -29,6 +31,7 @@ def update_ratings(results: list[RaceResult]) -> None:
     for rating_group, result in zip(rating_groups, race_results):
         result.mu = result.driver.mu = Decimal(str(rating_group[0].mu))
         result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
+
 
 TrueSkillEnv = ts.TrueSkill(
     draw_probability=0,

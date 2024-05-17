@@ -653,7 +653,7 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
     delete_penalty_stmt = delete(Penalty).where(Penalty.id == penalty.id)
     category = penalty.category
     drivers = category.active_drivers()
-    
+
     if penalty.report:
         penalty.report.is_reviewed = False
 

@@ -301,7 +301,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         + reprimand_text
         + "\n\nClassfiche e statistiche sono state aggiornate di conseguenza."
     )
-    
+
     await update.callback_query.edit_message_text(text)
 
     user_data.clear()
