@@ -620,44 +620,67 @@ def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
     return [r[0] for r in result]
 
 
-def delete_penalty(session: SQLASession, penalty: Penalty):
+def update_participant_status(session: SQLASession, participant: RoundParticipant):
+    stmt = (
+        update(RoundParticipant)
+        .where(
+            RoundParticipant.driver_id == participant.driver_id,
+            RoundParticipant.round_id == participant.round_id,
+        )
+        .values(participating=participant.participating)
+    )
+
+    session.execute(stmt)
+    session.commit()
+
+
+def delete_chat(session: SQLASession, chat_id: int):
+    stmt = delete(Chat).where(Chat.id == chat_id)
+    session.execute(stmt)
+    session.commit()
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
+def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
+    result = session.execute(select(Reprimand)).all()
+
+    return [r[0] for r in result]
+
+
+def reverse_penalty(session: SQLASession, penalty: Penalty):
     """Reverses and deletes the given penalty."""
 
-    delete_penalty_stmt = delete(Penalty).where(
-        Penalty.id == penalty.id
-    )
+    delete_penalty_stmt = delete(Penalty).where(Penalty.id == penalty.id)
     category = penalty.category
     drivers = category.active_drivers()
+    
+    if penalty.report:
+        penalty.report.is_reviewed = False
 
     # Gives back licence points, championship points, removes reprimands
-    # and warnings to the penalised driver's record.
+    # and warnings on the penalised driver's record.
     for driver_category in penalty.driver.categories:
         if driver_category.category_id == penalty.category_id:
+            if penalty.reprimand:
+                driver_category.reprimands -= 1
+
             driver_category.licence_points += penalty.licence_points
             driver_category.warnings -= penalty.warnings
-            driver_category.reprimands += penalty.reprimands
             driver_category.points += penalty.points
             break
     else:
         raise RuntimeError()
 
-    # If no time penalty was issued, give back points to team (if any), save and return.
+    # If no time penalty was issued, give back points to the driver's team (if any), save and return.
     if not penalty.time_penalty:
-        driver_team = penalty.reporting_driver.current_team()
+        driver_team = penalty.driver.current_team()
         if driver_team and penalty.points:
             teams: list[TeamChampionship] = []
             for team in category.championship.teams:
                 teams.append(team)
                 if driver_team.id == team.team_id:
-                    team.points += penalty.points               
+                    team.points += penalty.points
 
-        session.execute(delete_penalty_stmt)
-        session.commit()
-        return
-
-    # Penalties handed out in qualifying sessions need to be treated differently.
-    if penalty.session.is_quali:
-        reverse_qualifying_penalty(session, penalty)
         session.execute(delete_penalty_stmt)
         session.commit()
         return
@@ -676,9 +699,9 @@ def delete_penalty(session: SQLASession, penalty: Penalty):
     for i, row in enumerate(rows):
         race_result: RaceResult = row[0]
         race_results.append(race_result)
-        driver_points_before_penalty_deletion[
-            race_result.driver
-        ] = race_result.points_earned
+        driver_points_before_penalty_deletion[race_result.driver] = (
+            race_result.points_earned
+        )
 
         # Remove the penalty from the driver's result
         if race_result.driver_id == penalty.driver_id:
