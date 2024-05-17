@@ -646,6 +646,7 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     if user_data.get("current_report"):
         report = user_data["current_report"]
         report.is_reviewed = True
+        user_data["penalty"].report = report
         sqla_session.commit()
 
     penalty: Penalty = user_data["penalty"]

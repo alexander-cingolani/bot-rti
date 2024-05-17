@@ -3,6 +3,7 @@ This module contains the necessary callbacks to allow admins to delete a penalty
 that has already been applied.
 """
 
+# TODO: Update driver stats, link penalties to reports and mark related report as "unseen" when a penalty is deleted.
 import os
 from typing import Any, cast
 from more_itertools import chunked
@@ -19,7 +20,7 @@ from telegram.ext import (
 )
 from models import Championship, Penalty, Round
 
-from queries import delete_penalty, get_championship
+from queries import get_report, reverse_penalty, get_championship
 
 engine = create_engine(os.environ["DB_URL"])
 
@@ -178,7 +179,7 @@ async def __ask_penalty(update: Update, rnd: Round):
 
     buttons: list[InlineKeyboardButton] = []
     for i, penalty in enumerate(rnd.penalties):
-        text += f"{penalty.number} - {penalty.driver.abbreviated_full_name}, {penalty.time_penalty}s\n"
+        text += f"{penalty.number} - {penalty.driver.abbreviated_name}, {int(penalty.points)} punti di penalità\n"
         buttons.append(
             InlineKeyboardButton(text=str(penalty.number), callback_data=f"P{i}")
         )
@@ -219,8 +220,9 @@ async def __ask_confirmation(update: Update, penalty: Penalty):
     text = (
         "<u>Sei sicuro</u> di voler annullare questa penalità?\n\n"
         f"N° Documento: {penalty.number}\n"
-        f"Pilota: {penalty.driver.abbreviated_full_name}\n"
-        f"Decisione: {penalty.time_penalty}s, {penalty.warnings} warning, {penalty.licence_points} p. licenza"
+        f"Pilota: {penalty.driver.abbreviated_name}\n"
+        f"Punti penalità: {penalty.points}\n"
+        f"Reprimende: {1 if penalty.reprimand else 0}"
     )
 
     reply_markup = InlineKeyboardMarkup(
@@ -287,19 +289,19 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.callback_query.edit_message_text(text)
         return ConversationHandler.END
 
-    delete_penalty(sqla_session, penalty)
+    reverse_penalty(sqla_session, penalty)
+
     p = penalty
+    reprimand_text = (
+        f"\nReprimenda per {p.reprimand.description} rimossa." if p.reprimand else ""
+    )
     text = (
         "Penalità rimossa con successo!\n"
-        f"\n<b>{p.warnings}</b> warning rimoss{'o' if p.warnings == 1 else 'i'}"
-        f"\n<b>{p.reprimands}</b> richiam{'o' if p.reprimands == 1 else 'i'} rimoss{'o' if p.reprimands == 1 else 'i'}"
-        f"\n<b>{p.licence_points}</b> punt{'o' if p.licence_points == 1 else 'i'} licenza restituit{'o' if p.licence_points == 1 else 'i'}"
-        f"\n<b>{p.points}</b> punt{'o' if p.points == 1 else 'i'} restituit{'o' if p.points == 1 else 'i'}"
-        f"\n<b>{p.time_penalty}s</b> tolti dal tempo di gara"
+        f"\n<b>{p.points} punt{'o' if p.points == 1 else 'i'}</b> restituit{'o' if p.points == 1 else 'i'}"
+        + reprimand_text
+        + "\n\nClassfiche e statistiche sono state aggiornate di conseguenza."
     )
-    if penalty.time_penalty:
-        text += "\n\nStatistiche e classifiche sono state aggiornate di conseguenza."
-
+    
     await update.callback_query.edit_message_text(text)
 
     user_data.clear()
