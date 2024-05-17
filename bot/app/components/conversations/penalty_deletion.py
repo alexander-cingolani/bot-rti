@@ -3,7 +3,6 @@ This module contains the necessary callbacks to allow admins to delete a penalty
 that has already been applied.
 """
 
-# TODO: Update driver stats, link penalties to reports and mark related report as "unseen" when a penalty is deleted.
 import os
 from typing import Any, cast
 from more_itertools import chunked
@@ -20,7 +19,7 @@ from telegram.ext import (
 )
 from models import Championship, Penalty, Round
 
-from queries import get_report, reverse_penalty, get_championship
+from queries import reverse_penalty, get_championship
 
 engine = create_engine(os.environ["DB_URL"])
 
