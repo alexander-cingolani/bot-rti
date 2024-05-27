@@ -318,7 +318,7 @@ class Circuit(Base):
 
     @property
     def logo_url(self) -> str:
-        filename = f"{self.name.lower().replace(' ', '-')}.png"
+        filename = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return CIRCUIT_LOGO_DIR_URL + filename
 
     def __repr__(self) -> str:
