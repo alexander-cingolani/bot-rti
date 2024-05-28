@@ -1265,7 +1265,8 @@ class Driver(Base):
                 missed_races += 1
                 continue
 
-            statistics["fastest_laps"] += race_result.fastest_lap_points
+            if race_result.fastest_lap:
+                statistics["fastest_laps"] =+ 1
             if race_result.participated:
                 positions += race_result.position
                 race_gaps += (
