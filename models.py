@@ -74,7 +74,9 @@ class Championship(Base):
 
     id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
-    start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start: Mapped[datetime.date] = mapped_column(
+        Date, nullable=False, default=datetime.datetime.now().date()
+    )
     end: Mapped[datetime.date | None] = mapped_column(Date)
 
     categories: Mapped[list[Category]] = relationship(
@@ -1266,7 +1268,7 @@ class Driver(Base):
                 continue
 
             if race_result.fastest_lap:
-                statistics["fastest_laps"] =+ 1
+                statistics["fastest_laps"] += 1
             if race_result.participated:
                 positions += race_result.position
                 race_gaps += (
@@ -1771,7 +1773,7 @@ class RaceResult(Base):
 
         if not self.fastest_lap:
             return 0
-        
+
         return self.session.fastest_lap_points
 
     @property
