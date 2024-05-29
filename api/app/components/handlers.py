@@ -42,17 +42,6 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
         provisional_results = False
         last_round = category.last_completed_round()
 
-        if not last_round:
-            continue
-
-        if (datetime.now().date() - last_round.date) < timedelta(days=1):
-            provisional_results = True
-        else:
-            for report in last_round.reports:
-                if not report.is_reviewed:
-                    provisional_results = True
-                    break
-
         categories.append(
             {
                 "category_id": category.id,
@@ -63,6 +52,16 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
             }
         )
 
+        if not last_round:
+            continue
+
+        if (datetime.now().date() - last_round.date) < timedelta(days=1):
+            provisional_results = True
+        else:
+            for report in last_round.reports:
+                if not report.is_reviewed:
+                    provisional_results = True
+                    break
     session.close()
 
     return categories

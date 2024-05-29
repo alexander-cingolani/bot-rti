@@ -74,7 +74,9 @@ class Championship(Base):
 
     id: Mapped[int] = mapped_column("championship_id", SmallInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
-    start: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start: Mapped[datetime.date] = mapped_column(
+        Date, nullable=False, default=datetime.datetime.now().date()
+    )
     end: Mapped[datetime.date | None] = mapped_column(Date)
 
     categories: Mapped[list[Category]] = relationship(
@@ -318,7 +320,7 @@ class Circuit(Base):
 
     @property
     def logo_url(self) -> str:
-        filename = f"{self.name.lower().replace(' ', '-')}.png"
+        filename = f"{self.abbreviated_name.lower().replace(' ', '-')}.png"
         return CIRCUIT_LOGO_DIR_URL + filename
 
     def __repr__(self) -> str:
@@ -355,12 +357,6 @@ class Category(Base):
 
         championship_id (int): ID of the championship the category belongs to.
         game_id (int): ID of the game the category is based on.
-        split_point (int): If specified, is used to determine how many points are to be assigned
-            for the fastest lap based on the driver's finishing position.
-        fastest_lap_points (str): One or two numbers in a string split by a " ". The first number
-            tells how many points should be assigned for the first x drivers up to the split point,
-            while the second number tells how many points should be assigned for the drivers after
-            the split point.
         game (Game): Game the category is based on.
         rounds (list[Round]): Rounds in the category.
         race_results (list[RaceResult]): Registered race results.
@@ -375,8 +371,6 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     tag: Mapped[str] = mapped_column(String(8), nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    split_point: Mapped[int | None] = mapped_column(SmallInteger)
-    fastest_lap_points: Mapped[str | None] = mapped_column(String(15))
     game_id: Mapped[int] = mapped_column(ForeignKey(Game.id), nullable=False)
     championship_id: Mapped[int] = mapped_column(
         ForeignKey(Championship.id), nullable=False
@@ -714,7 +708,9 @@ class Session(Base):
     point_system_id: Mapped[int] = mapped_column(
         ForeignKey(PointSystem.id), nullable=False
     )
-
+    fastest_lap_points: Mapped[int] = mapped_column(
+        SmallInteger, default=0, nullable=False
+    )
     race_results: Mapped[list[RaceResult]] = relationship(
         "RaceResult", back_populates="session", order_by="RaceResult.position"
     )
@@ -811,7 +807,7 @@ class Session(Base):
             if penalty_seconds:
                 message += f" (+{penalty_seconds}s)"
 
-            if getattr(result, "fastest_lap_points", 0):
+            if result.fastest_lap_points:
                 message += " GV"
             message += "\n"
 
@@ -1271,7 +1267,8 @@ class Driver(Base):
                 missed_races += 1
                 continue
 
-            statistics["fastest_laps"] += race_result.fastest_lap_points
+            if race_result.fastest_lap:
+                statistics["fastest_laps"] += 1
             if race_result.participated:
                 positions += race_result.position
                 race_gaps += (
@@ -1770,19 +1767,14 @@ class RaceResult(Base):
         )
 
     @property
-    def fastest_lap_points(self) -> float:
+    def fastest_lap_points(self) -> float | int:
         """The amount of points the driver earned for the fastest lap.
         (0 if he didn't score it)"""
 
         if not self.fastest_lap:
             return 0
 
-        if not self.category.split_point:
-            return float(self.category.fastest_lap_points)
-
-        if self.position <= self.category.split_point:
-            return float(self.category.fastest_lap_points.split()[0])
-        return float(self.category.fastest_lap_points.split()[1])
+        return self.session.fastest_lap_points
 
     @property
     def points_earned(self) -> float:
