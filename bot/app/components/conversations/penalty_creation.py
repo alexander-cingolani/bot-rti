@@ -325,7 +325,7 @@ async def report_processing_entry_point(
     else:
         text = f"Hai {total} segnalazioni da processare, di cui:\n"
         for category, number in report_categories.items():
-            text += f"{number} in {category}\n"
+            text += f"{number} in {category.name}\n"
     text += "\nSeleziona la categoria dove vuoi giudicare le segnalazioni:"
 
     buttons: list[InlineKeyboardButton] = []
