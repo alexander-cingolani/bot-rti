@@ -312,9 +312,9 @@ async def report_processing_entry_point(
         return ConversationHandler.END
 
     user_data["unreviewed_reports"] = reports
-    report_categories: DefaultDict[str, int] = defaultdict(int)
+    report_categories: DefaultDict[Category, int] = defaultdict(int)
     for report in reports:
-        report_categories[report.round.category.name] += 1
+        report_categories[report.round.category] += 1
 
     total = sum(report_categories.values())
 
@@ -329,11 +329,8 @@ async def report_processing_entry_point(
     text += "\nSeleziona la categoria dove vuoi giudicare le segnalazioni:"
 
     buttons: list[InlineKeyboardButton] = []
-    for i, category_obj in enumerate(championship.categories):
-        if report_categories.get(category_obj.name):
-            buttons.append(
-                InlineKeyboardButton(category_obj.name, callback_data=f"C{i}")
-            )
+    for i, category in enumerate(report_categories.keys()):
+        buttons.append(InlineKeyboardButton(category.name, callback_data=f"C{i}"))
 
     category_buttons = list(chunked(buttons, 3))
     category_buttons.append([InlineKeyboardButton("Annulla", callback_data="cancel")])

@@ -396,6 +396,12 @@ class Category(Base):
         if not isinstance(other, Category):
             return NotImplemented
         return self.id == other.id
+    
+    def __key(self) -> int:
+        return self.id
+    
+    def __hash__(self) -> int:
+        return hash(self.__key())
 
     def first_non_completed_round(self) -> Round | None:
         """Returns the first non completed Round."""
