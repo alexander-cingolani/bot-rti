@@ -3,6 +3,7 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
+import logging
 import os
 from collections import defaultdict
 from typing import Any, DefaultDict, cast
@@ -26,6 +27,7 @@ from telegram.ext import (
 
 from models import Category, Championship, Driver, Penalty, Report
 from queries import (
+    get_category,
     get_championship,
     get_driver,
     get_last_penalty_number,
@@ -81,8 +83,6 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_data.clear()
         return ConversationHandler.END
 
-    user_data["championship"] = championship
-
     if update.message:
         user_data["penalty"] = Penalty()
     text = "In quale categoria è avvenuta l'infrazione?"
@@ -110,7 +110,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def ask_round(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = cast(dict[str, Any], context.user_data)
     if not update.callback_query.data.isnumeric():
-        user_data["category"] = user_data["championship"].categories[
+        user_data["category"] = user_data["categories"][
             int(update.callback_query.data.removeprefix("C"))
         ]
         user_data["penalty"].category = user_data["category"]
@@ -282,12 +282,6 @@ async def report_processing_entry_point(
 
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
-    user_data["championship"] = championship
-
-    if not championship:
-        sqla_session.close()
-        user_data.clear()
-        return ConversationHandler.END
 
     driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
     if not driver:
@@ -328,8 +322,10 @@ async def report_processing_entry_point(
             text += f"{number} in {category.name}\n"
     text += "\nSeleziona la categoria dove vuoi giudicare le segnalazioni:"
 
+    user_data["categories"] = []
     buttons: list[InlineKeyboardButton] = []
     for i, category in enumerate(report_categories.keys()):
+        user_data["categories"].append(category)
         buttons.append(InlineKeyboardButton(category.name, callback_data=f"C{i}"))
 
     category_buttons = list(chunked(buttons, 3))
@@ -346,10 +342,9 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     user_data = cast(dict[str, Any], context.user_data)
     sqla_session = cast(SQLASession, user_data["sqla_session"])
     reports = cast(list[Report], user_data["unreviewed_reports"])
-    championship = cast(Championship, user_data["championship"])
 
     if not update.callback_query.data.isnumeric():
-        user_data["selected_category"] = championship.categories[
+        user_data["selected_category"] = user_data["categories"][
             int(update.callback_query.data.removeprefix("C"))
         ]
 
@@ -358,6 +353,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     text = "Non risultano esserci segnalazioni "
 
     for report in reports:
+        logging.info(report.category_id)
         if not report.category_id == selected_category.id:
             continue
 
