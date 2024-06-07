@@ -5,11 +5,10 @@ file given a Penalty or Report object.
 
 from datetime import datetime
 from textwrap import wrap
-
 from reportlab.pdfbase import pdfmetrics  # type: ignore
 from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
 from reportlab.pdfgen import canvas  # type: ignore
-
+from reportlab.lib.pagesizes import A4  # type: ignore
 from models import Driver, Penalty, Report
 
 pdfmetrics.registerFont(TTFont("arial", "./app/assets/fonts/arial.ttf"))
@@ -34,15 +33,21 @@ class PenaltyDocument:
         self.penalty: Penalty = penalty
         self.canvas = canvas.Canvas(filename=self.filename)
         self.canvas.setTitle(self.filename)
+        self.canvas.setPageSize(A4)
 
     def __header(self):
+
+        page_width, _ = A4
+        x = (page_width - 180) / 2
+
         self.canvas.drawImage(
-            "./app/assets/images/logo_rti.jpg",
-            x=220,
+            "./app/assets/images/rti.png",
+            x=x,
             y=715,
-            height=100,
-            width=200,
+            height=90,
+            width=180,
             preserveAspectRatio=True,
+            mask=(0, 1, 0, 1, 0, 1),
         )
 
         self.canvas.setLineWidth(0.1)
@@ -68,15 +73,9 @@ class PenaltyDocument:
 
         self.canvas.setFont("arial", 11)
 
-        reported_team = self.penalty.driver.current_team()
-        if not reported_team:
-            reported_team_name = "-"
-        else:
-            reported_team_name = reported_team.name
-
         self.canvas.drawString(75, 619, "Safety Commission")
         self.canvas.drawString(75, 599, "Capo Scuderia,")
-        self.canvas.drawString(75, 585, f"Scuderia {reported_team_name}")
+        self.canvas.drawString(75, 585, f"Scuderia {self.penalty.team.name}")
         self.canvas.drawString(480, 619, str(self.penalty.number))
         self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
         self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
@@ -107,13 +106,7 @@ class PenaltyDocument:
             f"{driver.current_race_number} / {driver.name_and_psn_id}",
         )
 
-        reported_team = driver.current_team()
-        if not reported_team:
-            reported_team_name = "-"
-        else:
-            reported_team_name = reported_team.name
-
-        self.canvas.drawString(135, 475, reported_team_name)
+        self.canvas.drawString(135, 475, self.penalty.team.name)
         self.canvas.drawString(135, 450, self.penalty.incident_time)
         self.canvas.drawString(135, 425, self.penalty.session.name)
         self.canvas.drawString(135, 400, self.penalty.fact)
@@ -153,13 +146,18 @@ class ReportDocument:
             f"{report.round.number}° Round | {report.round.circuit.name}"
         )
         self.canvas = canvas.Canvas(self.filename)
+        self.canvas.setPageSize(A4)
 
     filename: str
 
     def __header(self) -> None:
-        logo_rti = "./app/assets/images/logo_rti.jpg"
+        logo_rti = "./app/assets/images/rti.png"
+
+        page_width, _ = A4
+        x = (page_width - 180) / 2
+
         self.canvas.drawImage(
-            logo_rti, x=220, y=715, height=90, width=180, preserveAspectRatio=True
+            logo_rti, x=x, y=715, height=90, width=180, preserveAspectRatio=True
         )
 
         self.canvas.setLineWidth(0.1)
@@ -179,12 +177,8 @@ class ReportDocument:
         self.canvas.drawString(410, 580, "Orario")
 
         self.canvas.setFont("arial", 10)
-        current_team = self.reporting_driver.current_team()
-        if not current_team:
-            team_name = "-"
-        else:
-            team_name = current_team.name
 
+        team_name = self.report.reporting_team.name
         self.canvas.drawString(75, 619, f"Scuderia {team_name}")
         self.canvas.drawString(75, 599, "Safety Commission")
         self.canvas.drawString(480, 619, str(self.report.number))
@@ -195,7 +189,7 @@ class ReportDocument:
         self.canvas.drawString(
             50,
             540,
-            f"La scuderia {team_name} " "chiede la revisione del seguente incidente:",
+            f"La scuderia {team_name} chiede la revisione del seguente incidente:",
         )
 
     def __body(self):
@@ -208,7 +202,7 @@ class ReportDocument:
         self.canvas.drawString(50, 375, "Fatto")
 
         self.canvas.setFont("arial", 11)
-        reported_driver = self.report.reported_driver
+
         reporting_driver = self.report.reporting_driver
         self.canvas.drawString(
             155,
@@ -221,12 +215,7 @@ class ReportDocument:
             f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.name_and_psn_id}",
         )
 
-        reported_team = reported_driver.current_team()
-        if not reported_team:
-            reported_team_name = "-"
-        else:
-            reported_team_name = reported_team.name
-
+        reported_team_name = self.report.reported_team.name
         self.canvas.drawString(155, 449, reported_team_name)
         self.canvas.drawString(155, 424, self.report.incident_time)
         self.canvas.drawString(155, 399, self.report.session.name)
