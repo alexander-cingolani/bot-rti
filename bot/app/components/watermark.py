@@ -10,7 +10,7 @@ def add_watermark(
     Args:
         input_image (Image): A PIL Image object of the input image.
         watermark_image_path (str): The path to the watermark image file, default is
-                                    '/assets/images/logo_rti.jpg'.
+                                    '/assets/images/rti.png'.
 
     Returns:
         Image: A PIL Image object of the watermarked image.
