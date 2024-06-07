@@ -3,7 +3,6 @@ This module contains the necessary callbacks to allow admins to proccess reports
 made by users.
 """
 
-import logging
 import os
 from collections import defaultdict
 from typing import Any, DefaultDict, cast
@@ -25,9 +24,8 @@ from telegram.ext import (
     filters,
 )
 
-from models import Category, Championship, Driver, Penalty, Report
+from models import Category, Driver, Penalty, Report
 from queries import (
-    get_category,
     get_championship,
     get_driver,
     get_last_penalty_number,
@@ -353,7 +351,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     text = "Non risultano esserci segnalazioni "
 
     for report in reports:
-        logging.info(report.category_id)
+
         if not report.category_id == selected_category.id:
             continue
 
@@ -367,10 +365,11 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             f"<b>Motivo segnalazione</b>: {report.reason}"
         )
         penalty = Penalty.from_report(report)
+
         penalty.number = (
             get_last_penalty_number(
                 sqla_session,
-                round_id=penalty.round_id,
+                round_id=penalty.round.id,
             )
             + 1
         )
@@ -588,7 +587,15 @@ async def ask_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     penalty: Penalty = user_data["penalty"]
     # Driver always has a team here.
-    penalty.team = penalty.driver.current_team()  # type: ignore
+    team = penalty.driver.get_team_on_date(penalty.round.date)
+    if not team:
+        raise ValueError(
+            "Driver {d} was not part of any team on {r}".format(
+                d=penalty.driver.full_name, r=penalty.round.date
+            )
+        )
+    penalty.team = team
+
     penalty.decision = ", ".join(
         filter(
             None,
@@ -640,7 +647,6 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         report = user_data["current_report"]
         report.is_reviewed = True
         user_data["penalty"].report = report
-        sqla_session.commit()
 
     penalty: Penalty = user_data["penalty"]
 

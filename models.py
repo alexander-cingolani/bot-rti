@@ -1145,6 +1145,16 @@ class Driver(Base):
                 return contract.team
         return None
 
+    def get_team_on_date(self, date: datetime.date) -> Team | None:
+        """Returns the team the driver had a contract with at the given date."""
+        for contract in self.contracts:
+            if contract.start > date:
+                continue
+            if contract.end:
+                if contract.end > date and contract.start < date:
+                    return contract.team
+        return None
+
     def current_contract(self) -> DriverContract | None:
         """Returns the driver's current contract."""
         for contract in self.contracts:
