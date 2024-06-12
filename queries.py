@@ -145,6 +145,7 @@ def get_driver(
     session: SQLASession,
     psn_id: str | None = None,
     telegram_id: int | str | None = None,
+    rre_id: str | None = None,
 ) -> Driver | None:
     """Retrieves a single Driver object from the database given his PSN or Telegram id.
     Either psn_id or telegram are optional, but at least one must be given.
@@ -160,9 +161,11 @@ def get_driver(
     if psn_id:
         statement = statement.where(Driver.psn_id == psn_id)
     elif telegram_id:
-        statement = statement.where(Driver._telegram_id == str(telegram_id))  # type: ignore
+        statement = statement.where(Driver._telegram_id == str(telegram_id)) # type: ignore
+    elif rre_id:
+        statement = statement.where(Driver.rre_id == rre_id)
     else:
-        raise ValueError("Neither psn_id or telegram_id were given.")
+        raise ValueError("No search criteria given.")
 
     try:
         result = session.execute(statement).one_or_none()

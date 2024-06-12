@@ -5,12 +5,12 @@ import os
 from collections import defaultdict
 from typing import Any, cast
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, QualifyingResult, RaceResult, Session
-from queries import get_category, get_championship, get_teams, save_results
+from models import Category, Driver, QualifyingResult, RaceResult, Session
+from queries import get_category, get_championship, get_driver, get_teams, save_results
 
 URL = os.environ["DB_URL"]
 RRE_GAME_ID = 3
@@ -247,21 +247,36 @@ def remove_wild_cards(
     return players
 
 
-async def save_rre_results(json_str: str) -> None:
-    logger.info("La funzione save_rre_results per i json string è stata chiamata.")
-    data = json.loads(json_str)
-    logger.info("Created data from json")
-    sqla_session = SQLASession()
-    current_championship = get_championship(sqla_session)
+def detect_category(sqla_session, data: dict[str, Any]):
 
-    if not current_championship:
+    players_per_category: defaultdict[Category, int] = defaultdict(int)
+    for player in data["Sessions"][2]["Players"]:
+        driver = get_driver(session=sqla_session, rre_id=player["UserId"])
+        if not driver:
+            continue
+        if not (category := driver.current_category()):
+            continue
+        players_per_category[category.category] += 1
+
+    return max(players_per_category, key=lambda key: players_per_category[key])
+
+
+async def save_rre_results(json_str: bytes) -> None:
+    logger.info("save_rre_results called, loading data from json...")
+    data = json.loads(json_str)
+    sqla_session = SQLASession()
+    championship = get_championship(sqla_session)
+    
+    if not championship:
         raise HTTPException(
             500, "Championship was not configured correctly in the database."
         )
 
-    date_round = {r.date: r for r in current_championship.rounds}
+    category = detect_category(sqla_session, data)
+
+    date_round = {r.date: r for r in category.rounds}
     if not (
-        current_round := date_round[datetime.utcfromtimestamp(data["StartTime"]).date()]
+        current_round := date_round[datetime.fromtimestamp(data["StartTime"]).date()]
     ):
         raise HTTPException(
             400, "The date in the file does not match any date in the championship."
@@ -269,12 +284,12 @@ async def save_rre_results(json_str: str) -> None:
     if current_round.is_completed:
         raise HTTPException(422, "This file has already been saved.")
 
-    current_category = current_round.category
-    driver_objs = current_category.active_drivers()
+    
+    driver_objs = category.active_drivers()
     drivers = {d.driver.rre_id: d.driver for d in driver_objs}
     reserves: list[int] = []
 
-    for team in current_championship.teams:
+    for team in championship.teams:
         for reserve in team.team.reserves():
             if reserve.driver.rre_id:
                 reserves.append(reserve.driver.rre_id)
@@ -288,6 +303,8 @@ async def save_rre_results(json_str: str) -> None:
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
 
     qualifying_data = data["Sessions"][1]
+    logging.info(qualifying_data["Players"])
+
     pole_lap = qualifying_data["Players"][0]["BestLapTime"]
 
     if session := current_round.qualifying_session:
@@ -303,7 +320,7 @@ async def save_rre_results(json_str: str) -> None:
                 QualifyingResult(
                     session=session,
                     round_id=current_round.id,
-                    category_id=current_category.id,
+                    category_id=category.id,
                     gap_to_first=gap_to_first,
                     laptime=laptime,
                     position=position,
@@ -313,7 +330,7 @@ async def save_rre_results(json_str: str) -> None:
                 )
             )
 
-        # Add qualifying results for drivers who didn't participate to quali
+        # Add qualifying results for drivers who didn't participate in quali
         for driver in driver_objs:
             for result in qualifying_results:
                 if result.driver_id == driver.driver_id:
@@ -326,7 +343,7 @@ async def save_rre_results(json_str: str) -> None:
                         participated=False,
                         round_id=current_round.id,
                         session=session,
-                        category_id=current_category.id,
+                        category_id=category.id,
                     )
                 )
         sqla_session.add_all(qualifying_results)
@@ -388,7 +405,7 @@ async def save_rre_results(json_str: str) -> None:
                 participated=True,
                 round_id=current_round.id,
                 session=session,
-                category_id=current_category.id,
+                category_id=category.id,
             )
 
             driver_race_results[driver.id] = race_res
@@ -419,7 +436,7 @@ async def save_rre_results(json_str: str) -> None:
                         participated=False,
                         round_id=current_round.id,
                         session=session,
-                        category_id=current_category.id,
+                        category_id=category.id,
                     )
                 )
 
@@ -431,12 +448,3 @@ async def save_rre_results(json_str: str) -> None:
     current_round.is_completed = True
     logger.info("Fine operazione json. Save results")
     save_results(sqla_session, qualifying_results, races)
-
-
-async def save_rre_results_file(file: UploadFile) -> None:
-    """Saves the results contained in the json file produced by the raceroom server."""
-    logger.info("La funzione save_rre_results_file è stata chiamata.")
-
-    json_str = await file.read()
-    logger.info("Chiamo la funzione di caricamento gia' con il json")
-    await save_rre_results(json_str)
