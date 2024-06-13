@@ -240,10 +240,12 @@ def remove_wild_cards(
     wild_card_counter = 0
     for player in results:
         if player["UserId"] in expected_player_ids:
-            player["Position"] -= wild_card_counter
+            player["PositionInClass"] -= wild_card_counter
             players.append(player)
         else:
             wild_card_counter += 1
+            logging.info(f"id: {player["UserId"]} name: {player["FullName"]}")
+    logging.info(f"wild cards: {wild_card_counter}")
     return players
 
 
@@ -261,12 +263,29 @@ def detect_category(sqla_session, data: dict[str, Any]):
     return max(players_per_category, key=lambda key: players_per_category[key])
 
 
+def gap_to_first_in_race(race_data: dict[str, Any], player: dict[str, Any]):
+    gap_to_first = 0
+    for winners_lap, players_lap in zip(
+        race_data["Players"][0]["RaceSessionLaps"], player["RaceSessionLaps"]
+    ):
+        if players_lap["Time"] > 0:
+            gap_to_first += players_lap["Time"] - winners_lap["Time"]
+            continue
+        for winner_sector, player_sector in zip(
+            reversed(winners_lap["SectorTimes"]),
+            reversed(players_lap["SectorTimes"]),
+        ):
+            if player_sector > 0:
+                gap_to_first += player_sector - winner_sector
+    return gap_to_first
+
+
 async def save_rre_results(json_str: bytes) -> None:
     logger.info("save_rre_results called, loading data from json...")
     data = json.loads(json_str)
     sqla_session = SQLASession()
     championship = get_championship(sqla_session)
-    
+
     if not championship:
         raise HTTPException(
             500, "Championship was not configured correctly in the database."
@@ -284,8 +303,10 @@ async def save_rre_results(json_str: bytes) -> None:
     if current_round.is_completed:
         raise HTTPException(422, "This file has already been saved.")
 
-    
     driver_objs = category.active_drivers()
+    
+    logging.info(driver_objs)
+    
     drivers = {d.driver.rre_id: d.driver for d in driver_objs}
     reserves: list[int] = []
 
@@ -294,7 +315,7 @@ async def save_rre_results(json_str: bytes) -> None:
             if reserve.driver.rre_id:
                 reserves.append(reserve.driver.rre_id)
     expected_player_ids = reserves + list(drivers.keys())
-
+    logging.info(expected_player_ids)
     for session in data["Sessions"]:
         players = remove_wild_cards(expected_player_ids, session["Players"])
         session["Players"] = players
@@ -303,18 +324,21 @@ async def save_rre_results(json_str: bytes) -> None:
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
 
     qualifying_data = data["Sessions"][1]
-    logging.info(qualifying_data["Players"])
 
     pole_lap = qualifying_data["Players"][0]["BestLapTime"]
 
     if session := current_round.qualifying_session:
         for player in qualifying_data["Players"]:
             rre_id = cast(int, player["UserId"])
-            position = cast(int, player["Position"])
+            position = cast(int, player["PositionInClass"])
             laptime = cast(int, player["BestLapTime"])
             gap_to_first = laptime - pole_lap
 
             driver = drivers[rre_id]
+
+            if laptime < 0:
+                laptime = None
+                gap_to_first = None
 
             qualifying_results.append(
                 QualifyingResult(
@@ -349,52 +373,30 @@ async def save_rre_results(json_str: bytes) -> None:
         sqla_session.add_all(qualifying_results)
 
     for i, race_data in enumerate(data["Sessions"][2:]):
-        fastest_lap = float("inf")
-        driver_race_results: dict[int, RaceResult] = {}
-        fastest_lap_player_id = 0
-        winners_time = race_data["Players"][0]["TotalTime"]
 
         if current_round.has_sprint_race and i == 0:
             session = cast(Session, current_round.sprint_race)
         else:
             session = current_round.long_race
 
-        deferred_penalty_applied = False
-
+        winners_time = race_data["Players"][0]["TotalTime"]
         for player in race_data["Players"]:
             if status := player.get("FinishStatus"):
                 if status != "Finished":
-                    continue
-            gap_to_first = 0
-            for winners_lap, players_lap in zip(
-                race_data["Players"][0]["RaceSessionLaps"], player["RaceSessionLaps"]
-            ):
-                if players_lap["Time"] > 0:
-                    gap_to_first += players_lap["Time"] - winners_lap["Time"]
-                    continue
-                for winner_sector, player_sector in zip(
-                    reversed(winners_lap["SectorTimes"]),
-                    reversed(players_lap["SectorTimes"]),
-                ):
-                    if player_sector > 0:
-                        gap_to_first += player_sector - winner_sector
-                        break
+                    break
+
+            # gap_to_first = gap_to_first_in_race(race_data, player)
+
+            gap_to_first = player["TotalTime"] - winners_time
 
             rre_id = cast(int, player["UserId"])
-            position = cast(int, player["Position"])
-            total_racetime = (race_data["Players"][0]["TotalTime"]) + gap_to_first
-
-            player_fastest_lap = cast(int, player["BestLapTime"])
+            position = cast(int, player["PositionInClass"])
+            total_racetime = player["TotalTime"]
             driver = drivers[rre_id]
 
-            if player_fastest_lap < fastest_lap:
-                fastest_lap = player_fastest_lap
-                fastest_lap_player_id = driver.id
-
-            # Apply any deferred penalties
-            for def_penalty in driver.deferred_penalties:
-                total_racetime += def_penalty.penalty.time_penalty
-                deferred_penalty_applied = True
+            if total_racetime < 0:
+                total_racetime = None
+                gap_to_first = None
 
             race_res = RaceResult(
                 position=position,
@@ -406,22 +408,10 @@ async def save_rre_results(json_str: bytes) -> None:
                 round_id=current_round.id,
                 session=session,
                 category_id=category.id,
+                fastest_lap=player["FastLap"],
             )
 
-            driver_race_results[driver.id] = race_res
             races[session].append(race_res)
-
-        # If deferred penalty was applied, recalculate session results.
-        if deferred_penalty_applied:
-            races[session].sort(key=lambda rr: rr.total_racetime)  # type: ignore
-            winners_time = 0
-            for pos, result in enumerate(races[session], start=1):
-                if pos == 1:
-                    winners_time = result.total_racetime
-
-                # RaceResults without total_racetime haven't been added yet
-                result.gap_to_first = result.total_racetime - winners_time  # type: ignore
-                result.position = pos
 
         # Add raceresults for drivers who didn't participate to this session
         for driver in driver_objs:
@@ -440,11 +430,9 @@ async def save_rre_results(json_str: bytes) -> None:
                     )
                 )
 
-        driver_race_results[fastest_lap_player_id].fastest_lap = True
         sqla_session.add_all(races[session])
-    from pprint import pformat
 
-    logging.info(pformat(races))
     current_round.is_completed = True
-    logger.info("Fine operazione json. Save results")
     save_results(sqla_session, qualifying_results, races)
+
+    logging.info("Results saved successfully.")
