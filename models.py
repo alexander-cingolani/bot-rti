@@ -87,8 +87,8 @@ class Championship(Base):
         back_populates="championship", order_by="Round.date"
     )
 
-    def reporting_round(self) -> Round | None:
-        """Returns the round in which reports can currently be created."""
+    def protesting_round(self) -> Round | None:
+        """Returns the round in which protests can currently be created."""
         now = datetime.datetime.now().date()
         for championship_roud in self.rounds:
             if (championship_roud.date + timedelta(hours=24)) == now:
@@ -181,7 +181,7 @@ class Permission(Base):
     """Represents a permission that can be granted to one or more roles in the team.
 
     id (int): Unique ID for the permission.
-    name (str): Name of the permission. E.g. "report-filing"
+    name (str): Name of the permission. E.g. "protest-filing"
     """
 
     __tablename__ = "permissions"
@@ -591,7 +591,7 @@ class Round(Base):
     )
 
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="round")
-    reports: Mapped[list[Report]] = relationship()
+    protests: Mapped[list[Protest]] = relationship()
     penalties: Mapped[list[Penalty]] = relationship()
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
         back_populates="round"
@@ -726,7 +726,7 @@ class Session(Base):
         order_by="QualifyingResult.position",
     )
     point_system: Mapped[PointSystem] = relationship()
-    reports: Mapped[list[Report]] = relationship(back_populates="session")
+    protests: Mapped[list[Protest]] = relationship(back_populates="session")
     penalties: Mapped[list[Penalty]] = relationship(back_populates="session")
     round: Mapped[Round] = relationship(back_populates="sessions")
 
@@ -749,14 +749,6 @@ class Session(Base):
             if race_result.participated:
                 drivers.append(race_result.driver)
         return drivers
-
-    def get_penalty_seconds_of(self, driver_id: int) -> int:
-        """Returns total time penalties received by a driver."""
-        seconds = 0
-        for penalty in self.penalties:
-            if penalty.driver_id == driver_id:
-                seconds += penalty.time_penalty
-        return seconds
 
     def results_message(self) -> str:
         """Generates a message containing the results of this session."""
@@ -840,8 +832,8 @@ class Penalty(Base):
         round_id (int): Unique ID of the round where the incident happened.
         session_id (int): Unique ID of the session where the incident happened.
 
-        driver_id (int): Unique ID of the driver receiving the report.
-        team_id (int): Unique ID of the team receiving the report.
+        driver_id (int): Unique ID of the driver receiving the protest.
+        team_id (int): Unique ID of the team receiving the protest.
 
         incident_time (str): In-game time when the incident happened.
         fact (str): The fact given by the user creating the penalty.
@@ -858,7 +850,7 @@ class Penalty(Base):
     fact: str
     decision: str
     reason: str
-    reporting_driver: Driver
+    protesting_driver: Driver
 
     id: Mapped[int] = mapped_column("penalty_id", Integer, primary_key=True)
     time_penalty: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
@@ -887,7 +879,7 @@ class Penalty(Base):
         ForeignKey("reprimands.reprimand_id")
     )
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"), nullable=False)
-    report_id: Mapped[int] = mapped_column(ForeignKey("reports.report_id"))
+    protest_id: Mapped[int] = mapped_column(ForeignKey("protests.protest_id"))
 
     driver: Mapped[Driver] = relationship(
         back_populates="received_penalties", foreign_keys=[driver_id]
@@ -896,21 +888,21 @@ class Penalty(Base):
     team: Mapped[Team] = relationship(
         back_populates="received_penalties", foreign_keys=[team_id]
     )
-    report: Mapped[Report | None] = relationship()
+    protest: Mapped[Protest | None] = relationship()
 
     @classmethod
-    def from_report(
+    def from_protest(
         cls,
-        report: Report,
+        protest: Protest,
         time_penalty: int = 0,
         licence_points: int = 0,
         warnings: int = 0,
         points: int = 0,
     ) -> Penalty:
-        """Initializes a Penalty object from a Report object.
+        """Initializes a Penalty object from a Protest object.
 
         Args:
-            report (Report): Report to initialize the Penalty object from.
+            protest (Protest): Protest to initialize the Penalty object from.
             time_penalty (int): Time penalty applied to the driver. (Default: 0)
             licence_points (int): Licence points deducted from the driver's licence. (Default: 0)
             warnings (int): Warnings given to the driver. (Default: 0)
@@ -918,27 +910,27 @@ class Penalty(Base):
                 (Default: 0)
 
         Raises:
-            TypeError: Raised if report is not of type `Report`.
+            TypeError: Raised if protest is not of type `Protest`.
 
         Returns:
             Penalty: The new object initialized with the given arguments.
         """
 
-        if not report:
-            raise TypeError(f"Cannot initialize Penalty object from {type(report)}.")
+        if not protest:
+            raise TypeError(f"Cannot initialize Penalty object from {type(protest)}.")
 
         c = cls(
-            driver=report.reported_driver,
+            driver=protest.protested_driver,
             time_penalty=time_penalty,
             licence_points=licence_points,
             warnings=warnings,
             points=points,
         )
-        c.incident_time = report.incident_time
-        c.category = report.category
-        c.round = report.round
-        c.session = report.session
-        c.reporting_driver = report.reporting_driver
+        c.incident_time = protest.incident_time
+        c.category = protest.category
+        c.round = protest.round
+        c.session = protest.session
+        c.protesting_driver = protest.protesting_driver
         return c
 
     def is_complete(self) -> bool:
@@ -957,53 +949,53 @@ class Penalty(Base):
         )
 
 
-class Report(Base):
-    """Represents a report.
-    Each report is associated with two Drivers and their Teams,
-    as well as the Category, Round and Session the reported incident happened in.
+class Protest(Base):
+    """Represents a protest.
+    Each protest is associated with two Drivers and their Teams,
+    as well as the Category, Round and Session the protested incident happened in.
     N.B. fact, penalty, reason and is_queued may only be provided after
-    the report has been reviewed.
+    the protest has been reviewed.
 
     Attributes:
-        id (int): Automatically generated unique ID assigned upon report creation.
-        number (int): The number of the report in the order it was received in in a Round.
+        id (int): Automatically generated unique ID assigned upon protest creation.
+        number (int): The number of the protest in the order it was received in in a Round.
         incident_time (str): String indicating the in-game time when the accident happened.
-        reason (str): The reason provided by the reporter for making the report.
+        reason (str): The reason provided by the protester for making the protest.
         video_link (str): [Not persisted] Link towards a YouTube video showing the accident
             happening. (Only intended for qualifying sessions)
-        is_reviewed (bool): False by default, indicates if the report has been reviewed yet.
-        report_time (datetime): Timestamp indicating when the report was made.
-        channel_message_id (int): ID of the message the report was sent by the user with.
+        is_reviewed (bool): False by default, indicates if the protest has been reviewed yet.
+        protest_time (datetime): Timestamp indicating when the protest was made.
+        channel_message_id (int): ID of the message the protest was sent by the user with.
 
         category_id (int): Unique ID of the category where incident happened.
         round_id (int): Unique ID of the round where the incident happened.
         session_id (int): Unique ID of the session where the incident happened.
-        reported_driver_id (int): Unique ID of the driver receiving the report.
-        reporting_driver_id (int): Unique ID of the driver making the report.
-        reported_team_id (int): Unique ID of the team receiving the report.
-        reporting_team_id (int): Unique ID of the team making the report.
+        protested_driver_id (int): Unique ID of the driver receiving the protest.
+        protesting_driver_id (int): Unique ID of the driver making the protest.
+        protested_team_id (int): Unique ID of the team receiving the protest.
+        protesting_team_id (int): Unique ID of the team making the protest.
 
         category (Category): Category where the incident happened.
         round (Round): Round where the incident happened.
         session (Session): Session where the incident happened.
-        reported_driver (Driver): The driver receiving the report.
-        reporting_driver (Driver): The driver making the report.
-        reported_team (Team): The team receiving the report.
-        reporting_team (Team): The team making the report.
+        protested_driver (Driver): The driver receiving the protest.
+        protesting_driver (Driver): The driver making the protest.
+        protested_team (Team): The team receiving the protest.
+        protesting_team (Team): The team making the protest.
     """
 
-    __tablename__ = "reports"
-    __table_args__ = (CheckConstraint("reporting_team_id != reported_team_id"),)
+    __tablename__ = "protests"
+    __table_args__ = (CheckConstraint("protesting_team_id != protested_team_id"),)
 
     __allow_unmapped__ = True
     video_link: str | None = None
 
-    id: Mapped[int] = mapped_column("report_id", Integer, primary_key=True)
+    id: Mapped[int] = mapped_column("protest_id", Integer, primary_key=True)
     number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     incident_time: Mapped[str] = mapped_column(String(50), nullable=False)
     reason: Mapped[str] = mapped_column(Text(2000), nullable=False)
     is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    report_time: Mapped[datetime.datetime] = mapped_column(
+    protest_time: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
     channel_message_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -1011,39 +1003,39 @@ class Report(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey(Category.id), nullable=False)
     round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
     session_id: Mapped[int] = mapped_column(ForeignKey(Session.id), nullable=False)
-    reported_driver_id: Mapped[int] = mapped_column(
+    protested_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
 
-    reporting_driver_id: Mapped[int] = mapped_column(
+    protesting_driver_id: Mapped[int] = mapped_column(
         ForeignKey("drivers.driver_id"), nullable=False
     )
-    reported_team_id: Mapped[int] = mapped_column(
+    protested_team_id: Mapped[int] = mapped_column(
         ForeignKey("teams.team_id"), nullable=False
     )
-    reporting_team_id: Mapped[int] = mapped_column(
+    protesting_team_id: Mapped[int] = mapped_column(
         ForeignKey("teams.team_id"), nullable=False
     )
 
     category: Mapped[Category] = relationship()
-    round: Mapped[Round] = relationship(back_populates="reports")
+    round: Mapped[Round] = relationship(back_populates="protests")
     session: Mapped[Session] = relationship()
 
-    reported_driver: Mapped[Driver] = relationship(foreign_keys=[reported_driver_id])
-    reporting_driver: Mapped[Driver] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_driver_id]
+    protested_driver: Mapped[Driver] = relationship(foreign_keys=[protested_driver_id])
+    protesting_driver: Mapped[Driver] = relationship(
+        back_populates="protests_made", foreign_keys=[protesting_driver_id]
     )
-    reported_team: Mapped[Team] = relationship(foreign_keys=[reported_team_id])
+    protested_team: Mapped[Team] = relationship(foreign_keys=[protested_team_id])
 
-    reporting_team: Mapped[Team] = relationship(
-        back_populates="reports_made", foreign_keys=[reporting_team_id]
+    protesting_team: Mapped[Team] = relationship(
+        back_populates="protests_made", foreign_keys=[protesting_team_id]
     )
 
     def __str__(self) -> str:
         return (
-            f"Report(number={self.number}, incident_time={self.incident_time},"
-            f" reason={self.reason}, reported_driver={self.reported_driver},"
-            f" reporting_driver={self.reporting_driver}, reported_team={self.reported_team})"
+            f"Protest(number={self.number}, incident_time={self.incident_time},"
+            f" reason={self.reason}, protested_driver={self.protested_driver},"
+            f" protesting_driver={self.protesting_driver}, protested_team={self.protested_team})"
         )
 
     def is_complete(self) -> bool:
@@ -1051,13 +1043,13 @@ class Report(Base):
         return all(
             (
                 self.incident_time,
-                self.reported_driver,
-                self.reporting_driver,
+                self.protested_driver,
+                self.protesting_driver,
                 self.category,
                 self.round,
                 self.session,
-                self.reported_team,
-                self.reporting_team,
+                self.protested_team,
+                self.protesting_team,
                 self.number,
             )
         )
@@ -1078,9 +1070,9 @@ class Driver(Base):
         contracts (list[DriverContract]): All the contracts the driver has signed.
         categories (list[DriverCategory]): Categories the driver has participated in.
         race_results (list[RaceResult]): Results made by the driver in his career.
-        received_reports (list[Report]): Reports made against the driver during his career.
-        reports_made (list[Report]): Reports made by the driver during his career.
-        qualifying_results (list[Report]): Results obtained by the driver in qualifying sessions
+        received_protests (list[Protest]): Protests made against the driver during his career.
+        protests_made (list[Protest]): Protests made by the driver during his career.
+        qualifying_results (list[Protest]): Results obtained by the driver in qualifying sessions
             during his career.
         roles (list[DriverRole]): Roles covered by this driver.
     """
@@ -1113,14 +1105,11 @@ class Driver(Base):
     )
     race_results: Mapped[list[RaceResult]] = relationship(back_populates="driver")
     received_penalties: Mapped[list[Penalty]] = relationship(back_populates="driver")
-    reports_made: Mapped[list[Report]] = relationship(
-        back_populates="reporting_driver",
-        foreign_keys=[Report.reporting_driver_id],
+    protests_made: Mapped[list[Protest]] = relationship(
+        back_populates="protesting_driver",
+        foreign_keys=[Protest.protesting_driver_id],
     )
     qualifying_results: Mapped[list[QualifyingResult]] = relationship(
-        back_populates="driver"
-    )
-    deferred_penalties: Mapped[list[DeferredPenalty]] = relationship(
         back_populates="driver"
     )
     roles: Mapped[list[DriverRole]] = relationship(back_populates="driver")
@@ -1393,11 +1382,11 @@ class Team(Base):
     """Represents a team.
 
     Attributes:
-        reports_made (list[Report]): Reports made by the team.
-        received_reports (list[Report]): Reports received by the team.
+        protests_made (list[Protest]): Protests made by the team.
+        received_protests (list[Protest]): Protests received by the team.
 
         drivers (list[DriverContract]): Drivers contracted to the team.
-        leader (Driver): Driver who is allowed to make reports for the team.
+        leader (Driver): Driver who is allowed to make protests for the team.
 
         team_id (int): The team's unique ID.
         name (str): The team's unique name.
@@ -1418,9 +1407,9 @@ class Team(Base):
     contracted_drivers: Mapped[list[DriverContract]] = relationship(
         back_populates="team"
     )
-    reports_made: Mapped[list[Report]] = relationship(
-        back_populates="reporting_team",
-        foreign_keys=[Report.reporting_team_id],
+    protests_made: Mapped[list[Protest]] = relationship(
+        back_populates="protesting_team",
+        foreign_keys=[Protest.protesting_team_id],
     )
     received_penalties: Mapped[list[Penalty]] = relationship(
         back_populates="team",
@@ -1852,36 +1841,8 @@ class Chat(Base):
     user_id: Mapped[int | None] = mapped_column(BigInteger)
 
 
-class DeferredPenalty(Base):
-    """Represents a penalty to be applied to the result of next race the penalised
-    driver participates in. The need for this object comes from the fact that
-    sometimes drivers can be penalised without having completed the race they were
-    penalised in. DeferredPenalty objects are also linked to a separate Penalty
-    object which contains all the details about the penalty.
-
-    id (int): Unique ID for this object.
-    penalty_id (int): Unique ID of the Penalty this object is related to.
-    driver_id (int): Unique ID of the Driver who received the penalty.
-    is_applied (bool): True if the penalty was applied.
-
-    penalty (Penalty): Penalty object this DeferredPenalty is related to.
-    driver (Driver): Driver object who received the penalty.
-
-    """
-
-    __tablename__ = "deferred_penalties"
-
-    id: Mapped[int] = mapped_column("deferred_penalty_id", Integer, primary_key=True)
-    penalty_id: Mapped[int] = mapped_column(ForeignKey(Penalty.id), unique=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id))
-    is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    penalty: Mapped[Penalty] = relationship()
-    driver: Mapped[Driver] = relationship(back_populates="deferred_penalties")
-
-
 class Reprimand(Base):
-    """Represents a type reprimand that can be given to a driver in response to a report.
+    """Represents a type reprimand that can be given to a driver in response to a protest.
 
     id (int): Unique ID for this object.
     description (str): A brief description for the type of reprimand.

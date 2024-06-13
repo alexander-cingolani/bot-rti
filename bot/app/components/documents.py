@@ -1,6 +1,6 @@
 """
-This module contains the PenaltyDocument and ReportDocument classes, which generate a pdf
-file given a Penalty or Report object.
+This module contains the PenaltyDocument and ProtestDocument classes, which generate a pdf
+file given a Penalty or Protest object.
 """
 
 from datetime import datetime
@@ -9,7 +9,7 @@ from reportlab.pdfbase import pdfmetrics  # type: ignore
 from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
 from reportlab.pdfgen import canvas  # type: ignore
 from reportlab.lib.pagesizes import A4  # type: ignore
-from models import Driver, Penalty, Report
+from models import Driver, Penalty, Protest
 
 pdfmetrics.registerFont(TTFont("arial", "./app/assets/fonts/arial.ttf"))
 pdfmetrics.registerFont(TTFont("arialB", "./app/assets/fonts/arialB.ttf"))
@@ -135,15 +135,15 @@ class PenaltyDocument:
         return self.filename
 
 
-class ReportDocument:
-    def __init__(self, report: Report) -> None:
-        self.report: Report = report
-        self.reporting_driver: Driver = report.reporting_driver
+class ProtestDocument:
+    def __init__(self, protest: Protest) -> None:
+        self.protest: Protest = protest
+        self.protesting_driver: Driver = protest.protesting_driver
         self.filename: str = (
-            f"{self.report.number} - Segnalazione {self.report.reported_driver.full_name}.pdf"
+            f"{self.protest.number} - Segnalazione {self.protest.protested_driver.full_name}.pdf"
         )
         self.subtitle: str = (
-            f"{report.round.number}° Round | {report.round.circuit.name}"
+            f"{protest.round.number}° Round | {protest.round.circuit.name}"
         )
         self.canvas = canvas.Canvas(self.filename)
         self.canvas.setPageSize(A4)
@@ -165,7 +165,7 @@ class ReportDocument:
         self.canvas.line(x1=50, x2=550, y1=560, y2=560)
 
         self.canvas.setFont("RaceSport", 24)
-        self.canvas.drawCentredString(297, 690, f"{self.report.category.name}")
+        self.canvas.drawCentredString(297, 690, f"{self.protest.category.name}")
         self.canvas.setFontSize(14)
         self.canvas.drawCentredString(297, 663, self.subtitle)
 
@@ -178,10 +178,10 @@ class ReportDocument:
 
         self.canvas.setFont("arial", 10)
 
-        team_name = self.report.reporting_team.name
+        team_name = self.protest.protesting_team.name
         self.canvas.drawString(75, 619, f"Scuderia {team_name}")
         self.canvas.drawString(75, 599, "Safety Commission")
-        self.canvas.drawString(480, 619, str(self.report.number))
+        self.canvas.drawString(480, 619, str(self.protest.number))
         self.canvas.drawString(480, 599, datetime.now().date().strftime("%d %b %Y"))
         self.canvas.drawString(480, 579, datetime.now().time().strftime("%H:%M"))
         self.canvas.setFont("arial", 11)
@@ -203,33 +203,33 @@ class ReportDocument:
 
         self.canvas.setFont("arial", 11)
 
-        reporting_driver = self.report.reporting_driver
+        protesting_driver = self.protest.protesting_driver
         self.canvas.drawString(
             155,
             499,
-            f"{reporting_driver.current_race_number} / {reporting_driver.name_and_psn_id}",
+            f"{protesting_driver.current_race_number} / {protesting_driver.name_and_psn_id}",
         )
         self.canvas.drawString(
             155,
             474,
-            f"{self.report.reported_driver.current_race_number} / {self.report.reported_driver.name_and_psn_id}",
+            f"{self.protest.protested_driver.current_race_number} / {self.protest.protested_driver.name_and_psn_id}",
         )
 
-        reported_team_name = self.report.reported_team.name
-        self.canvas.drawString(155, 449, reported_team_name)
-        self.canvas.drawString(155, 424, self.report.incident_time)
-        self.canvas.drawString(155, 399, self.report.session.name)
-        text = "\n".join(wrap(self.report.reason, 80)).split("\n")
+        protested_team_name = self.protest.protested_team.name
+        self.canvas.drawString(155, 449, protested_team_name)
+        self.canvas.drawString(155, 424, self.protest.incident_time)
+        self.canvas.drawString(155, 399, self.protest.session.name)
+        text = "\n".join(wrap(self.protest.reason, 80)).split("\n")
         y0 = 374
         for line in text:
             self.canvas.drawString(155, y0, line)
             y0 -= 15
 
-        if self.report.video_link:
+        if self.protest.video_link:
             self.canvas.setFont("arialB", 11.5)
             self.canvas.drawString(50, y0 - 15, "Video")
             self.canvas.setFont("arial", 10)
-            self.canvas.drawString(155, y0 - 15, self.report.video_link)
+            self.canvas.drawString(155, y0 - 15, self.protest.video_link)
 
     def generate_document(self) -> str:
         """Generates and saves the document returning its name"""
