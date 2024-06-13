@@ -1,6 +1,6 @@
 """
 This module contains the necessary queries in order to retrieve specific objects
-such as Reports, Categories and Drivers.
+such as Protests, Categories and Drivers.
 """
 
 from collections import defaultdict
@@ -27,7 +27,7 @@ from models import (
     Penalty,
     QualifyingResult,
     RaceResult,
-    Report,
+    Protest,
     Reprimand,
     RoundParticipant,
     Session,
@@ -115,29 +115,29 @@ def get_admins(session: SQLASession) -> list[Driver]:
     return []
 
 
-def get_reports(
+def get_protests(
     session: SQLASession,
     round_id: int | None = None,
     is_reviewed: bool | None = None,
-) -> list[Report]:
-    """Returns a list of reports matching the given arguments.
+) -> list[Protest]:
+    """Returns a list of protests matching the given arguments.
 
     Args:
-        round_id (int, optional): round_id of the round the reports were made in. Defaults to None.
-        is_reviewed (bool, optional): If the report is reviewed or not. Defaults to None.
-        is_queued (bool, optional): If the report is queued or not. Defaults to None.
+        round_id (int, optional): round_id of the round the protests were made in. Defaults to None.
+        is_reviewed (bool, optional): If the protest is reviewed or not. Defaults to None.
+        is_queued (bool, optional): If the protest is queued or not. Defaults to None.
     """
-    statement = select(Report)
+    statement = select(Protest)
     if round_id:
-        statement = statement.where(Report.round_id == round_id)
+        statement = statement.where(Protest.round_id == round_id)
     if is_reviewed is not None:
-        statement = statement.where(Report.is_reviewed == is_reviewed)
+        statement = statement.where(Protest.is_reviewed == is_reviewed)
 
-    result = session.execute(statement.order_by(Report.number)).all()
-    reports: list[Report] = [res[0] for res in result]
+    result = session.execute(statement.order_by(Protest.number)).all()
+    protests: list[Protest] = [res[0] for res in result]
 
-    reports.sort(key=lambda r: r.round.date)
-    return reports
+    protests.sort(key=lambda r: r.round.date)
+    return protests
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
@@ -204,17 +204,17 @@ def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
     return teams
 
 
-def get_report(session: SQLASession, report_id: str) -> Report | None:
-    """Returns the report matching the given report_id.
+def get_protest(session: SQLASession, protest_id: str) -> Protest | None:
+    """Returns the protest matching the given protest_id.
 
     Args:
         session (SQLASession): Session to execute the query with.
-        report_id (int): ID of the report to fetch.
+        protest_id (int): ID of the protest to fetch.
 
     Returns:
-        Report | None: None if no matching report_id was found in the database.
+        Protest | None: None if no matching protest_id was found in the database.
     """
-    result = session.execute(select(Report).where(Report.id == report_id)).one_or_none()
+    result = session.execute(select(Protest).where(Protest.id == protest_id)).one_or_none()
     if result:
         return result[0]
     return None
@@ -239,24 +239,24 @@ def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_report_number(
+def get_last_protest_number(
     session: SQLASession, category_id: int, round_id: int
 ) -> int:
-    """Gets the number of the last report made in a specific category and round.
+    """Gets the number of the last protest made in a specific category and round.
 
     Args:
-        category_id (int): ID of the category of which to return the last report.
-        round_id (int): ID of the round of which to return the last report.
+        category_id (int): ID of the category of which to return the last protest.
+        round_id (int): ID of the round of which to return the last protest.
 
     Returns:
-        int: Number of the last report made in the given round.
+        int: Number of the last protest made in the given round.
     """
 
     result = session.execute(
-        select(Report)
-        .where(Report.category_id == category_id)
-        .where(Report.round_id == round_id)
-        .order_by(desc(Report.number))
+        select(Protest)
+        .where(Protest.category_id == category_id)
+        .where(Protest.round_id == round_id)
+        .order_by(desc(Protest.number))
     ).first()
 
     if result:
@@ -287,7 +287,7 @@ def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
 
 
 def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
-    """Saves a report and applies the penalties inside it (if any)
+    """Saves a protest and applies the penalties inside it (if any)
     modifying the results of the session the penalty is referred to.
 
     Args:
@@ -306,7 +306,7 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
     if not result:
         raise ValueError("QualifyingResult not in database.")
 
-    # penalty.reported_driver_id = penalty.driver.driver_id
+    # penalty.protested_driver_id = penalty.driver.driver_id
     session.add(penalty)
     session.commit()
 
@@ -413,7 +413,7 @@ def save_results(
 
 
 def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
-    """Saves a report and applies the penalties inside it (if any)
+    """Saves a protest and applies the penalties inside it (if any)
     modifying the results of the session the penalty is referred to, while also
     deducting lost points from the driver's team points tally.
 
@@ -557,14 +557,14 @@ def get_category(session: SQLASession, category_id: int) -> Category | None:
     return None
 
 
-def delete_report(session: SQLASession, report_id: str) -> None:
-    """Deletes the report matching the report_id from the database.
+def delete_protest(session: SQLASession, protest_id: str) -> None:
+    """Deletes the protest matching the protest_id from the database.
 
     Args:
         session (SQLASession): Session to execute the query with.
-        report_id (str): ID of the report to delete.
+        protest_id (str): ID of the protest to delete.
     """
-    session.execute(delete(Report).where(Report.id == report_id))
+    session.execute(delete(Protest).where(Protest.id == protest_id))
     session.commit()
     session.expire_all()
 
@@ -657,8 +657,8 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
     category = penalty.category
     drivers = category.active_drivers()
 
-    if penalty.report:
-        penalty.report.is_reviewed = False
+    if penalty.protest:
+        penalty.protest.is_reviewed = False
 
     # Gives back licence points, championship points, removes reprimands
     # and warnings on the penalised driver's record.

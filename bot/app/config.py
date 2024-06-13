@@ -9,21 +9,21 @@ from decimal import Decimal
 
 PARTICIPANT_LIST_OPENING = time(7)
 PARTICIPATION_LIST_REMINDER = time(19)
-REPORT_WINDOW_OPENING = time(0)
+PROTEST_WINDOW_OPENING = time(0)
 PARTICIPANTS_LIST_CLOSURE = time(hour=21, minute=45)
-REPORT_WINDOW_CLOSURE = time(hour=23, minute=59, second=59)
+PROTEST_WINDOW_CLOSURE = time(hour=23, minute=59, second=59)
 
 # Driver Permission IDs
 MANAGE_RESULTS = 3
 MANAGE_PENALTIES = 4
 
 # Team Permission IDs
-FILE_REPORT = 3
+FILE_PROTEST = 3
 
 # Fixed chats
-REPORT_CHANNEL = int(os.environ["REPORT_CHANNEL"])
+PROTEST_CHANNEL = int(os.environ["PROTEST_CHANNEL"])
 TEST_CHANNEL = int(os.environ["TEST_CHANNEL"])
-LATE_REPORT_CHAT = int(os.environ["LATE_REPORT_CHAT"])
+LATE_PROTEST_CHAT = int(os.environ["LATE_PROTEST_CHAT"])
 GROUP_CHAT = int(os.environ["GROUP_CHAT"])
 DEVELOPER_CHAT = int(os.environ["DEVELOPER_CHAT"])
 TEAM_LEADER_CHAT = int(os.environ["TEAM_LEADER_CHAT"])
