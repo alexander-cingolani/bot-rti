@@ -1092,6 +1092,7 @@ class Driver(Base):
     name: Mapped[str | None] = mapped_column(String(30))
     surname: Mapped[str | None] = mapped_column(String(30))
     rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
+    discord_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
     mu: Mapped[Decimal] = mapped_column(
         Numeric(precision=7, scale=5), nullable=False, default=25
