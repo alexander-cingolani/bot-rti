@@ -214,6 +214,7 @@ def get_protest(session: SQLASession, protest_id: str) -> Protest | None:
 
     Returns:
         Protest | None: None if no matching protest_id was found in the database.
+        Protest | None: None if no matching protest_id was found in the database.
     """
     result = session.execute(
         select(Protest).where(Protest.id == protest_id)
