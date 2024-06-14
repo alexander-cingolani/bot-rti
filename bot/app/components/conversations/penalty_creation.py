@@ -1,6 +1,5 @@
 """
 This module contains the necessary callbacks to allow admins to proccess protests
-This module contains the necessary callbacks to allow admins to proccess protests
 made by users.
 """
 
