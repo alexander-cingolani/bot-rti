@@ -1,5 +1,5 @@
 """
-This module contains the necessary callbacks to allow admins to proccess reports
+This module contains the necessary callbacks to allow admins to proccess protests
 made by users.
 """
 
@@ -8,7 +8,7 @@ from collections import defaultdict
 from typing import Any, DefaultDict, cast
 
 from app import config
-from app.components.documents import PenaltyDocument
+from documents import PenaltyDocument
 from app.components.utils import send_or_edit_message
 from more_itertools import chunked
 from sqlalchemy import create_engine
@@ -24,12 +24,12 @@ from telegram.ext import (
     filters,
 )
 
-from models import Category, Driver, Penalty, Report
+from models import Category, Driver, Penalty, Protest
 from queries import (
     get_championship,
     get_driver,
     get_last_penalty_number,
-    get_reports,
+    get_protests,
     get_reprimand_types,
     save_and_apply_penalty,
 )
@@ -56,7 +56,7 @@ DBSession = sessionmaker(bind=engine, autoflush=False)
 
 
 async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Allows admins to create penalties without a pre-existing report made by a leader."""
+    """Allows admins to create penalties without a pre-existing protest made by a leader."""
 
     sqla_session = DBSession()
     driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
@@ -205,7 +205,7 @@ async def ask_incident_time(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Saves the championship round and asks who the driver to report is."""
+    """Saves the championship round and asks who the driver to protest is."""
 
     user_data = cast(dict[str, Any], context.user_data)
 
@@ -269,10 +269,10 @@ async def ask_infraction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ASK_POINTS_PENALTY
 
 
-async def report_processing_entry_point(
+async def protest_processing_entry_point(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-    """Asks the user which category he wants to view reports from,
+    """Asks the user which category he wants to view protests from,
     after the /start_reviewing command is issued."""
 
     sqla_session = DBSession()
@@ -294,35 +294,35 @@ async def report_processing_entry_point(
         )
         return ConversationHandler.END
 
-    reports = get_reports(sqla_session, is_reviewed=False)
+    protests = get_protests(sqla_session, is_reviewed=False)
 
-    if not reports:
+    if not protests:
         text = "Non ci sono segnalazioni da processare."
         await send_or_edit_message(update, text)
         sqla_session.close()
         user_data.clear()
         return ConversationHandler.END
 
-    user_data["unreviewed_reports"] = reports
-    report_categories: DefaultDict[Category, int] = defaultdict(int)
-    for report in reports:
-        report_categories[report.round.category] += 1
+    user_data["unreviewed_protests"] = protests
+    protest_categories: DefaultDict[Category, int] = defaultdict(int)
+    for protest in protests:
+        protest_categories[protest.round.category] += 1
 
-    total = sum(report_categories.values())
+    total = sum(protest_categories.values())
 
     if total == 1:
-        text = f"C'è solo una segnalazione in {reports[0].category.name}"
-    elif len(report_categories) == 1:
-        text = f"Ci sono {total} segnalazioni in {reports.pop().round.category.name}."
+        text = f"C'è solo una segnalazione in {protests[0].category.name}"
+    elif len(protest_categories) == 1:
+        text = f"Ci sono {total} segnalazioni in {protests.pop().round.category.name}."
     else:
         text = f"Hai {total} segnalazioni da processare, di cui:\n"
-        for category, number in report_categories.items():
+        for category, number in protest_categories.items():
             text += f"{number} in {category.name}\n"
     text += "\nSeleziona la categoria dove vuoi giudicare le segnalazioni:"
 
     user_data["categories"] = []
     buttons: list[InlineKeyboardButton] = []
-    for i, category in enumerate(report_categories.keys()):
+    for i, category in enumerate(protest_categories.keys()):
         user_data["categories"].append(category)
         buttons.append(InlineKeyboardButton(category.name, callback_data=f"C{i}"))
 
@@ -335,11 +335,11 @@ async def report_processing_entry_point(
 
 
 async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Shows the user the first unreviewed report in the selected category."""
+    """Shows the user the first unreviewed protest in the selected category."""
 
     user_data = cast(dict[str, Any], context.user_data)
     sqla_session = cast(SQLASession, user_data["sqla_session"])
-    reports = cast(list[Report], user_data["unreviewed_reports"])
+    protests = cast(list[Protest], user_data["unreviewed_protests"])
 
     if not update.callback_query.data.isnumeric():
         user_data["selected_category"] = user_data["categories"][
@@ -350,21 +350,21 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     text = "Non risultano esserci segnalazioni "
 
-    for report in reports:
+    for protest in protests:
 
-        if not report.category_id == selected_category.id:
+        if not protest.category_id == selected_category.id:
             continue
 
         text = (
-            f"<b>{report.category.name}</b>\n"
-            f"<i>Tappa {report.round.number}</i> ({report.round.circuit.abbreviated_name}) - Segnalazione no.{report.number}\n\n"
-            f"<b>Piloti coinvolti</b>: {report.reported_driver.psn_id}, "
-            f"{report.reporting_driver.psn_id}\n"
-            f"<b>Sessione</b>: {report.session.name}\n"
-            f"<b>Minuto incidente</b>: {report.incident_time}\n"
-            f"<b>Motivo segnalazione</b>: {report.reason}"
+            f"<b>{protest.category.name}</b>\n"
+            f"<i>Tappa {protest.round.number}</i> ({protest.round.circuit.abbreviated_name}) - Segnalazione no.{protest.number}\n\n"
+            f"<b>Piloti coinvolti</b>: {protest.protested_driver.psn_id}, "
+            f"{protest.protesting_driver.psn_id}\n"
+            f"<b>Sessione</b>: {protest.session.name}\n"
+            f"<b>Minuto incidente</b>: {protest.incident_time}\n"
+            f"<b>Motivo segnalazione</b>: {protest.reason}"
         )
-        penalty = Penalty.from_report(report)
+        penalty = Penalty.from_protest(protest)
 
         penalty.number = (
             get_last_penalty_number(
@@ -374,7 +374,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             + 1
         )
         user_data["penalty"] = penalty
-        user_data["current_report"] = report
+        user_data["current_protest"] = protest
         reply_markup: list[InlineKeyboardButton] = [
             InlineKeyboardButton("« Categoria", callback_data="start_reviewing"),
             InlineKeyboardButton("Fatto »", callback_data=str(ASK_FACT)),
@@ -392,13 +392,13 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the admin for the fact when callback_data containing "ask_fact" is received."""
 
     user_data = cast(dict[str, Any], context.user_data)
-    report: Report = user_data["current_report"]
+    protest: Protest = user_data["current_protest"]
     text = "Seleziona il fatto accaduto, oppure scrivine uno tu.\n"
 
     buttons: list[InlineKeyboardButton] = []
 
     for i, fact in enumerate(config.FACTS):
-        callback_data = f"qf{i}" if report.session.is_quali else f"f{i}"
+        callback_data = f"qf{i}" if protest.session.is_quali else f"f{i}"
         buttons.append(
             InlineKeyboardButton(
                 text=f"{i + 1}",
@@ -406,7 +406,7 @@ async def ask_fact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
         )
         text += f"\n{i + 1} - {fact}".format(
-            a=report.reporting_driver.current_race_number
+            a=protest.protesting_driver.current_race_number
         )
 
     chunked_buttons = list(chunked(buttons, 4))
@@ -435,13 +435,13 @@ async def ask_points_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_data = cast(dict[str, Any], context.user_data)
 
     if update.callback_query:
-        # Save infraction if the report was made via the alternative command "penalizza"
+        # Save infraction if the protest was made via the alternative command "penalizza"
         if update.callback_query.data[0] == "i":
             user_data["penalty"].fact = config.INFRACTIONS[
                 int(update.callback_query.data.removeprefix("i"))
             ]
         elif not update.callback_query.data.isdigit():
-            if user_data["current_report"].session.is_quali:
+            if user_data["current_protest"].session.is_quali:
                 user_data["penalty"].fact = config.FACTS[
                     int(update.callback_query.data.removeprefix("qf"))
                 ].format(a=user_data["penalty"].driver.current_race_number)
@@ -450,7 +450,9 @@ async def ask_points_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             user_data["penalty"].fact = config.FACTS[
                 int(update.callback_query.data.removeprefix("f"))
-            ].format(a=user_data["current_report"].reporting_driver.current_race_number)
+            ].format(
+                a=user_data["current_protest"].protesting_driver.current_race_number
+            )
 
     else:
         user_data["penalty"].fact = update.message.text
@@ -630,7 +632,7 @@ async def ask_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
     else:
         text += (
-            "\n⚠️ Prima di inviare il report è necessario aver compilato tutti i campi."
+            "\n⚠️ Prima di inviare il protest è necessario aver compilato tutti i campi."
         )
 
     await send_or_edit_message(update, text, InlineKeyboardMarkup(reply_markup))
@@ -638,22 +640,22 @@ async def ask_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ASK_IF_NEXT
 
 
-async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Send the report and ends the conversation"""
+async def send_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Send the protest and ends the conversation"""
 
     user_data = cast(dict[str, Any], context.user_data)
     sqla_session: SQLASession = user_data["sqla_session"]
-    if user_data.get("current_report"):
-        report = user_data["current_report"]
-        report.is_reviewed = True
-        user_data["penalty"].report = report
+    if user_data.get("current_protest"):
+        protest = user_data["current_protest"]
+        protest.is_reviewed = True
+        user_data["penalty"].protest = protest
 
     penalty: Penalty = user_data["penalty"]
 
     save_and_apply_penalty(sqla_session, penalty)
     file = PenaltyDocument(penalty).generate_document()
     await context.bot.send_document(
-        chat_id=config.REPORT_CHANNEL,
+        chat_id=config.PROTEST_CHANNEL,
         document=open(file, "rb"),
     )
     text = "Penalità applicata e inviata."
@@ -664,10 +666,10 @@ async def send_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
-async def go_back_handler_report_processing(
+async def go_back_handler_protest_processing(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-    """Handles "go back" and "go forwards" buttons in the report_processing conversation.
+    """Handles "go back" and "go forwards" buttons in the protest_processing conversation.
 
     This function is called by the dispatcher whenever callback_query.data contains a number
     between 0 and 5.
@@ -713,11 +715,11 @@ penalty_creation = ConversationHandler(
     entry_points=[
         CommandHandler(
             "segnalazioni",
-            report_processing_entry_point,
+            protest_processing_entry_point,
             filters=filters.ChatType.PRIVATE,
         ),
         CommandHandler("penalizza", create_penalty, filters=filters.ChatType.PRIVATE),
-        CallbackQueryHandler(report_processing_entry_point, r"^start_reviewing$"),
+        CallbackQueryHandler(protest_processing_entry_point, r"^start_reviewing$"),
         CallbackQueryHandler(create_penalty, r"^create_penalty$"),
     ],
     states={
@@ -751,11 +753,11 @@ penalty_creation = ConversationHandler(
         ASK_CONFIRMATION: [
             MessageHandler(filters.Regex(r"^[^/]{20,}$"), ask_confirmation)
         ],
-        ASK_IF_NEXT: [CallbackQueryHandler(send_report, r"^send_now$")],
+        ASK_IF_NEXT: [CallbackQueryHandler(send_protest, r"^send_now$")],
     },
     fallbacks=[
         CommandHandler("esci", exit_conversation),
         CallbackQueryHandler(exit_conversation, r"^cancel$"),
-        CallbackQueryHandler(go_back_handler_report_processing, r"^1[2-9]$|^2[0-7]$"),
+        CallbackQueryHandler(go_back_handler_protest_processing, r"^1[2-9]$|^2[0-7]$"),
     ],
 )

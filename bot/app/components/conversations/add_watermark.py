@@ -6,7 +6,7 @@ import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from telegram import Document, Update
+from telegram import Update
 from telegram.ext import (
     CommandHandler,
     ContextTypes,

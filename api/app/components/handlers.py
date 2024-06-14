@@ -9,8 +9,16 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Category, Driver, QualifyingResult, RaceResult, Session
-from queries import get_category, get_championship, get_driver, get_teams, save_results
+from models import Category, Driver, Protest, QualifyingResult, RaceResult, Session
+from queries import (
+    get_category,
+    get_championship,
+    get_driver,
+    get_last_protest_number,
+    get_teams,
+    save_results,
+)
+from documents import ProtestDocument
 
 URL = os.environ["DB_URL"]
 RRE_GAME_ID = 3
@@ -58,8 +66,8 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
         if (datetime.now().date() - last_round.date) < timedelta(days=1):
             provisional_results = True
         else:
-            for report in last_round.reports:
-                if not report.is_reviewed:
+            for protest in last_round.protests:
+                if not protest.is_reviewed:
                     provisional_results = True
                     break
     session.close()
@@ -271,6 +279,7 @@ def gap_to_first_in_race(race_data: dict[str, Any], player: dict[str, Any]):
         if players_lap["Time"] > 0:
             gap_to_first += players_lap["Time"] - winners_lap["Time"]
             continue
+
         for winner_sector, player_sector in zip(
             reversed(winners_lap["SectorTimes"]),
             reversed(players_lap["SectorTimes"]),
@@ -304,9 +313,9 @@ async def save_rre_results(json_str: bytes) -> None:
         raise HTTPException(422, "This file has already been saved.")
 
     driver_objs = category.active_drivers()
-    
+
     logging.info(driver_objs)
-    
+
     drivers = {d.driver.rre_id: d.driver for d in driver_objs}
     reserves: list[int] = []
 
@@ -379,15 +388,12 @@ async def save_rre_results(json_str: bytes) -> None:
         else:
             session = current_round.long_race
 
-        winners_time = race_data["Players"][0]["TotalTime"]
         for player in race_data["Players"]:
             if status := player.get("FinishStatus"):
                 if status != "Finished":
                     break
 
-            # gap_to_first = gap_to_first_in_race(race_data, player)
-
-            gap_to_first = player["TotalTime"] - winners_time
+            gap_to_first = gap_to_first_in_race(race_data, player)
 
             rre_id = cast(int, player["UserId"])
             position = cast(int, player["PositionInClass"])
@@ -436,3 +442,62 @@ async def save_rre_results(json_str: bytes) -> None:
     save_results(sqla_session, qualifying_results, races)
 
     logging.info("Results saved successfully.")
+
+
+async def generate_protest_document(
+    protesting_driver_discord_id: int,
+    protested_driver_discord_id: int,
+    protest_reason: str,
+    incident_time: str,
+    session_name: str,
+) -> tuple[bytes, str]:
+
+    sqla_session = SQLASession()
+
+    protesting_driver = get_driver(
+        sqla_session, discord_id=protesting_driver_discord_id
+    )
+    protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
+
+    category = protesting_driver.current_category()
+    if not category:
+        raise ValueError("Driver is not currently part of any category.")
+    category = category.category
+    championship = category.championship
+
+    rounds = championship.protesting_rounds()
+
+    rnd = {rnd.category: rnd for rnd in rounds}[category]
+
+    if session_name == "Gara 1":
+        if not rnd.sprint_race:
+            raise ValueError("Received incorrect session_name for round type.")
+        session = rnd.sprint_race
+    elif session_name == "Gara 2" or session_name == "Gara":
+        session = rnd.long_race
+    elif session_name == "Qualifica":
+        session = rnd.qualifying_session
+    else:
+        raise ValueError("Received invalid session name.")
+
+    number = (
+        get_last_protest_number(sqla_session, category_id=category.id, round_id=rnd.id)
+        + 1
+    )
+
+    protest = Protest(
+        protested_driver=protested_driver,
+        protesting_driver=protesting_driver,
+        reason=protest_reason,
+        incident_time=incident_time,
+        session=session,
+        round=rnd,
+        category=category,
+        protesting_team=protesting_driver.current_team(),
+        protested_team=protested_driver.current_team(),
+        number=number,
+    )
+    sqla_session.add(protest)
+    sqla_session.commit()
+    protest_document = ProtestDocument(protest)
+    return protest_document.generate_document()

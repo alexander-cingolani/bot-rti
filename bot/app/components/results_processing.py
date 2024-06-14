@@ -2,6 +2,7 @@
 Contains functions used to operate on results or parts of results.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -75,9 +76,15 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
     """
 
     # Creates a dictionary containing driver psn_ids mapped to a DriverCategory object.
-    driver_map: dict[str, DriverCategory] = {
-        driver.driver.psn_id: driver for driver in expected_drivers
-    }
+    if expected_drivers[0].category.game.name != "rre":
+        driver_map: dict[str, DriverCategory] = {
+            driver.driver.psn_id: driver for driver in expected_drivers
+        }
+    else:
+        driver_map: dict[str, DriverCategory] = {
+            driver.driver.full_name.replace(" ", ""): driver
+            for driver in expected_drivers
+        }
 
     results: list[Result] = []
     for line in text.splitlines():

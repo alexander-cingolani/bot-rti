@@ -18,6 +18,9 @@ RUN pip install -r requirements.txt --no-cache
 
 COPY ./models.py /bot/models.py
 COPY ./queries.py /bot/queries.py
+COPY ./documents.py /bot/documents.py
+COPY ./assets /bot/app/assets
+
 COPY ./bot/app /bot/app
 
 

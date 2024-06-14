@@ -408,28 +408,6 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     fastest_lap=fastest_lap,
                 )
             )
-        for driver in drivers:
-            for penalty in driver.deferred_penalties:
-                if not penalty.is_applied:
-                    race_results = sessions_results[session]
-
-                    # Applies the time penalty to the driver's race result.
-                    for race_result in race_results:
-                        if race_result.driver.id == driver.id:
-                            race_result.total_racetime += penalty.penalty.time_penalty
-
-                    race_results.sort(
-                        key=lambda rr: (
-                            rr.gap_to_first if rr.gap_to_first else float("inf")
-                        )
-                    )
-                    best_time = race_results[0].total_racetime
-                    # Applies the correct finishing position, recalculates the gap_to_first.
-                    for position, result in enumerate(race_results, start=1):
-                        if result.participated:
-                            result.gap_to_first = result.total_racetime - best_time
-                            result.position = position
-                    penalty.is_applied = True
 
     user_data["round"].is_completed = True
 

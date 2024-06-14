@@ -18,6 +18,8 @@ RUN pip install --upgrade -r requirements.txt --no-cache
 
 COPY ./models.py /api/models.py
 COPY ./queries.py /api/queries.py
+COPY ./documents.py /api/documents.py
+COPY ./assets /api/app/assets
 COPY ./api/app /api/app
 
 CMD ["hypercorn", "--bind", "0.0.0.0:80", "app.main:app"]

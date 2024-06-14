@@ -16,7 +16,7 @@ import pytz
 from app import config
 from app.components.conversations.driver_registration import driver_registration
 from app.components.conversations.penalty_creation import penalty_creation
-from app.components.conversations.report_creation import report_creation
+from app.components.conversations.protest_creation import protest_creation
 from app.components.conversations.result_recognition import save_results_conv
 from app.components.conversations.add_watermark import add_watermark_conv
 from app.components.conversations.penalty_deletion import penalty_deletion
@@ -220,7 +220,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if chat.type == TGChat.CHANNEL and chat.id not in (
         config.TEST_CHANNEL,
-        config.REPORT_CHANNEL,
+        config.PROTEST_CHANNEL,
     ):
         await chat.leave()
         return
@@ -607,8 +607,8 @@ async def complete_last_race_results(
     sqla_session.close()
 
 
-async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a message to the report channel announcing that the report window
+async def announce_protests(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message to the protest channel announcing that the protest window
     has opened for a specific category.
     """
     sqla_session = DBSession()
@@ -618,37 +618,40 @@ async def announce_reports(context: ContextTypes.DEFAULT_TYPE) -> None:
         sqla_session.close()
         return
 
-    if rnd := championship.reporting_round():
-        text = (
-            f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
-            f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
-            f"#{championship.abbreviated_name}Tappa{rnd.number}"
-            f" #{rnd.category.tag}"
-        )
+    if rounds := championship.protesting_rounds():
+        for rnd in rounds:
+            text = (
+                f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
+                f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
+                f"#{championship.abbreviated_name}Tappa{rnd.number}"
+                f" #{rnd.category.tag}"
+            )
 
-        await context.bot.send_message(
-            chat_id=config.REPORT_CHANNEL, text=text, disable_notification=True
-        )
+            await context.bot.send_message(
+                chat_id=config.PROTEST_CHANNEL, text=text, disable_notification=True
+            )
     sqla_session.close()
 
 
-async def close_report_window(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Sends a sticker to the report channel indicating that the time window for making
-    reports has closed.
+async def close_protest_window(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a sticker to the protest channel indicating that the time window for making
+    protests has closed.
     """
 
     sqla_session = DBSession()
     championship = get_championship(sqla_session)
 
     if championship:
-        if rnd := championship.reporting_round():
-            if not rnd.reports:
-                await context.bot.send_message(
-                    chat_id=config.REPORT_CHANNEL, text="Nessuna segnalazione ricevuta."
-                )
+        if rounds := championship.protesting_rounds():
+            for rnd in rounds:
+                if not rnd.protests:
+                    await context.bot.send_message(
+                        chat_id=config.PROTEST_CHANNEL,
+                        text="Nessuna segnalazione ricevuta.",
+                    )
 
             await context.bot.send_sticker(
-                chat_id=config.REPORT_CHANNEL,
+                chat_id=config.PROTEST_CHANNEL,
                 sticker=open("./app/assets/images/sticker.webp", "rb"),
                 disable_notification=True,
             )
@@ -1015,9 +1018,9 @@ def main() -> None:
     )
 
     application.job_queue.run_daily(  # type: ignore
-        callback=announce_reports,
-        time=config.REPORT_WINDOW_OPENING,
-        chat_id=config.REPORT_CHANNEL,
+        callback=announce_protests,
+        time=config.PROTEST_WINDOW_OPENING,
+        chat_id=config.PROTEST_CHANNEL,
     )
     application.job_queue.run_daily(  # type: ignore
         callback=send_participants_list,
@@ -1025,14 +1028,14 @@ def main() -> None:
         chat_id=config.GROUP_CHAT,
     )
     application.job_queue.run_daily(  # type: ignore
-        callback=close_report_window,
-        time=config.REPORT_WINDOW_CLOSURE,
-        chat_id=config.REPORT_CHANNEL,
+        callback=close_protest_window,
+        time=config.PROTEST_WINDOW_CLOSURE,
+        chat_id=config.PROTEST_CHANNEL,
     )
     application.job_queue.run_daily(  # type: ignore
         callback=freeze_participants_list,
         time=config.PARTICIPANTS_LIST_CLOSURE,
-        chat_id=config.REPORT_CHANNEL,
+        chat_id=config.PROTEST_CHANNEL,
     )
     application.job_queue.run_daily(  # type: ignore
         callback=participants_list_reminder,
@@ -1050,7 +1053,7 @@ def main() -> None:
     )
     application.add_handler(driver_registration)
     application.add_handler(penalty_creation)
-    application.add_handler(report_creation)
+    application.add_handler(protest_creation)
     application.add_handler(save_results_conv)
     application.add_handler(add_watermark_conv)
     application.add_handler(penalty_deletion)
