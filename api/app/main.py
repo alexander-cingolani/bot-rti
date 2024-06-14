@@ -139,7 +139,6 @@ async def upload_rre_results(
 
 @app.post("/api/upload-protest", response_model=Token)
 async def upload_protest(
-    current_user: Annotated[User, Depends(get_current_user)],
     protesting_driver_discord_id: int = Form(),
     protested_driver_discord_id: int = Form(),
     protest_reason: str = Form(),
@@ -158,7 +157,6 @@ async def upload_protest(
     if not session_name in ("Qualifica", "Gara 1", "Gara 2", "Gara"):
         raise HTTPException(422, "Invalid value given for session_name.")
 
-    access_token = create_access_token({"sub": current_user.username})
     with open("temp.pdf", "wb") as file:
         file.write(protest_document[0])
     return FileResponse("temp.pdf")
