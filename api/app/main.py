@@ -51,60 +51,34 @@ app.add_middleware(
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 * 2 + 240  # 2 weeks and 4 hours
 
 
-@app.post("/api")
+@app.post("/api/teams")
+async def teams(championship_id: int = Form()):
+    return get_teams_list(int(championship_id))
+
+
+@app.post("/api/categories")
+async def categories(championship_id: int = Form()):
+    return get_categories(championship_id)
+
+
+@app.post("/api/calendar")
+async def calendar(category_id: int = Form()):
+    return get_calendar(int(category_id))
+
+
+@app.post("/api/standings")
+async def standings(category_id: int = Form()):
+    return get_standings_with_results(int(category_id))
+
+
+@app.post("/api/get-driver-points")
 async def rti(
-    action: str = Form(),
-    championship_id: str | int | None = Form(default="latest"),
-    category_id: int | None = Form(default=None),
+    championship_id: int = Form(),
 ):
-    match action:
-        case "get_teams":
-            if championship_id is None:
-                raise HTTPException(
-                    422,
-                    "Argument 'championship_id' must be provided for 'get_teams' action",
-                )
-            result = get_teams_list(int(championship_id))
-
-        case "get_category_list":
-            if championship_id is None:
-                raise HTTPException(
-                    422,
-                    "Argument 'championship_id' must be provided for 'get_category_list' action",
-                )
-            result = get_categories(championship_id)
-
-        case "get_calendar":
-            if category_id is None:
-                raise HTTPException(
-                    422,
-                    "Argument 'category_id' must be provided for 'get_calendar' action",
-                )
-            result = get_calendar(int(category_id))
-
-        case "get_standings":
-            if category_id is None:
-                raise HTTPException(
-                    422,
-                    "Argument 'category_id' must be provided for 'get_standings' action",
-                )
-            result = get_standings_with_results(int(category_id))
-
-        case "get_driver_points":
-            if championship_id is None:
-                raise HTTPException(
-                    422,
-                    "Argument 'category_id' must be provided for 'get_driver_points' action",
-                )
-            result = get_drivers_points(int(championship_id))
-
-        case other:
-            raise HTTPException(400, f"'{other}' action is invalid.")
-
-    return result
+    return get_drivers_points(int(championship_id))
 
 
-@app.post("/token", response_model=Token)
+@app.post("/api/token", response_model=Token)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ):
@@ -139,7 +113,6 @@ async def upload_rre_results(
 
 @app.post("/api/upload-protest", response_model=Token)
 async def upload_protest(
-    current_user: Annotated[User, Depends(get_current_user)],
     protesting_driver_discord_id: int = Form(),
     protested_driver_discord_id: int = Form(),
     protest_reason: str = Form(),
@@ -158,8 +131,6 @@ async def upload_protest(
     if not session_name in ("Qualifica", "Gara 1", "Gara 2", "Gara"):
         raise HTTPException(422, "Invalid value given for session_name.")
 
-    access_token = create_access_token({"sub": current_user.username})
     with open("temp.pdf", "wb") as file:
         file.write(protest_document[0])
     return FileResponse("temp.pdf")
-    
