@@ -13,7 +13,7 @@ __pycache__
 
 # testing
 **/coverage
-*test*
+test*
 
 # next.js
 **/.next/
