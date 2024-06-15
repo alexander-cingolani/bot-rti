@@ -140,12 +140,9 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
             if quali_result:
                 extra_points += quali_result.points_earned
 
-            penalties = race_result.session.get_penalty_seconds_of(driver.id)
-
         else:
             info_gp = f"LR{race_result.round_id}"
             extra_points = race_result.fastest_lap
-            penalties = race_result.session.get_penalty_seconds_of(driver.id)
 
         position = race_result.position if race_result.position is not None else "/"
 
@@ -154,7 +151,6 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
                 "info_gp": info_gp,
                 "position": position,
                 "extra_points": int(extra_points),
-                "penalties": penalties,
             }
         )
 
