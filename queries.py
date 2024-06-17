@@ -176,6 +176,17 @@ def get_driver(
     return result[0] if result else None
 
 
+def get_drivers(session: SQLASession):
+    statement = select(Driver)
+    result = session.execute(statement).all()
+
+    drivers: list[Driver] = []
+    if result:
+        for row in result:
+            drivers.append(row[0])
+    return drivers
+
+
 def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
     """Returns the list of teams participating to the given championship, ordered by
     championship position.
