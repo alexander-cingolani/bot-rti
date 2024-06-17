@@ -284,9 +284,13 @@ async def __ask_fastest_lap_driver(
 
     driver_buttons: list[InlineKeyboardButton] = []
     for driver in drivers:
+
+        if not (driver_name := driver.driver.psn_id):
+            driver_name = driver.driver.full_name
+
         driver_buttons.append(
             InlineKeyboardButton(
-                text=driver.driver.psn_id, callback_data=f"FL{driver.driver_id}"
+                text=driver_name, callback_data=f"FL{driver.driver_id}"
             )
         )
     chunked_driver_buttons = list(chunked(driver_buttons, 2))

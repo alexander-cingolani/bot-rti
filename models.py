@@ -800,11 +800,7 @@ class Session(Base):
                 gap = "<i>assente</i>"
                 position = "/"
 
-            penalty_seconds = self.get_penalty_seconds_of(result.driver_id)
             message += f"{position} - {result.driver.abbreviated_name} {gap}"
-
-            if penalty_seconds:
-                message += f" (+{penalty_seconds}s)"
 
             if result.fastest_lap_points:
                 message += " GV"

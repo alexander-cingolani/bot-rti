@@ -75,7 +75,6 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         list[Result]: Results obtained.
     """
 
-    # Creates a dictionary containing driver psn_ids mapped to a DriverCategory object.
     if expected_drivers[0].category.game.name != "rre":
         driver_map: dict[str, DriverCategory] = {
             driver.driver.psn_id: driver for driver in expected_drivers
@@ -94,7 +93,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
                 given_driver_name, driver_map.keys(), cutoff=0.2
             )
             if matches:
-                driver_name = matches[0]  # Gets best match
+                driver_name = matches[0]
             else:
                 driver_name = ""
         else:
@@ -187,7 +186,15 @@ def results_to_text(results: list[Result]) -> str:
             gap = seconds_to_text(result.seconds)
         else:
             gap = "ASSENTE"
-        driver = result.driver.driver.psn_id if result.driver else "NON_RICONOSCIUTO"
+            
+        if result.driver:
+            if result.driver.driver.psn_id:
+                driver = result.driver.driver.psn_id
+            else:
+                driver = result.driver.driver.full_name
+        else:
+            driver = "NON RICONOSCIUTO"
+            
         text += f"\n{driver} {gap}"
     return text
 

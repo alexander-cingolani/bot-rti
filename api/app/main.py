@@ -72,7 +72,7 @@ async def standings(category_id: int = Form()):
 
 
 @app.post("/api/driver-points")
-async def rti(
+async def driver_points(
     championship_id: int = Form(),
 ):
     return get_drivers_points(int(championship_id))
