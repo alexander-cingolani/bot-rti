@@ -353,7 +353,9 @@ async def save_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             if driver_category.category_id == user_data["category"].id:
                 user_data["drivers"][driver_alias] = driver
                 buttons.append(
-                    InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
+                    InlineKeyboardButton(
+                        driver.psn_id_or_abbreviated_name, callback_data=driver_alias
+                    )
                 )
     chunked_buttons = list(chunked(buttons, 2))
     callback_function = (
@@ -393,7 +395,7 @@ async def save_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         driver = driver_contract.driver
         driver_alias = f"d{i}"
         user_data["drivers"][driver_alias] = driver
-        buttons.append(InlineKeyboardButton(driver.psn_id, callback_data=driver_alias))
+        buttons.append(InlineKeyboardButton(driver.psn_id_or_abbreviated_name, callback_data=driver_alias))
 
     chunked_buttons = list(chunked(buttons, 2))
     chunked_buttons.append(
@@ -442,7 +444,7 @@ async def protesting_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if driver.current_team() != user_data["protesting_team"]:
             user_data["drivers"][driver_alias] = driver
             buttons.append(
-                InlineKeyboardButton(driver.psn_id, callback_data=driver_alias)
+                InlineKeyboardButton(driver.psn_id_or_abbreviated_name, callback_data=driver_alias)
             )
 
     chunked_buttons = list(chunked(buttons, 2))

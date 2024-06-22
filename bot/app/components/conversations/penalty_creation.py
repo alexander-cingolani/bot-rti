@@ -216,7 +216,7 @@ async def ask_driver(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     buttons: list[InlineKeyboardButton] = []
     for i, driver in enumerate(user_data["penalty"].session.participating_drivers()):
-        driver_name = driver.psn_id if driver.psn_id else driver.full_name
+        driver_name = driver.psn_id_or_full_name
         buttons.append(InlineKeyboardButton(driver_name, callback_data=f"D{i}"))
 
     chunked_buttons = list(chunked(buttons, 2))
@@ -358,8 +358,8 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         text = (
             f"<b>{protest.category.name}</b>\n"
             f"<i>Tappa {protest.round.number}</i> ({protest.round.circuit.abbreviated_name}) - Segnalazione no.{protest.number}\n\n"
-            f"<b>Piloti coinvolti</b>: {protest.protested_driver.psn_id}, "
-            f"{protest.protesting_driver.psn_id}\n"
+            f"<b>Piloti coinvolti</b>: {protest.protested_driver.psn_id_or_full_name}, "
+            f"{protest.protesting_driver.psn_id_or_full_name}\n"
             f"<b>Sessione</b>: {protest.session.name}\n"
             f"<b>Minuto incidente</b>: {protest.incident_time}\n"
             f"<b>Motivo segnalazione</b>: {protest.reason}"
