@@ -1135,8 +1135,8 @@ class Driver(Base):
     def get_team_on_date(self, date: datetime.date) -> Team | None:
         """Returns the team the driver had a contract with at the given date."""
         for contract in self.contracts:
-            if contract.start > date:
-                continue
+            if date > contract.start and not contract.end:
+                return contract.team
             if contract.end:
                 if contract.end > date and contract.start < date:
                     return contract.team
