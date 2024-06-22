@@ -104,7 +104,7 @@ def recalculate_ratings():
     drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)
 
     for driver in drivers:
-        print(f"{driver.psn_id}: {driver.mu} - {driver.sigma}")
+        print(f"{driver.psn_id_or_full_name}: {driver.mu} - {driver.sigma}")
         
         
 def recalculate_all_ratings():
@@ -166,7 +166,7 @@ def recalculate_all_ratings():
         drivers.sort(key=lambda x: x.rating if x.rating else 0, reverse=True)
 
         for driver in drivers:
-            print(f"{driver.psn_id}: {driver.mu} - {driver.sigma}")
+            print(f"{driver.psn_id_or_abbreviated_name}: {driver.mu} - {driver.sigma}")
         
 
 

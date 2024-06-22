@@ -653,11 +653,13 @@ async def send_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     penalty: Penalty = user_data["penalty"]
 
     save_and_apply_penalty(sqla_session, penalty)
-    file = PenaltyDocument(penalty).generate_document()
+    
+    buffer, filename = PenaltyDocument(penalty).generate_document()
+
     await context.bot.send_document(
-        chat_id=config.PROTEST_CHANNEL,
-        document=open(file, "rb"),
+        chat_id=config.PROTEST_CHANNEL, document=buffer, filename=filename
     )
+
     text = "Penalità applicata e inviata."
 
     await send_or_edit_message(update, text)
