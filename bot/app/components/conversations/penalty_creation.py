@@ -306,14 +306,14 @@ async def protest_processing_entry_point(
     user_data["unreviewed_protests"] = protests
     protest_categories: DefaultDict[Category, int] = defaultdict(int)
     for protest in protests:
-        protest_categories[protest.round.category] += 1
+        protest_categories[protest.category] += 1
 
     total = sum(protest_categories.values())
 
     if total == 1:
         text = f"C'è solo una segnalazione in {protests[0].category.name}"
     elif len(protest_categories) == 1:
-        text = f"Ci sono {total} segnalazioni in {protests.pop().round.category.name}."
+        text = f"Ci sono {total} segnalazioni in {protests.pop().category.name}."
     else:
         text = f"Hai {total} segnalazioni da processare, di cui:\n"
         for category, number in protest_categories.items():
@@ -511,6 +511,7 @@ async def ask_reprimand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     else:
         points = int(update.message.text.split()[0])
         user_data["penalty"].points = points
+        user_data["point_penalty_text"] = f"Sottratti {points} punti in campionato"
 
     text = "Se data, seleziona la reprimenda:"
     reprimand_types = get_reprimand_types(sqla_session)
@@ -609,8 +610,7 @@ async def ask_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
     if not penalty.decision:
         penalty.decision = "Nessun'azione"
-    if penalty.decision:
-        penalty.decision += "."
+
     text = (
         f"<b>Segnalazione no.{penalty.number}</b> - Recap dati inseriti\n\n"
         f"<b>Tappa</b>: {penalty.round.number if penalty.round else '-'}\n"
@@ -653,7 +653,7 @@ async def send_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     penalty: Penalty = user_data["penalty"]
 
     save_and_apply_penalty(sqla_session, penalty)
-    
+
     buffer, filename = PenaltyDocument(penalty).generate_document()
 
     await context.bot.send_document(
@@ -747,7 +747,8 @@ penalty_creation = ConversationHandler(
             ),
         ],
         ASK_REPRIMAND: [
-            CallbackQueryHandler(ask_reprimand, r"^pp[0-9]{1,}$|^no_penalty$")
+            CallbackQueryHandler(ask_reprimand, r"^pp[0-9]{1,}$|^no_penalty$"),
+            MessageHandler(filters.Regex(r"^[^/]{1,}$"), ask_reprimand),
         ],
         ASK_PENALTY_REASON: [
             CallbackQueryHandler(ask_penalty_reason, r"rep[0-9]{1,}|no_reprimand")
