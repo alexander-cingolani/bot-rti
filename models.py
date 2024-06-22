@@ -1203,7 +1203,19 @@ class Driver(Base):
         if self.name and self.surname:
             return f"{self.name} {self.surname}"
         return self.psn_id
+    
+    @property
+    def psn_id_or_full_name(self) -> str:
+        if self.psn_id:
+            return self.psn_id
+        return self.full_name
 
+    @property
+    def psn_id_or_abbreviated_name(self) -> str:
+        if self.psn_id:
+            return self.psn_id
+        return self.abbreviated_name
+    
     @property
     def abbreviated_name(self) -> str:
         if self.name and self.surname:

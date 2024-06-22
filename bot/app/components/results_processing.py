@@ -30,9 +30,7 @@ class Result:
 
     def __str__(self) -> str:
         if self.driver:
-            return (
-                f"(driver_name={self.driver.driver.psn_id}, position={self.position})"
-            )
+            return f"(driver_name={self.driver.driver.psn_id_or_full_name}, position={self.position})"
         return f"(driver_name=None, position={self.position})"
 
     def __init__(self, driver: DriverCategory, seconds: int | None):
@@ -75,15 +73,10 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         list[Result]: Results obtained.
     """
 
-    if expected_drivers[0].category.game.name != "rre":
-        driver_map: dict[str, DriverCategory] = {
-            driver.driver.psn_id: driver for driver in expected_drivers
-        }
-    else:
-        driver_map: dict[str, DriverCategory] = {
-            driver.driver.full_name.replace(" ", ""): driver
-            for driver in expected_drivers
-        }
+    driver_map: dict[str, DriverCategory] = {
+        driver.driver.psn_id_or_full_name.replace(" ", ""): driver
+        for driver in expected_drivers
+    }
 
     results: list[Result] = []
     for line in text.splitlines():
@@ -186,16 +179,13 @@ def results_to_text(results: list[Result]) -> str:
             gap = seconds_to_text(result.seconds)
         else:
             gap = "ASSENTE"
-            
+
         if result.driver:
-            if result.driver.driver.psn_id:
-                driver = result.driver.driver.psn_id
-            else:
-                driver = result.driver.driver.full_name
+            driver_name = result.driver.driver.psn_id_or_full_name.replace(" ", "")
         else:
-            driver = "NON RICONOSCIUTO"
-            
-        text += f"\n{driver} {gap}"
+            driver_name = "NON RICONOSCIUTO"
+
+        text += f"\n{driver_name} {gap}"
     return text
 
 
