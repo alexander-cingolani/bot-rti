@@ -458,23 +458,29 @@ async def generate_protest_document(
     category = protesting_driver.current_category()
     if not category:
         raise ValueError("Driver is not currently part of any category.")
+
     category = category.category
     championship = category.championship
 
     rounds = championship.protesting_rounds()
 
-    rnd = {rnd.category: rnd for rnd in rounds}[category]
+    rnd = {rnd.category: rnd for rnd in rounds}.get(category)
+
+    if not rnd:
+        raise HTTPException(410, "Protest was sent outside of the report window.")
 
     if session_name == "Gara 1":
         if not rnd.sprint_race:
-            raise ValueError("Received incorrect session_name for round type.")
+            logging.error("Protest contained incorrect session_name for round type.")
+            raise HTTPException(400, "Received incorrect session_name for round type.")
         session = rnd.sprint_race
     elif session_name == "Gara 2" or session_name == "Gara":
         session = rnd.long_race
     elif session_name == "Qualifica":
         session = rnd.qualifying_session
     else:
-        raise ValueError("Received invalid session name.")
+        logging.error("Protest contained invalid session_name.")
+        raise HTTPException(400, "Received invalid session_name.")
 
     number = (
         get_last_protest_number(sqla_session, category_id=category.id, round_id=rnd.id)
