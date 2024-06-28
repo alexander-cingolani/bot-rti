@@ -1203,7 +1203,7 @@ class Driver(Base):
         if self.name and self.surname:
             return f"{self.name} {self.surname}"
         return self.psn_id
-    
+
     @property
     def psn_id_or_full_name(self) -> str:
         if self.psn_id:
@@ -1215,7 +1215,7 @@ class Driver(Base):
         if self.psn_id:
             return self.psn_id
         return self.abbreviated_name
-    
+
     @property
     def abbreviated_name(self) -> str:
         if self.name and self.surname:
@@ -1782,9 +1782,8 @@ class RaceResult(Base):
         )
 
     @property
-    def fastest_lap_points(self) -> float | int:
-        """The amount of points the driver earned for the fastest lap.
-        (0 if he didn't score it)"""
+    def fastest_lap_points(self) -> int:
+        """Points earned for the fastest lap."""
 
         if not self.fastest_lap:
             return 0
@@ -1794,7 +1793,7 @@ class RaceResult(Base):
     @property
     def points_earned(self) -> float:
         """Total amount of points earned by the driver in this race.
-        (Finishing position + fastest lap points) *Does not take into account penalty points.
+        (Finishing position + fastest lap points) *Does not take penalty points into account.
         """
 
         if not self.participated:
