@@ -69,8 +69,8 @@ REASONS = (
 )
 
 FACTS = (
-    "Collisione con vettura no.{a}",
-    "Bandiere blu non rispettate nei confronti della vettura no.{a}",
+    "Collisione con vettura n. {a}",
+    "Bandiere blu non rispettate nei confronti della vettura n. {a}",
 )
 
 INFRACTIONS = (

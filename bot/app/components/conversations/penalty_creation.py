@@ -358,8 +358,8 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         text = (
             f"<b>{protest.category.name}</b>\n"
             f"<i>Tappa {protest.round.number}</i> ({protest.round.circuit.abbreviated_name}) - Segnalazione no.{protest.number}\n\n"
-            f"<b>Piloti coinvolti</b>: {protest.protested_driver.psn_id_or_full_name}, "
-            f"{protest.protesting_driver.psn_id_or_full_name}\n"
+            f"<b>Pilota vittima</b>: {protest.protesting_driver.psn_id_or_full_name}\n"
+            f"<b>Pilota colpevole</b>: {protest.protested_driver.psn_id_or_full_name}\n"
             f"<b>Sessione</b>: {protest.session.name}\n"
             f"<b>Minuto incidente</b>: {protest.incident_time}\n"
             f"<b>Motivo segnalazione</b>: {protest.reason}"
