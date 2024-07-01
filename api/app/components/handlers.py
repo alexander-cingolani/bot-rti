@@ -275,6 +275,20 @@ def calculate_gap_to_winner(race_data: dict[str, Any], player: dict[str, Any]):
     return gap_to_first
 
 
+def fastest_lap_scorer(race_data: dict[str, Any]) -> int:
+    fastest_lap = float("inf")
+    driver_with_fastest_lap = 0
+    for player in race_data["Players"]:
+        for lap in race_data["RaceSessionLaps"]:
+            if lap["Laptime"] <= 0:
+                continue
+
+            if lap["Laptime"] > 0 and  lap["Laptime"] < fastest_lap:
+                driver_with_fastest_lap = player["UserId"]
+                fastest_lap = lap["Laptime"]
+
+    return driver_with_fastest_lap
+
 async def save_rre_results(json_str: bytes) -> None:
     logger.info("Loading data from json file...")
     data = json.loads(json_str)
@@ -313,16 +327,15 @@ async def save_rre_results(json_str: bytes) -> None:
             raise HTTPException(500, "Could not match driver due to a missing rre_id in the database.")
 
     reserves: list[int] = []
-
     for team in championship.teams:
         for reserve in team.team.reserves():
             if reserve.driver.rre_id is not None:
                 reserves.append(reserve.driver.rre_id)
+
     expected_player_ids = reserves + list(drivers.keys())
 
     for session in data["Sessions"]:
-        players = remove_wild_cards(expected_player_ids, session["Players"])
-        session["Players"] = players
+        session["Players"] = remove_wild_cards(expected_player_ids, session["Players"])
 
     qualifying_results: list[QualifyingResult] = []
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
@@ -372,15 +385,18 @@ async def save_rre_results(json_str: bytes) -> None:
                     category_id=category.id,
                 )
             )
+
         sqla_session.add_all(qualifying_results)
 
-    for i, race_data in enumerate(data["Sessions"][2:]):
 
+    for i, race_data in enumerate(data["Sessions"][2:]):
         if current_round.has_sprint_race and i == 0:
             session = cast(Session, current_round.sprint_race)
         else:
             session = current_round.long_race
 
+        
+        driver_with_fastest_lap = fastest_lap_scorer(race_data)
         remaining_drivers = set(drivers.values())
         for player in race_data["Players"]:
             if status := player.get("FinishStatus"):
@@ -410,7 +426,7 @@ async def save_rre_results(json_str: bytes) -> None:
                 round_id=current_round.id,
                 session=session,
                 category_id=category.id,
-                fastest_lap=player["FastLap"],
+                fastest_lap=rre_id == driver_with_fastest_lap,
             )
 
             races[session].append(race_result)
