@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import datetime as dt
 import os
 from typing import Annotated, Any
 
@@ -9,11 +10,11 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 SECRET_KEY = os.environ.get("SECRET_API_KEY")
-
 USERNAME = os.environ.get("RRE_SERVER_USERNAME")
+RRE_SERVER_PASSWORD = os.environ.get("RRE_SERVER_PASSWORD")
 ALGORITHM = "HS256"
 
-if not SECRET_KEY or not USERNAME:
+if not any((SECRET_KEY, USERNAME, RRE_SERVER_PASSWORD)):
     raise RuntimeError("Environment variables not set correctly")
 
 
@@ -37,7 +38,7 @@ class UserInDB(User):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-HASHED_USER_PASSWORD = pwd_context.hash(os.environ.get("RRE_SERVER_PASSWORD"))
+HASHED_USER_PASSWORD = pwd_context.hash(RRE_SERVER_PASSWORD)
 
 app = FastAPI()
 
@@ -69,9 +70,9 @@ def authenticate_user(username: str, password: str):
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(dt.UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now(dt.UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
