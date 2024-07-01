@@ -302,12 +302,21 @@ async def save_rre_results(json_str: bytes) -> None:
 
     driver_objs = category.active_drivers()
 
-    drivers = {d.driver.rre_id: d.driver for d in driver_objs}
+    if not driver_objs:
+        raise HTTPException(500, "No drivers participating in this category, could not save results.")
+
+    drivers: dict[int, Driver] = {}
+    for d in driver_objs:
+        if d.driver.rre_id is not None:
+            drivers[d.driver.rre_id] = d.driver
+        else:
+            raise HTTPException(500, "Could not match driver due to a missing rre_id in the database.")
+
     reserves: list[int] = []
 
     for team in championship.teams:
         for reserve in team.team.reserves():
-            if reserve.driver.rre_id:
+            if reserve.driver.rre_id is not None:
                 reserves.append(reserve.driver.rre_id)
     expected_player_ids = reserves + list(drivers.keys())
 
@@ -439,8 +448,15 @@ async def generate_protest_document(
     protesting_driver = get_driver(
         sqla_session, discord_id=protesting_driver_discord_id
     )
+    
+    if not protesting_driver:
+        raise HTTPException(404, "Protesting driver's discord_id not found in database.")
+    
     protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
-
+    
+    if not protested_driver:
+        raise HTTPException(404, "Protested driver's discord_id not found in database.")
+    
     category = protesting_driver.current_category()
     if not category:
         raise ValueError("Driver is not currently part of any category.")
