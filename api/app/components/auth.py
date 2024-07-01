@@ -9,9 +9,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-SECRET_KEY = os.environ.get("SECRET_API_KEY")
-USERNAME = os.environ.get("RRE_SERVER_USERNAME")
-RRE_SERVER_PASSWORD = os.environ.get("RRE_SERVER_PASSWORD")
+SECRET_KEY = os.environ.get("SECRET_API_KEY", "")
+USERNAME = os.environ.get("RRE_SERVER_USERNAME", "")
+RRE_SERVER_PASSWORD = os.environ.get("RRE_SERVER_PASSWORD", "")
 ALGORITHM = "HS256"
 
 if not any((SECRET_KEY, USERNAME, RRE_SERVER_PASSWORD)):
