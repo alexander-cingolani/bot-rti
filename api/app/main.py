@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
-from api.app.schemas import Category, DriverResults, Round, Team
+from app.schemas import Category, DriverResults, Round, Team
 from app.components.auth import (
     Token,
     User,
