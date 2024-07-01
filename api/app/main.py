@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
+
+from api.app.schemas import Category, DriverResults, Round, Team
 from app.components.auth import (
     Token,
     User,
@@ -50,22 +52,22 @@ app.add_middleware(
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 * 2 + 240  # 2 weeks and 4 hours
 
 
-@app.post("/api/teams")
+@app.post("/api/teams", response_model=list[Team])
 async def teams(championship_id: int = Form()):
     return get_teams_list(int(championship_id))
 
 
-@app.post("/api/categories")
+@app.post("/api/categories", response_model=list[Category])
 async def categories(championship_id: int = Form()):
     return get_categories(championship_id)
 
 
-@app.post("/api/calendar")
+@app.post("/api/calendar", response_model=list[Round])
 async def calendar(category_id: int = Form()):
     return get_calendar(int(category_id))
 
 
-@app.post("/api/standings")
+@app.post("/api/standings", response_model=list[DriverResults])
 async def standings(category_id: int = Form()):
     return get_standings_with_results(int(category_id))
 
@@ -112,6 +114,7 @@ async def upload_rre_results(
 
 @app.post("/api/upload-protest", response_model=Token)
 async def upload_protest(
+    current_user: Annotated[User, Depends(get_current_user)],
     protesting_driver_discord_id: int = Form(),
     protested_driver_discord_id: int = Form(),
     protest_reason: str = Form(),
