@@ -304,7 +304,7 @@ async def save_rre_results(json_str: bytes) -> None:
 
     date_round = {r.date: r for r in category.rounds}
     start_date = datetime.fromtimestamp(data["StartTime"]).date()
-    current_round = date_round[start_date]
+    current_round = date_round.get(start_date)
 
     if not current_round:
         raise HTTPException(
