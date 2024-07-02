@@ -315,28 +315,39 @@ async def save_rre_results(json_str: bytes) -> None:
     current_round = date_round.get(start_date)
 
     if not current_round:
-        logging.info("The date in the file did not match any date in the championship calendar. Results not saved.")
+        logging.info(
+            "The date in the file did not match any date in the championship calendar. Results not saved."
+        )
         raise HTTPException(
             400, "The date in the file does not match any date in the championship."
         )
 
     if current_round.is_completed:
         logging.info("File had already been saved.")
-        raise HTTPException(422, "This file has already been saved and cannot be saved again.")
+        raise HTTPException(
+            422, "This file has already been saved and cannot be saved again."
+        )
 
     driver_objs = category.active_drivers()
 
     if not driver_objs:
         logging.error("Failed to save results, no drivers in " + category.name)
-        raise HTTPException(500, "No drivers participating in this category, could not save results.")
+        raise HTTPException(
+            500, "No drivers participating in this category, could not save results."
+        )
 
     drivers: dict[int, Driver] = {}
     for d in driver_objs:
         if d.driver.rre_id is not None:
             drivers[d.driver.rre_id] = d.driver
         else:
-            logging.error("Could not match driver due to missing rre_id in the database. Driver ID: " + d.driver.full_name)
-            raise HTTPException(500, "Could not match driver due to a missing rre_id in the database.")
+            logging.error(
+                "Could not match driver due to missing rre_id in the database. Driver ID: "
+                + d.driver.full_name
+            )
+            raise HTTPException(
+                500, "Could not match driver due to a missing rre_id in the database."
+            )
 
     reserves: list[int] = []
     for team in championship.teams:
@@ -359,7 +370,7 @@ async def save_rre_results(json_str: bytes) -> None:
     if session := current_round.qualifying_session:
         remaining_drivers = set(drivers.values())
         for player in qualifying_data["Players"]:
-            
+
             rre_id = cast(int, player["UserId"])
             driver = drivers[rre_id]
             laptime = None
@@ -392,7 +403,7 @@ async def save_rre_results(json_str: bytes) -> None:
                     position=position,
                     driver_id=driver.id,
                     driver=driver,
-                    status=status
+                    status=status,
                 )
             )
 
@@ -496,8 +507,10 @@ async def generate_protest_document(
 
     if not protesting_driver:
         logging.warning("discord_id does not match any driver in the database.")
-        raise HTTPException(404, "Protesting driver's discord_id not found in database.")
-    
+        raise HTTPException(
+            404, "Protesting driver's discord_id not found in database."
+        )
+
     protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
 
     if not protested_driver:
