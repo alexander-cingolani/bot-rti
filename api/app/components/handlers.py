@@ -9,7 +9,15 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session as DBSession
 
-from models import Category, Driver, Protest, QualifyingResult, RaceResult, Session
+from models import (
+    Category,
+    Driver,
+    Protest,
+    QualifyingResult,
+    RaceResult,
+    Session,
+    SessionCompletionStatus,
+)
 from queries import (
     get_category,
     get_championship,
@@ -238,8 +246,6 @@ def remove_wild_cards(
             players.append(player)
         else:
             wild_card_counter += 1
-            logging.info(f"id: {player["UserId"]} name: {player["FullName"]}")
-    logging.info(f"wild cards: {wild_card_counter}")
     return players
 
 
@@ -279,15 +285,16 @@ def fastest_lap_scorer(race_data: dict[str, Any]) -> int:
     fastest_lap = float("inf")
     driver_with_fastest_lap = 0
     for player in race_data["Players"]:
-        for lap in race_data["RaceSessionLaps"]:
-            if lap["Laptime"] <= 0:
+        for lap in player["RaceSessionLaps"]:
+            if lap["Time"] <= 0:
                 continue
 
-            if lap["Laptime"] > 0 and  lap["Laptime"] < fastest_lap:
+            if lap["Time"] > 0 and lap["Time"] < fastest_lap:
                 driver_with_fastest_lap = player["UserId"]
-                fastest_lap = lap["Laptime"]
+                fastest_lap = lap["Time"]
 
     return driver_with_fastest_lap
+
 
 async def save_rre_results(json_str: bytes) -> None:
     logger.info("Loading data from json file...")
@@ -352,18 +359,28 @@ async def save_rre_results(json_str: bytes) -> None:
     if session := current_round.qualifying_session:
         remaining_drivers = set(drivers.values())
         for player in qualifying_data["Players"]:
+            
             rre_id = cast(int, player["UserId"])
-            position = cast(int, player["PositionInClass"])
-            laptime = cast(int, player["BestLapTime"])
-
             driver = drivers[rre_id]
+            laptime = None
+            gap_to_pole = None
+            position = None
             remaining_drivers.discard(driver)
 
-            if laptime > 0:
-                gap_to_pole = laptime - pole_lap
-            else:
-                laptime = None
-                gap_to_pole = None
+            match player.get("FinishStatus"):
+                case "DidNotFinish":
+                    status = SessionCompletionStatus.dnf
+                case "Disqualified":
+                    status = SessionCompletionStatus.dsq
+                case _:
+                    position = cast(int, player["PositionInClass"])
+                    status = SessionCompletionStatus.finished
+                    laptime = cast(int, player["BestLapTime"])
+                    if laptime > 0:
+                        gap_to_pole = laptime - pole_lap
+                    else:
+                        laptime = None
+                        gap_to_pole = None
 
             qualifying_results.append(
                 QualifyingResult(
@@ -375,7 +392,7 @@ async def save_rre_results(json_str: bytes) -> None:
                     position=position,
                     driver_id=driver.id,
                     driver=driver,
-                    participated=True,
+                    status=status
                 )
             )
 
@@ -384,7 +401,7 @@ async def save_rre_results(json_str: bytes) -> None:
                 QualifyingResult(
                     driver_id=driver.id,
                     driver=driver,
-                    participated=False,
+                    status=SessionCompletionStatus.dns,
                     round_id=current_round.id,
                     session=session,
                     category_id=category.id,
@@ -393,33 +410,40 @@ async def save_rre_results(json_str: bytes) -> None:
 
         sqla_session.add_all(qualifying_results)
 
-
     for i, race_data in enumerate(data["Sessions"][2:]):
         if current_round.has_sprint_race and i == 0:
             session = cast(Session, current_round.sprint_race)
         else:
             session = current_round.long_race
 
-        
         driver_with_fastest_lap = fastest_lap_scorer(race_data)
         remaining_drivers = set(drivers.values())
-        for player in race_data["Players"]:
-            if status := player.get("FinishStatus"):
-                if status != "Finished":
-                    break
 
-            gap_to_winner = calculate_gap_to_winner(race_data, player)
+        for player in race_data["Players"]:
 
             rre_id = cast(int, player["UserId"])
-            position = cast(int, player["PositionInClass"])
-            driver_racetime = player["TotalTime"]
-
             driver = drivers[rre_id]
             remaining_drivers.discard(driver)
+            driver_racetime = None
+            gap_to_winner = None
+            position = None
 
-            if driver_racetime < 0:
-                driver_racetime = None
-                gap_to_winner = None
+            match player.get("FinishStatus"):
+                case "DidNotFinish":
+                    status = SessionCompletionStatus.dnf
+                case "Disqualified":
+                    status = SessionCompletionStatus.dsq
+                case _:
+                    status = SessionCompletionStatus.finished
+                    driver_racetime = player["TotalTime"]
+
+                    if driver_racetime > 0:
+                        gap_to_winner = calculate_gap_to_winner(race_data, player)
+                    else:
+                        driver_racetime = None
+                        gap_to_winner = None
+
+                    position = cast(int, player["PositionInClass"])
 
             race_result = RaceResult(
                 position=position,
@@ -427,7 +451,7 @@ async def save_rre_results(json_str: bytes) -> None:
                 driver=driver,
                 total_racetime=driver_racetime,
                 gap_to_first=gap_to_winner,
-                participated=True,
+                status=status,
                 round_id=current_round.id,
                 session=session,
                 category_id=category.id,
@@ -441,7 +465,7 @@ async def save_rre_results(json_str: bytes) -> None:
                 RaceResult(
                     driver_id=driver.id,
                     driver=driver,
-                    participated=False,
+                    status=SessionCompletionStatus.dns,
                     round_id=current_round.id,
                     session=session,
                     category_id=category.id,
@@ -469,17 +493,17 @@ async def generate_protest_document(
     protesting_driver = get_driver(
         sqla_session, discord_id=protesting_driver_discord_id
     )
-    
+
     if not protesting_driver:
         logging.warning("discord_id does not match any driver in the database.")
         raise HTTPException(404, "Protesting driver's discord_id not found in database.")
     
     protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
-    
+
     if not protested_driver:
         logging.warning("discord_id does not match any driver in the database.")
         raise HTTPException(404, "Protested driver's discord_id not found in database.")
-    
+
     category = protesting_driver.current_category()
     if not category:
         raise ValueError("Driver is not currently part of any category.")

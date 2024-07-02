@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import trueskill as ts  # type: ignore
 
-from models import Driver, RaceResult
+from models import Driver, RaceResult, SessionCompletionStatus
 from queries import get_championship, get_drivers
 
 TrueSkillEnv = ts.TrueSkill(
@@ -25,7 +25,7 @@ def update_ratings(results: list[RaceResult]) -> None:
     race_results: list[RaceResult] = []
     for result in results:
         driver: Driver = result.driver
-        if result.participated:
+        if result.status == SessionCompletionStatus.finished:
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
             ranks.append(result.position)
             race_results.append(result)
@@ -67,7 +67,7 @@ def recalculate_ratings():
                 finishing_positions: list[int] = []
                 race_results: list[RaceResult] = []
                 for result in session.race_results:
-                    if result.participated:
+                    if result.status == SessionCompletionStatus.finished:
                         rtg = (
                             ts.Rating(
                                 mu=float(result.driver.mu),
@@ -105,16 +105,16 @@ def recalculate_ratings():
 
     for driver in drivers:
         print(f"{driver.psn_id_or_full_name}: {driver.mu} - {driver.sigma}")
-        
-        
+
+
 def recalculate_all_ratings():
     """Only used to recalculate all the ratings in the last championship."""
     sqla_session = DBSession()
-    
+
     drivers = get_drivers(sqla_session)
     for driver in drivers:
         driver.mu = 25
-        driver.sigma = 25/3
+        driver.sigma = 25 / 3
     sqla_session.commit()
 
     for i in range(1, 6):
@@ -129,7 +129,7 @@ def recalculate_all_ratings():
                     finishing_positions: list[int] = []
                     race_results: list[RaceResult] = []
                     for result in session.race_results:
-                        if result.participated:
+                        if result.status == SessionCompletionStatus.finished:
                             rtg = (
                                 ts.Rating(
                                     mu=float(result.driver.mu),
@@ -167,7 +167,6 @@ def recalculate_all_ratings():
 
         for driver in drivers:
             print(f"{driver.psn_id_or_abbreviated_name}: {driver.mu} - {driver.sigma}")
-        
 
 
 if __name__ == "__main__":

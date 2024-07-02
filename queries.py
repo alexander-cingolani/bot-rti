@@ -29,6 +29,7 @@ from models import (
     Reprimand,
     RoundParticipant,
     Session,
+    SessionCompletionStatus,
     Team,
     TeamChampionship,
 )
@@ -334,7 +335,7 @@ def _update_ratings(results: list[RaceResult]) -> None:
     for result in results:
         driver: Driver = result.driver
 
-        if result.participated:
+        if result.status == SessionCompletionStatus.finished:
             rating_groups.append((ts.Rating(float(driver.mu), float(driver.sigma)),))
             ranks.append(result.position)  # type: ignore
             race_results.append(result)
@@ -468,7 +469,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     rows = sqla_session.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.id)
-        .where(RaceResult.participated == True)
+        .where(RaceResult.status == SessionCompletionStatus.finished)
         .order_by(RaceResult.position)
     ).all()
 
@@ -480,7 +481,10 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         race_result: RaceResult = row[0]
         race_results.append(race_result)
         driver_points[race_result.driver] = race_result.points_earned
-        if race_result.driver_id == penalty.driver.id and race_result.participated:
+        if (
+            race_result.driver_id == penalty.driver.id
+            and race_result.status == SessionCompletionStatus.finished
+        ):
             race_result.total_racetime += penalty.time_penalty  # type: ignore
             penalised_race_result = race_result
 
@@ -495,7 +499,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
                 driver_points[race_result.driver] = race_result.points_earned
                 if (
                     race_result.driver_id == penalty.driver.id
-                    and race_result.participated
+                    and race_result.status == SessionCompletionStatus.finished
                 ):
                     race_result.total_racetime += penalty.time_penalty  # type: ignore
                     penalised_race_result = race_result
@@ -706,7 +710,7 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
     rows = session.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session_id)
-        .where(RaceResult.participated == True)
+        .where(RaceResult.status == SessionCompletionStatus.finished)
         .order_by(RaceResult.position)
     ).all()
 
