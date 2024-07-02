@@ -296,6 +296,7 @@ async def save_rre_results(json_str: bytes) -> None:
     championship = get_championship(sqla_session)
 
     if not championship:
+        logging.info("Incorrect championship configuration, results not saved.")
         raise HTTPException(
             500, "Championship was not configured correctly in the database."
         )
@@ -307,16 +308,19 @@ async def save_rre_results(json_str: bytes) -> None:
     current_round = date_round.get(start_date)
 
     if not current_round:
+        logging.info("The date in the file did not match any date in the championship calendar. Results not saved.")
         raise HTTPException(
             400, "The date in the file does not match any date in the championship."
         )
 
     if current_round.is_completed:
-        raise HTTPException(422, "This file has already been saved.")
+        logging.info("File had already been saved.")
+        raise HTTPException(422, "This file has already been saved and cannot be saved again.")
 
     driver_objs = category.active_drivers()
 
     if not driver_objs:
+        logging.error("Failed to save results, no drivers in " + category.name)
         raise HTTPException(500, "No drivers participating in this category, could not save results.")
 
     drivers: dict[int, Driver] = {}
@@ -324,6 +328,7 @@ async def save_rre_results(json_str: bytes) -> None:
         if d.driver.rre_id is not None:
             drivers[d.driver.rre_id] = d.driver
         else:
+            logging.error("Could not match driver due to missing rre_id in the database. Driver ID: " + d.driver.full_name)
             raise HTTPException(500, "Could not match driver due to a missing rre_id in the database.")
 
     reserves: list[int] = []
@@ -466,11 +471,13 @@ async def generate_protest_document(
     )
     
     if not protesting_driver:
+        logging.warning("discord_id does not match any driver in the database.")
         raise HTTPException(404, "Protesting driver's discord_id not found in database.")
     
     protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
     
     if not protested_driver:
+        logging.warning("discord_id does not match any driver in the database.")
         raise HTTPException(404, "Protested driver's discord_id not found in database.")
     
     category = protesting_driver.current_category()
@@ -485,6 +492,7 @@ async def generate_protest_document(
     rnd = {rnd.category: rnd for rnd in rounds}.get(category)
 
     if not rnd:
+        logging.info("Protest sent outside of the report window.")
         raise HTTPException(410, "Protest was sent outside of the report window.")
 
     if session_name == "Gara 1":
