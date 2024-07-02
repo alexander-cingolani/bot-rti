@@ -54,6 +54,13 @@ class Base(DeclarativeBase):
     pass
 
 
+class SessionCompletionStatus(enum.Enum):
+    finished = "F"
+    dnf = "DNF"
+    dns = "DNS"
+    dsq = "DSQ"
+
+
 class Championship(Base):
     """Represents a championship.
     Each Championship has multiple Drivers, Rounds and Categories categories associated to it.
@@ -742,12 +749,12 @@ class Session(Base):
         drivers: list[Driver] = []
         if self.is_quali:
             for quali_result in self.qualifying_results:
-                if quali_result.participated:
+                if quali_result.status:
                     drivers.append(quali_result.driver)
             return drivers
 
         for race_result in self.race_results:
-            if race_result.participated:
+            if race_result.status == SessionCompletionStatus.finished:
                 drivers.append(race_result.driver)
         return drivers
 
@@ -1278,13 +1285,13 @@ class Driver(Base):
         race_gaps = 0
         missed_races = 0
         for race_result in self.race_results:
-            if not race_result.participated:
+            if race_result.status == SessionCompletionStatus.dns:
                 missed_races += 1
                 continue
 
             if race_result.fastest_lap:
                 statistics["fastest_laps"] += 1
-            if race_result.participated:
+            if race_result.status == SessionCompletionStatus.finished:
                 positions += race_result.position
                 race_gaps += (
                     race_result.gap_to_first
@@ -1305,7 +1312,7 @@ class Driver(Base):
 
             if quali_result.position == 1:
                 statistics["poles"] += 1
-            if quali_result.participated:
+            if quali_result.status == SessionCompletionStatus.finished:
                 quali_positions += quali_result.position
                 quali_gaps += (
                     quali_result.gap_to_first
@@ -1640,7 +1647,6 @@ class QualifyingResult(Base):
         laptime (int): Best lap registered by the driver in the.
         gap_to_first (int): Seconds by which the laptime is off from the fastest lap
             time in the driver's car class.
-        participated (bool): True if the driver participated to the Qualifying session.
 
         driver_id (int): Unique ID of the driver the result belongs to.
         round_id (int): Unique ID of the round the result was made in.
@@ -1668,7 +1674,9 @@ class QualifyingResult(Base):
     position: Mapped[int | None] = mapped_column(SmallInteger)
     laptime: Mapped[int | None] = mapped_column(Integer)
     gap_to_first: Mapped[int | None] = mapped_column(Integer)
-    participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[SessionCompletionStatus] = mapped_column(
+        Enum(SessionCompletionStatus), default=False, nullable=False
+    )
 
     driver_id: Mapped[int] = mapped_column(ForeignKey(Driver.id), nullable=False)
     round_id: Mapped[int] = mapped_column(ForeignKey(Round.id), nullable=False)
@@ -1686,7 +1694,7 @@ class QualifyingResult(Base):
     @property
     def points_earned(self) -> float:
         """Points earned by the driver in this qualifying session."""
-        if not self.participated:
+        if self.status != SessionCompletionStatus.finished:
             return 0
 
         return self.session.point_system.point_system[self.position - 1]
@@ -1731,7 +1739,6 @@ class RaceResult(Base):
         id (int): Automatically generated unique ID assigned upon object creation.
         position (int): The position the driver finished in the race.
         fastest_lap (bool): True if the driver scored the fastest lap, False by default.
-        participated (bool): True if the driver participated to the race.
         gap_to_first (int): Difference between the driver's race time
             and the class winner's race time.
         total_racetime (int): Total time the driver took to complete the race.
@@ -1757,7 +1764,11 @@ class RaceResult(Base):
     id: Mapped[int] = mapped_column("result_id", Integer, primary_key=True)
     position: Mapped[int | None] = mapped_column(SmallInteger)
     fastest_lap: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    participated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[SessionCompletionStatus] = mapped_column(
+        Enum(SessionCompletionStatus),
+        default=SessionCompletionStatus.dns,
+        nullable=False,
+    )
     gap_to_first: Mapped[int | None] = mapped_column(Integer)
     total_racetime: Mapped[Integer | None] = mapped_column(Integer)
     mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
@@ -1796,7 +1807,7 @@ class RaceResult(Base):
         (Finishing position + fastest lap points) *Does not take penalty points into account.
         """
 
-        if not self.participated:
+        if self.status != SessionCompletionStatus.finished:
             return 0
 
         return (

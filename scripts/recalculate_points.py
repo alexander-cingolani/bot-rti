@@ -7,7 +7,7 @@ from collections import defaultdict
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Driver, Team
+from models import Driver, SessionCompletionStatus, Team
 from queries import get_championship
 
 DB_URL = "mysql+mysqlconnector://alexander:alexander@172.18.0.2:3306/rti-dev"
@@ -41,7 +41,7 @@ def recalculate_points():
                         driver_points[result.driver] += result.points_earned
 
                 for result in session.race_results:
-                    if result.participated:
+                    if result.status == SessionCompletionStatus.finished:
                         driver_points[result.driver] += result.points_earned
 
         for driver in category.drivers:
