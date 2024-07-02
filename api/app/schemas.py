@@ -16,7 +16,7 @@ class Category(BaseModel):
 
 class Info(BaseModel):
     info_gp: str
-    position: int
+    position: int | str
     extra_points: int
 
 
@@ -37,4 +37,4 @@ class SessionInfo(BaseModel):
 class Round(BaseModel):
     circuit_logo: str
     circuit: str
-    info: SessionInfo
+    info: list[SessionInfo]
