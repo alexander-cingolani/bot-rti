@@ -1,7 +1,7 @@
 anyio==4.4.0
 APScheduler==3.10.4
 cachetools==5.3.3
-certifi==2024.6.2
+certifi==2024.7.4
 chardet==5.2.0
 greenlet==3.0.3
 h11==0.14.0
