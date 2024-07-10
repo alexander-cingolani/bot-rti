@@ -19,11 +19,11 @@ from models import (
     SessionCompletionStatus,
 )
 from queries import (
-    get_category,
-    get_championship,
-    get_driver,
-    get_last_protest_number,
-    get_teams,
+    fetch_category,
+    fetch_championship,
+    fetch_driver,
+    fetch_last_protest_number,
+    fetch_teams,
     save_results,
 )
 from documents import ProtestDocument
@@ -48,7 +48,7 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
     elif isinstance(championship_id, str):
         championship_id = int(championship_id)
 
-    championship = get_championship(session, championship_id)
+    championship = fetch_championship(session, championship_id)
 
     if not championship:
         return []
@@ -86,7 +86,7 @@ def get_categories(championship_id: int | str | None) -> list[dict[str, Any]]:
 def get_calendar(category_id: int) -> list[dict[str, Any]] | None:
     session = SQLASession()
 
-    category = get_category(session=session, category_id=category_id)
+    category = fetch_category(session=session, category_id=category_id)
 
     if not category:
         return
@@ -158,7 +158,7 @@ def _create_driver_result_list(race_results: list[RaceResult]) -> list[dict[str,
 def get_standings_with_results(category_id: int) -> list[dict[str, Any]] | None:
     session = SQLASession()
 
-    category = get_category(session=session, category_id=category_id)
+    category = fetch_category(session=session, category_id=category_id)
     if not category:
         return
 
@@ -210,7 +210,7 @@ def get_drivers_points(championship_id: int):
     session = SQLASession()
 
     result: dict[int, list[list[float]]] = {}
-    championship = get_championship(session, championship_id=championship_id)
+    championship = fetch_championship(session, championship_id=championship_id)
 
     if not championship:
         return
@@ -224,7 +224,7 @@ def get_drivers_points(championship_id: int):
 def get_teams_list(championship_id: int) -> list[dict[str, Any]]:
     """Returns the teams participating to the championship ordered by position."""
     session = SQLASession()
-    team_objs = get_teams(session, championship_id)
+    team_objs = fetch_teams(session, championship_id)
 
     teams: list[dict[str, Any]] = []
     for team in team_objs:
@@ -253,7 +253,7 @@ def detect_category(sqla_session: DBSession, data: dict[str, Any]):
 
     players_per_category: defaultdict[Category, int] = defaultdict(int)
     for player in data["Sessions"][2]["Players"]:
-        driver = get_driver(session=sqla_session, rre_id=player["UserId"])
+        driver = fetch_driver(session=sqla_session, rre_id=player["UserId"])
         if not driver:
             continue
         if not (category := driver.current_category()):
@@ -296,11 +296,11 @@ def fastest_lap_scorer(race_data: dict[str, Any]) -> int:
     return driver_with_fastest_lap
 
 
-async def save_rre_results(json_str: bytes) -> None:
+async def save_rre_results(results: str) -> None:
     logger.info("Loading data from json file...")
-    data = json.loads(json_str)
+    data = json.loads(results)
     sqla_session = SQLASession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         logging.info("Incorrect championship configuration, results not saved.")
@@ -501,7 +501,7 @@ async def generate_protest_document(
 
     sqla_session = SQLASession()
 
-    protesting_driver = get_driver(
+    protesting_driver = fetch_driver(
         sqla_session, discord_id=protesting_driver_discord_id
     )
 
@@ -511,7 +511,9 @@ async def generate_protest_document(
             404, "Protesting driver's discord_id not found in database."
         )
 
-    protested_driver = get_driver(sqla_session, discord_id=protested_driver_discord_id)
+    protested_driver = fetch_driver(
+        sqla_session, discord_id=protested_driver_discord_id
+    )
 
     if not protested_driver:
         logging.warning("discord_id does not match any driver in the database.")
@@ -546,7 +548,9 @@ async def generate_protest_document(
         raise HTTPException(400, "Received invalid session_name.")
 
     number = (
-        get_last_protest_number(sqla_session, category_id=category.id, round_id=rnd.id)
+        fetch_last_protest_number(
+            sqla_session, category_id=category.id, round_id=rnd.id
+        )
         + 1
     )
 

@@ -38,7 +38,7 @@ from models import (
     Round,
     Session,
 )
-from queries import get_championship, get_driver, save_results
+from queries import fetch_championship, fetch_driver, save_results
 
 engine = create_engine(os.environ["DB_URL"])
 DBSession = sessionmaker(bind=engine, autoflush=False)
@@ -61,7 +61,7 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data.clear()
 
     sqla_session: SQLASession = DBSession()
-    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver(sqla_session, telegram_id=update.effective_user.id)
 
     if not driver.has_permission(config.MANAGE_RESULTS):
         await update.message.reply_text(
@@ -70,7 +70,7 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ConversationHandler.END
 
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         await update.message.reply_text(

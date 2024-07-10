@@ -39,7 +39,7 @@ TrueSkillEnv = ts.TrueSkill(
 )
 
 
-def get_championship(
+def fetch_championship(
     session: SQLASession, championship_id: int | None = None
 ) -> Championship | None:
     """If not given a championship_id, returns the most recent one.
@@ -65,7 +65,7 @@ def get_championship(
     return None
 
 
-def get_team_leaders(
+def fetch_team_leaders(
     session: SQLASession, championship_id: int | None = None
 ) -> list[Driver]:
     """Returns a list of the team leaders in the championship specified by championship_id.
@@ -79,7 +79,7 @@ def get_team_leaders(
         list[Driver]: List of drivers who were team leaders in the championship.
     """
     if not championship_id:
-        championship = get_championship(session)
+        championship = fetch_championship(session)
         if championship:
             championship_id = championship.id
         else:
@@ -100,7 +100,7 @@ def get_team_leaders(
     return []
 
 
-def get_admins(session: SQLASession) -> list[Driver]:
+def fetch_admins(session: SQLASession) -> list[Driver]:
     statement = (
         select(Driver)
         .join(DriverRole, Driver.id == DriverRole.driver_id)
@@ -114,7 +114,7 @@ def get_admins(session: SQLASession) -> list[Driver]:
     return []
 
 
-def get_protests(
+def fetch_protests(
     session: SQLASession,
     round_id: int | None = None,
     is_reviewed: bool | None = None,
@@ -140,7 +140,7 @@ def get_protests(
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
-def get_driver(
+def fetch_driver(
     session: SQLASession,
     psn_id: str | None = None,
     telegram_id: int | str | None = None,
@@ -177,18 +177,7 @@ def get_driver(
     return result[0] if result else None
 
 
-def get_drivers(session: SQLASession):
-    statement = select(Driver)
-    result = session.execute(statement).all()
-
-    drivers: list[Driver] = []
-    if result:
-        for row in result:
-            drivers.append(row[0])
-    return drivers
-
-
-def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
+def fetch_teams(session: SQLASession, championship_id: int) -> list[Team]:
     """Returns the list of teams participating to the given championship, ordered by
     championship position.
 
@@ -217,7 +206,7 @@ def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
     return teams
 
 
-def get_protest(session: SQLASession, protest_id: str) -> Protest | None:
+def fetch_protest(session: SQLASession, protest_id: str) -> Protest | None:
     """Returns the protest matching the given protest_id.
 
     Args:
@@ -236,7 +225,7 @@ def get_protest(session: SQLASession, protest_id: str) -> Protest | None:
     return None
 
 
-def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
+def fetch_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     """Returns the Driver object with a psn_id similar to the one given.
 
     Args:
@@ -255,7 +244,9 @@ def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_protest_number(session: SQLASession, round_id: int) -> int:
+def fetch_last_protest_number(
+    session: SQLASession, category_id: int, round_id: int
+) -> int:
     """Gets the number of the last protest made in a specific category and round.
 
     Args:
@@ -277,7 +268,7 @@ def get_last_protest_number(session: SQLASession, round_id: int) -> int:
     return 0
 
 
-def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
+def fetch_last_penalty_number(session: SQLASession, round_id: int) -> int:
     """Returns the last penalty number for any given round.
     0 is returned if no penalties have been applied in that round.
 
@@ -552,7 +543,7 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
     return
 
 
-def get_category(session: SQLASession, category_id: int) -> Category | None:
+def fetch_category(session: SQLASession, category_id: int) -> Category | None:
     """Returns a Category given an id.
 
     Args:
@@ -584,7 +575,7 @@ def delete_protest(session: SQLASession, protest_id: str) -> None:
     session.expire_all()
 
 
-def get_all_drivers(session: SQLASession) -> list[Driver]:
+def fetch_drivers(session: SQLASession) -> list[Driver]:
     """Returns a list containing all the drivers currently saved in the database.
 
     Args:
@@ -596,7 +587,7 @@ def get_all_drivers(session: SQLASession) -> list[Driver]:
     return [r[0] for r in result]
 
 
-def get_participants_from_round(
+def fetch_round_participants(
     session: SQLASession, round_id: int
 ) -> list[RoundParticipant]:
     """Returns a list containing the participants to a particular round.
@@ -631,28 +622,8 @@ def delete_chat(session: SQLASession, chat_id: int):
     session.commit()
 
 
-def update_participant_status(session: SQLASession, participant: RoundParticipant):
-    stmt = (
-        update(RoundParticipant)
-        .where(
-            RoundParticipant.driver_id == participant.driver_id,
-            RoundParticipant.round_id == participant.round_id,
-        )
-        .values(participating=participant.participating)
-    )
-
-    session.execute(stmt)
-    session.commit()
-
-
-def delete_chat(session: SQLASession, chat_id: int):
-    stmt = delete(Chat).where(Chat.id == chat_id)
-    session.execute(stmt)
-    session.commit()
-
-
 @cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
-def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
+def fetch_reprimand_types(session: SQLASession) -> list[Reprimand]:
     result = session.execute(select(Reprimand)).all()
 
     return [r[0] for r in result]

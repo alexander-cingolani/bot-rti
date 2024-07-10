@@ -19,7 +19,7 @@ from telegram.ext import (
 )
 from models import Championship, Penalty, Round
 
-from queries import reverse_penalty, get_championship
+from queries import reverse_penalty, fetch_championship
 
 engine = create_engine(os.environ["DB_URL"])
 
@@ -41,7 +41,7 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     sqla_session = DBSession()
     user_data["sqla_session"] = sqla_session
 
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         await update.message.reply_text(
