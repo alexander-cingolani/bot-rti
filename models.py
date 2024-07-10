@@ -85,6 +85,7 @@ class Championship(Base):
         Date, nullable=False, default=datetime.datetime.now().date()
     )
     end: Mapped[datetime.date | None] = mapped_column(Date)
+    tag: Mapped[str] = mapped_column(String(7))
 
     categories: Mapped[list[Category]] = relationship(
         back_populates="championship", order_by="Category.id"
@@ -121,14 +122,6 @@ class Championship(Base):
             if not rnd.is_completed:
                 rounds.append(rnd)
         return rounds
-
-    @property
-    def abbreviated_name(self) -> str:
-        """Short version of the championship's name created by taking the first letter
-        of each word in it.
-        E.G. "eSports Championship 1" -> "EC1"
-        """
-        return "".join(i[0] for i in self.name.split()).upper()
 
     @property
     def driver_list(self) -> list[Driver]:

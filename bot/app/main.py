@@ -470,7 +470,7 @@ async def complete_championship_standings(
     if not championship:
         return
 
-    message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
+    message = f"<b>CLASSIFICHE #{championship.tag}</b>"
     if not championship:
         await update.message.reply_text("Il campionato è finito.")
         sqla_session.close()
@@ -521,7 +521,7 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
 
     teams = sorted(championship.teams, key=lambda t: t.points, reverse=True)
 
-    message = f"<b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b>\n\n"
+    message = f"<b>CLASSIFICA COSTRUTTORI #{championship.tag}</b>\n\n"
     for pos, team in enumerate(teams, start=1):
         if driver:
             current_team = driver.current_team()
@@ -625,7 +625,7 @@ async def announce_protests(context: ContextTypes.DEFAULT_TYPE) -> None:
             text = (
                 f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
                 f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
-                f"#{championship.abbreviated_name}Tappa{rnd.number}"
+                f"#{championship.tag}Tappa{rnd.number}"
                 f" #{rnd.category.tag}"
             )
 
