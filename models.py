@@ -1080,6 +1080,7 @@ class Driver(Base):
     id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
     name: Mapped[str | None] = mapped_column(String(30))
     surname: Mapped[str | None] = mapped_column(String(30))
+    email: Mapped[str | None] = mapped_column(String(320))
     rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)

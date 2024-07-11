@@ -65,6 +65,15 @@ def fetch_championship(
     return None
 
 
+def fetch_championship_by_tag(session: SQLASession, tag: str) -> Championship | None:
+    statement = select(Championship).where(Championship.tag.lower() == tag.lower())
+    result = session.execute(statement).one_or_none()
+
+    if result:
+        return result[0]
+    return None
+
+
 def fetch_team_leaders(
     session: SQLASession, championship_id: int | None = None
 ) -> list[Driver]:
@@ -140,40 +149,44 @@ def fetch_protests(
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
-def fetch_driver(
-    session: SQLASession,
-    psn_id: str | None = None,
-    telegram_id: int | str | None = None,
-    rre_id: str | None = None,
-    discord_id: int | None = None,
-) -> Driver | None:
-    """Retrieves a single Driver object from the database given his PSN or Telegram id.
-    Either psn_id or telegram are optional, but at least one must be given.
-    Args:
-        session (SQLASession): Session to execute the query with.
-        psn_id (str, optional): Driver's PSN ID. Defaults to None.
-        telegram_id (str, optional): Driver's Telegram ID. Defaults to None.
+def fetch_driver_by_psn_id(session: SQLASession, psn_id: str) -> Driver | None:
 
-    Returns:
-        Driver | None: None if no driver/multiple drivers matching the given ID were found.
-    """
-    statement = select(Driver)
-    if psn_id:
-        statement = statement.where(Driver.psn_id == psn_id)
-    elif telegram_id:
-        statement = statement.where(Driver._telegram_id == str(telegram_id))  # type: ignore
-    elif rre_id:
-        statement = statement.where(Driver.rre_id == rre_id)
-    elif discord_id:
-        statement = statement.where(Driver.discord_id == discord_id)
-    else:
-        raise ValueError("No search criteria given.")
-
+    statement = select(Driver).where(Driver.psn_id == psn_id)
     try:
         result = session.execute(statement).one_or_none()
     except MultipleResultsFound:
         return None
 
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_telegram_id(
+    session: SQLASession, telegram_id: str
+) -> Driver | None:
+    statement = select(Driver).where(Driver._telegram_id == str(telegram_id))  # type: ignore
+    result = session.execute(statement).first()
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_rre_id(session: SQLASession, rre_id: int) -> Driver | None:
+    statement = select(Driver).where(Driver.rre_id == rre_id)
+    result = session.execute(statement).first()
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_discord_id(session: SQLASession, discord_id: int) -> Driver | None:
+    statement = select(Driver).where(Driver.discord_id == discord_id)
+    result = session.execute(statement).first()
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_email(session: SQLASession, email: str) -> Driver | None:
+    statement = select(Driver).where(Driver.email == email)
+    result = session.execute(statement).first()
     return result[0] if result else None
 
 

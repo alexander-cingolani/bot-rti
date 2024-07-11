@@ -59,9 +59,9 @@ from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
     delete_chat,
     fetch_admins,
+    fetch_driver_by_telegram_id,
     fetch_drivers,
     fetch_championship,
-    fetch_driver,
     fetch_round_participants,
     fetch_team_leaders,
     update_participant_status,
@@ -226,7 +226,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     user = update.effective_user
-    driver = fetch_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, user.id)
     if not driver:
         website_link = "<a href='https://racingteamitalia.it/'>Racing Team Italia</a>"
         await chat.send_message(
@@ -265,7 +265,7 @@ async def greet_new_chat_members(
             return
 
         session = DBSession()
-        driver = fetch_driver(session, telegram_id=user.id)
+        driver = fetch_driver_by_telegram_id(session, user.id)
         session.close()
 
         if not driver:
@@ -304,7 +304,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "e <i>classifiche</i> dei nostri campionati."
     )
 
-    driver = fetch_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, user.id)
     if not driver:
         website_link = "<a href='https://racingteamitalia.it/#user-registration-form-1115'>sito</a>"
         instagram_link = "<a href='https://www.instagram.com/rti_racingteamitalia/'>rti_racingteamitalia</a>"
@@ -350,7 +350,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     session = DBSession()
     user = update.effective_user
-    driver = fetch_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, telegram_id=user.id)
 
     if not driver:
         message = (
@@ -417,7 +417,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """
     session = DBSession()
     user = update.effective_user
-    user_driver = fetch_driver(session, telegram_id=user.id)
+    user_driver = fetch_driver_by_telegram_id(session, user.id)
     if not user_driver:
         await update.message.reply_text(
             "Per usare questa funzione devi essere registrato.\n"
@@ -464,9 +464,7 @@ async def complete_championship_standings(
     """
     sqla_session = DBSession()
     championship = fetch_championship(sqla_session)
-    user_driver = fetch_driver(
-        session=sqla_session, telegram_id=update.effective_user.id
-    )
+    user_driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not championship:
         return
 
@@ -517,7 +515,7 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     if not championship:
         return
 
-    driver = fetch_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
 
     teams = sorted(championship.teams, key=lambda t: t.points, reverse=True)
 
@@ -540,7 +538,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 
     sqla_session = DBSession()
     user = update.effective_user
-    driver = fetch_driver(sqla_session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -787,7 +785,9 @@ async def update_participants_list(
     if not chat_data.get("participants_list_message"):
         chat_data["participants_list_message"] = update.message
 
-    driver: Driver | None = fetch_driver(session, telegram_id=update.effective_user.id)
+    driver: Driver | None = fetch_driver_by_telegram_id(
+        session, telegram_id=update.effective_user.id
+    )
     if not driver:
         await update.callback_query.answer(
             "Non ti sei ancora registrato! Puoi farlo tramite il comando /registrami in privato.",
@@ -921,7 +921,7 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of rounds yet to be completed in the user's category.
     This command is only available for registered and currently active users."""
     session = DBSession()
-    driver = fetch_driver(session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(session, update.effective_user.id)
 
     message = ""
 
@@ -971,7 +971,9 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
 async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     sqla_session = DBSession()
 
-    if not (driver := fetch_driver(sqla_session, telegram_id=update.effective_user.id)):
+    if not (
+        driver := fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
+    ):
         await update.message.reply_text(
             "Per usare questo comando occorre prima essersi registrati."
         )

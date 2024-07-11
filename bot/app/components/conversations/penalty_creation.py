@@ -27,7 +27,7 @@ from telegram.ext import (
 from models import Category, Driver, Penalty, Protest
 from queries import (
     fetch_championship,
-    fetch_driver,
+    fetch_driver_by_telegram_id,
     fetch_last_penalty_number,
     fetch_protests,
     fetch_reprimand_types,
@@ -59,7 +59,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Allows admins to create penalties without a pre-existing protest made by a leader."""
 
     sqla_session = DBSession()
-    driver = fetch_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             text="Non hai il permesso per usare questa funzione."
@@ -276,12 +276,11 @@ async def protest_processing_entry_point(
     after the /start_reviewing command is issued."""
 
     sqla_session = DBSession()
-    championship = fetch_championship(sqla_session)
 
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
 
-    driver = fetch_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             text="Non hai il permesso per usare questa funzione."

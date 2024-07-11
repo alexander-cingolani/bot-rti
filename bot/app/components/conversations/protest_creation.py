@@ -30,7 +30,7 @@ from models import Category, Protest, Round, Team
 from queries import (
     delete_protest,
     fetch_championship,
-    fetch_driver,
+    fetch_driver_by_telegram_id,
     fetch_last_protest_number,
     fetch_protest,
 )
@@ -69,7 +69,7 @@ async def create_late_protest(
     user_data["championship"] = championship
     user_data["categories"] = {}
 
-    driver = fetch_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             "Come utente non registrato, non hai accesso a questa funzione."
@@ -201,7 +201,7 @@ async def create_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_data = cast(dict[str, Any], context.chat_data)
     user_data.clear()
     sqla_session = DBSession()
-    driver = fetch_driver(sqla_session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, user.id)
     chat_data["late_protest"] = False
     if not driver:
         await update.message.reply_text(
