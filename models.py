@@ -1081,7 +1081,9 @@ class Driver(Base):
     name: Mapped[str | None] = mapped_column(String(30))
     surname: Mapped[str | None] = mapped_column(String(30))
     email: Mapped[str | None] = mapped_column(String(320))
-    rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    joined_on: Mapped[datetime.date | None] = mapped_column(Date)
+    left_on: Mapped[datetime.date | None] = mapped_column(Date)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
     mu: Mapped[Decimal] = mapped_column(
@@ -1252,7 +1254,17 @@ class Driver(Base):
     @property
     def is_active(self) -> bool:
         """A driver is considered active if he is currently competing in a championship."""
-        return not self.categories[-1].left_on
+        if self.categories:
+            return not self.categories[-1].left_on
+        return False
+
+    @property
+    def is_current_member(self) -> bool:
+        if not self.left_on:
+            return True
+        elif self.left_on < datetime.datetime.now().date():
+            return False
+        return False
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def stats(self) -> dict[str, int | float]:
