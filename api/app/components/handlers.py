@@ -6,11 +6,11 @@ from typing import Any, cast
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-from app.schemas.standings import StandingsSchema
-from app.schemas.resultsfile import (
+from schemas.standings import StandingsSchema
+from schemas.resultsfile import (
     RaceRoomResultsSchema,
 )
-from app.schemas.protest import CreateProtestSchema
+from schemas.protest import CreateProtestSchema
 from models import (
     Category,
     Driver,
@@ -252,9 +252,7 @@ async def save_rre_results(db: DBSession, results: RaceRoomResultsSchema) -> Non
 
     if not championship:
         logging.info("Championship ID does not exist.")
-        raise HTTPException(
-            500, "Championship ID does not exist."
-        )
+        raise HTTPException(500, "Championship ID does not exist.")
 
     category = detect_category(db, results)
 
