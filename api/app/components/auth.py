@@ -5,9 +5,10 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from jwt import InvalidTokenError
 
 SECRET_KEY = os.environ.get("SECRET_API_KEY", "")
 USERNAME = os.environ.get("RRE_SERVER_USERNAME", "")
@@ -24,11 +25,11 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: str | None = None
+    username: str
 
 
 class User(BaseModel):
-    username: str
+    username: str | None
 
 
 class UserInDB(User):
@@ -86,13 +87,16 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")  # type: ignore
-        if not username:
+        username: str | None = payload.get("sub")
+        if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except JWTError:
+
+    except InvalidTokenError:
         raise credentials_exception
-    user = get_user(username=token_data.username)  # type: ignore
+
+    user = get_user(username=token_data.username)
+
     if not user:
         raise credentials_exception
     return user
