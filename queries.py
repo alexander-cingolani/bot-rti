@@ -4,6 +4,7 @@ such as Protests, Categories and Drivers.
 """
 
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -64,7 +65,26 @@ def fetch_championship(
         return result[0]
     return None
 
-def fetch_championships()
+
+def fetch_championships(db: DBSession, active: bool | None) -> list[Championship]:
+    statement = select(Championship)
+    if active is None:
+        pass
+    elif active:
+        statement.where(Championship.end.is_(None)).where(
+            Championship.end > datetime.now().date()
+        )
+    else:
+        statement.where(Championship.end.isnot(None)).where(
+            Championship.end < datetime.now().date()
+        )
+
+    result = db.execute(statement).all()
+
+    if result:
+        return [row[0] for row in result]
+    return []
+
 
 def fetch_championship_by_tag(db: DBSession, tag: str) -> Championship | None:
     statement = select(Championship).where(Championship.tag.lower() == tag.lower())
@@ -162,9 +182,7 @@ def fetch_driver_by_psn_id(db: DBSession, psn_id: str) -> Driver | None:
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
-def fetch_driver_by_telegram_id(
-    db: DBSession, telegram_id: str
-) -> Driver | None:
+def fetch_driver_by_telegram_id(db: DBSession, telegram_id: str) -> Driver | None:
     statement = select(Driver).where(Driver._telegram_id == str(telegram_id))  # type: ignore
     result = db.execute(statement).first()
     return result[0] if result else None
@@ -231,9 +249,7 @@ def fetch_protest(db: DBSession, protest_id: str) -> Protest | None:
         Protest | None: None if no matching protest_id was found in the database.
         Protest | None: None if no matching protest_id was found in the database.
     """
-    result = db.execute(
-        select(Protest).where(Protest.id == protest_id)
-    ).one_or_none()
+    result = db.execute(select(Protest).where(Protest.id == protest_id)).one_or_none()
     if result:
         return result[0]
     return None
@@ -258,9 +274,7 @@ def fetch_similar_driver(db: DBSession, psn_id: str) -> Driver | None:
     return None
 
 
-def fetch_last_protest_number(
-    db: DBSession, category_id: int, round_id: int
-) -> int:
+def fetch_last_protest_number(db: DBSession, category_id: int, round_id: int) -> int:
     """Gets the number of the last protest made in a specific category and round.
 
     Args:
@@ -601,9 +615,7 @@ def fetch_drivers(db: DBSession) -> list[Driver]:
     return [r[0] for r in result]
 
 
-def fetch_round_participants(
-    db: DBSession, round_id: int
-) -> list[RoundParticipant]:
+def fetch_round_participants(db: DBSession, round_id: int) -> list[RoundParticipant]:
     """Returns a list containing the participants to a particular round.
 
     Args:
