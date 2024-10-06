@@ -6,11 +6,11 @@ from typing import Any, cast
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-from schemas.standings import StandingsSchema
-from schemas.resultsfile import (
+from app.components.schemas.standings import StandingsSchema
+from app.components.schemas.resultsfile import (
     RaceRoomResultsSchema,
 )
-from schemas.protest import CreateProtestSchema
+from app.components.schemas.protest import CreateProtestSchema
 from models import (
     Category,
     Driver,
@@ -343,6 +343,7 @@ async def save_rre_results(db: DBSession, results: RaceRoomResultsSchema) -> Non
                     session=session,
                     round_id=current_round.id,
                     category_id=category.id,
+                    category=category,
                     gap_to_first=gap_to_pole,
                     laptime=laptime,
                     position=position,
@@ -357,18 +358,18 @@ async def save_rre_results(db: DBSession, results: RaceRoomResultsSchema) -> Non
                 QualifyingResult(
                     driver_id=driver.id,
                     driver=driver,
+                    category=category,
                     status=SessionCompletionStatus.dns,
                     round_id=current_round.id,
                     session=session,
                     category_id=category.id,
+
                 )
             )
 
-        db.add_all(qualifying_results)
-
     for i, race_data in enumerate(results.sessions[2:]):
         if current_round.has_sprint_race and i == 0:
-            session = Session, current_round.sprint_race
+            session = current_round.sprint_race
         else:
             session = current_round.long_race
 
@@ -409,25 +410,23 @@ async def save_rre_results(db: DBSession, results: RaceRoomResultsSchema) -> Non
                 status=status,
                 round_id=current_round.id,
                 session=session,
+                category=category,
                 category_id=category.id,
                 fastest_lap=player.rre_id == driver_with_fastest_lap,
             )
-
             races[session].append(race_result)
 
         for driver in remaining_drivers:
-            races[session].append(
-                RaceResult(
+            race_result = RaceResult(
                     driver_id=driver.id,
                     driver=driver,
                     status=SessionCompletionStatus.dns,
                     round_id=current_round.id,
                     session=session,
                     category_id=category.id,
+                    category=category
                 )
-            )
-
-        db.add_all(races[session])
+            races[session].append(race_result)
 
     current_round.is_completed = True
     save_results(db, qualifying_results, races)
