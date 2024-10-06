@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.schemas.info import SessionInfoSchema
+from app.components.schemas.info import SessionInfoSchema
 
 
 class RoundSchema(BaseModel):
