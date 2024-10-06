@@ -1086,6 +1086,7 @@ class Driver(Base):
     left_on: Mapped[datetime.date | None] = mapped_column(Date)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
+    rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     mu: Mapped[Decimal] = mapped_column(
         Numeric(precision=7, scale=5), nullable=False, default=25
     )
