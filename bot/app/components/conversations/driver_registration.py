@@ -41,7 +41,7 @@ async def driver_registration_entry_point(
 
     driver = get_driver(session, telegram_id=user.id)
     if not driver:
-        text = "Per registrarti scrivimi il tuo <i>PlayStation ID</i>:"
+        text = "Per registrarti, scrivimi il tuo <i>PSN ID</i>:"
         await update.message.reply_text(text)
     else:
         text = f"Sei già registrato/a come <code>{driver.psn_id}</code>, sei tu?"
@@ -85,18 +85,16 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Checks that no other user is registered to the requested psn_id
         if driver_obj.telegram_id:
             text = (
-                "Oh oh. Sembra che qualcuno si sia già registrato con questo ID.\n"
-                f"Se sei sicuro che {update.message.text} si tratti del tuo ID, contatta "
-                f"un amministratore per risolvere il problema."
+                "Oh oh.\nSembra che qualcuno si sia già registrato con questo ID.\n"
+                f"Se credi sia un errore, contatta un amministratore per risolvere il problema."
             )
         else:
             driver_obj.telegram_id = update.effective_user.id
             sqla_session.commit()
             text = (
                 "Ok!\n"
-                "In futuro potrai utilizzare il comando /stats per vedere le tue statistiche.\n"
-                "Al momento questa funzione non è disponibile, in quanto i dati che ho"
-                " a disposizione non sono sufficienti."
+                "Dopo le tue prime gare in RTI, sarai in grado di usare il comando /stats per "
+                "dare un'occhiata alle tue statistiche."
             )
         await update.message.reply_text(text)
         sqla_session.close()
@@ -106,7 +104,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if suggested_driver := get_similar_driver(sqla_session, psn_id=update.message.text):
         if not suggested_driver.telegram_id:
             user_data["suggested_driver"] = suggested_driver.psn_id
-            text = f'Ho trovato "<code>{suggested_driver.psn_id}</code>", sei tu?'
+            text = f'Ho trovato un ID simile: "<code>{suggested_driver.psn_id}</code>", sei tu?'
             reply_markup = InlineKeyboardMarkup(
                 [
                     [
@@ -143,7 +141,7 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         driver = cast(
             Driver, get_driver(sqla_session, psn_id=user_data["suggested_driver"])
         )
-        if driver.telegram_id:
+        if driver.telegram_id and driver.telegram_id != update.effective_user.id:
             text = (
                 "Oh oh. Sembra che qualcuno si sia già registrato con questo ID."
                 f"Se sei sicuro che {user_data['suggested_driver']} sia il tuo ID, "
@@ -164,7 +162,11 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         user_data.clear()
         return ConversationHandler.END
 
-    text = "Ok, se vuoi riprova digitando l'ID PSN, altrimenti /annulla."
+    text = (
+        "Ok, se vuoi riprova digitando l'ID PSN, altrimenti /annulla."
+        "potrebbe darsi che il tuo ID non sia stato ancora aggiunto nel nostro database"
+        " in questo caso prova a contattare un amministratore per fartelo aggiungere."
+    )
     await update.callback_query.edit_message_text(text)
     return CHECK_ID
 
