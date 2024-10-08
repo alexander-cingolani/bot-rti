@@ -129,6 +129,7 @@ async def update_championship(
     championship_tag: str,
     championship: ChampionshipSchema,
     current_user: Annotated[User, Depends(get_current_user)],
+    db: DBSession = Depends(get_db)
 ):
     """Updates the championship with the new information"""
     return
