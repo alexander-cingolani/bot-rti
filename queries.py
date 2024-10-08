@@ -255,9 +255,7 @@ def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_protest_number(
-    session: SQLASession, round_id: int
-) -> int:
+def get_last_protest_number(session: SQLASession, round_id: int) -> int:
     """Gets the number of the last protest made in a specific category and round.
 
     Args:
