@@ -1,7 +1,7 @@
 from datetime import timedelta
 import logging
 import os
-from typing import Annotated, Awaitable, Callable
+from typing import Annotated, Any, Awaitable, Callable
 
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -15,6 +15,7 @@ from queries import (
     fetch_protests,
     fetch_teams,
 )
+from starlette.middleware.base import BaseHTTPMiddleware
 from app.components.schemas.category import CategorySchema
 from app.components.schemas.championship import ChampionshipSchema
 from app.components.schemas.driver import DriverSchema
@@ -28,7 +29,6 @@ from app.components.schemas.session import SessionSchema
 from app.components.schemas.round import RoundSchema
 from app.components.schemas.token import TokenSchema
 from app.components.auth import (
-    User,
     authenticate_user,
     create_access_token,
     get_current_user,
@@ -71,7 +71,7 @@ app.add_middleware(
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 * 2 + 240  # 2 weeks and 4 hours
 DATABASE_URL = os.environ["DB_URL"]
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -88,11 +88,28 @@ async def db_session_middleware(
     return response
 
 
+class DBSessionMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Any):
+        response = None
+        try:
+            # Create a new database session and store it in request.state.db
+            request.state.db = SessionLocal()
+            response = await call_next(request)
+        finally:
+            # Close the session after the request is completed
+            request.state.db.close()
+
+        return response
+
+
+app.add_middleware(DBSessionMiddleware)
+
+
 def get_db(request: Request) -> DBSession:
     return request.state.db
 
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -118,7 +135,7 @@ async def read_championship(championship_tag: str, db: DBSession = Depends(get_d
 @app.post("/api-v2/championships/")
 async def create_championship(
     championship: ChampionshipSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return "api-v2/championships/championship-name"
@@ -128,8 +145,8 @@ async def create_championship(
 async def update_championship(
     championship_tag: str,
     championship: ChampionshipSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: DBSession = Depends(get_db)
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
+    db: DBSession = Depends(get_db),
 ):
     """Updates the championship with the new information"""
     return
@@ -138,7 +155,7 @@ async def update_championship(
 @app.delete("/api-v2/championships/{championship_tag}")
 async def delete_championship(
     championship_tag: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     """Deletes the specified championship."""
@@ -165,7 +182,7 @@ async def read_category(category_name: str, db: DBSession = Depends(get_db)):
 @app.post("/api-v2/championships/{championship_tag}/categories/")
 async def create_category(
     category: CategorySchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -175,7 +192,7 @@ async def create_category(
 async def edit_category(
     category_name: str,
     category: CategorySchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -184,7 +201,7 @@ async def edit_category(
 @app.delete("/api-v2/championships/{championship_tag}/categories/{category_name}")
 async def delete_category(
     category_name: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -209,7 +226,7 @@ async def read_round(round_id: int, db: DBSession = Depends(get_db)):
 @app.post("/api-v2/championships/{championship_tag}/categories/{category_name}/rounds/")
 async def create_round(
     round: RoundSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -221,7 +238,7 @@ async def create_round(
 async def edit_round(
     round_id: int,
     round: RoundSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -248,7 +265,7 @@ async def read_session(session_id: int, db: DBSession = Depends(get_db)):
 )
 async def create_session(
     session: SessionSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -260,7 +277,7 @@ async def create_session(
 async def edit_session(
     session_id: int,
     session: SessionSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -271,7 +288,7 @@ async def edit_session(
 )
 async def delete_session(
     session_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -298,7 +315,7 @@ async def read_race_result(race_result_id: int, db: DBSession = Depends(get_db))
 )
 async def create_race_result(
     race_result: RaceResultSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -310,7 +327,7 @@ async def create_race_result(
 async def edit_race_result(
     race_result_id: int,
     race_result: RaceResultSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -344,7 +361,7 @@ async def read_quali_result(quali_result_id: int, db: DBSession = Depends(get_db
 )
 async def create_quali_result(
     quali_result: QualifyingResultSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -356,7 +373,7 @@ async def create_quali_result(
 async def edit_quali_result(
     quali_result_id: int,
     quali_result: QualifyingResultSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -367,7 +384,7 @@ async def edit_quali_result(
 )
 async def delete_quali_result(
     quali_result_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -393,7 +410,7 @@ async def read_protest(protest_id: int, db: DBSession = Depends(get_db)):
     "/api-v2/championships/{championship_tag}/categories/{category_name}/rounds/{round_id}/protests/",
 )
 async def create_protest(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     protest: CreateProtestSchema,
     db: DBSession = Depends(get_db),
 ) -> FileResponse:
@@ -417,7 +434,7 @@ async def create_protest(
 async def edit_protest(
     protest_id: int,
     protest: ProtestSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -428,7 +445,7 @@ async def edit_protest(
 )
 async def delete_protest(
     protest_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -455,7 +472,7 @@ async def read_penalty(penalty_id: int, db: DBSession = Depends(get_db)):
 )
 async def create_penalty(
     penalty: PenaltySchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -467,7 +484,7 @@ async def create_penalty(
 async def edit_penalty(
     penalty_id: int,
     penalty: PenaltySchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -478,7 +495,7 @@ async def edit_penalty(
 )
 async def delete_penalty(
     penalty_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -503,7 +520,7 @@ async def read_team(team_id: int, db: DBSession = Depends(get_db)):
 @app.post("/api-v2/teams/")
 async def create_team(
     team: TeamSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -513,7 +530,7 @@ async def create_team(
 async def edit_team(
     team_id: int,
     team: EditTeamSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -522,7 +539,7 @@ async def edit_team(
 @app.delete("/api-v2/teams/{team_id}")
 async def delete_team(
     team_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -547,7 +564,7 @@ async def read_driver(driver_id: int, db: DBSession = Depends(get_db)):
 @app.post("/api-v2/drivers/")
 async def create_driver(
     driver: DriverSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
@@ -557,25 +574,28 @@ async def create_driver(
 async def edit_driver(
     driver_id: int,
     driver: DriverSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
-):  
+):
     return
 
 
 @app.delete("/api-v2/drivers/{driver_id}")
 async def delete_driver(
     driver_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     return
 
 
 @app.post("/api-v2/token", response_model=TokenSchema)
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: DBSession = Depends(get_db),
+):
     logger.info("login was called")
-    user = authenticate_user(form_data.username, form_data.password)
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -587,13 +607,14 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/api-v2/rre-results/", response_model=TokenSchema)
 async def upload_rre_results(
     results: RaceRoomResultsSchema,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
     db: DBSession = Depends(get_db),
 ):
     logger.info("upload_rre_results was called.")

@@ -3,12 +3,15 @@ import datetime as dt
 import os
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from jwt import InvalidTokenError
+from sqlalchemy.orm import Session as DBSession
+
+from queries import fetch_driver_by_email
 
 SECRET_KEY = os.environ.get("SECRET_API_KEY", "")
 USERNAME = os.environ.get("RRE_SERVER_USERNAME", "")
@@ -23,18 +26,8 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-
-class TokenData(BaseModel):
-    username: str
-
-
-class User(BaseModel):
-    username: str | None
-
-
-class UserInDB(User):
-    hashed_password: str
-
+def get_db(request: Request) -> DBSession:
+    return request.state.db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -52,15 +45,8 @@ def get_password_hash(password: str):
     return pwd_context.hash(password)
 
 
-def get_user(username: str):
-    return UserInDB(
-        username=username,
-        hashed_password=HASHED_USER_PASSWORD,
-    )
-
-
-def authenticate_user(username: str, password: str):
-    user = get_user(username)
+def authenticate_user(db: DBSession, username: str, password: str):
+    user = fetch_driver_by_email(db, username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -79,7 +65,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     return encoded_jwt
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DBSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -87,15 +73,15 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str | None = payload.get("sub")
-        if username is None:
+        email: str | None = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+
 
     except InvalidTokenError:
         raise credentials_exception
 
-    user = get_user(username=token_data.username)
+    user = fetch_driver_by_email(db, email=email)
 
     if not user:
         raise credentials_exception
