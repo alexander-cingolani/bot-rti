@@ -265,10 +265,7 @@ async def create_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_data.clear()
         return ConversationHandler.END
 
-    category = driver.current_category().category
-
-    if not category:
-        raise ValueError("Driver is not part of a category.")
+    category = championship_rounds[0].category
 
     championship_round = None
     for rnd in championship_rounds:
@@ -277,7 +274,7 @@ async def create_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             break
     else:
         raise ValueError(
-            "This shouldn't have happened. Driver got past category check."
+            "This shouldn't have happened. The current protesting round didn't match its category."
         )
 
     user_data["category"] = category
