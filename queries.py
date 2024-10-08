@@ -255,9 +255,7 @@ def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_protest_number(
-    session: SQLASession, category_id: int, round_id: int
-) -> int:
+def get_last_protest_number(session: SQLASession, round_id: int) -> int:
     """Gets the number of the last protest made in a specific category and round.
 
     Args:
@@ -270,7 +268,6 @@ def get_last_protest_number(
 
     result = session.execute(
         select(Protest)
-        .where(Protest.category_id == category_id)
         .where(Protest.round_id == round_id)
         .order_by(desc(Protest.number))
     ).first()
@@ -632,13 +629,6 @@ def delete_chat(session: SQLASession, chat_id: int):
     stmt = delete(Chat).where(Chat.id == chat_id)
     session.execute(stmt)
     session.commit()
-
-
-@cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
-def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
-    result = session.execute(select(Reprimand)).all()
-
-    return [r[0] for r in result]
 
 
 def update_participant_status(session: SQLASession, participant: RoundParticipant):
