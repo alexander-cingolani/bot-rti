@@ -7,13 +7,9 @@ from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine
 from queries import (
-    fetch_championship,
-    fetch_category,
+    fetch_championship_by_tag,
     fetch_championships,
-    fetch_drivers,
-    fetch_protest,
-    fetch_protests,
-    fetch_teams,
+
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.components.schemas.category import CategorySchema
@@ -129,7 +125,7 @@ async def read_championships(active: bool = False, db: DBSession = Depends(get_d
 
 @app.get("/api-v2/championships/{championship_tag}", response_model=ChampionshipSchema)
 async def read_championship(championship_tag: str, db: DBSession = Depends(get_db)):
-    return fetch_championship(db, championship_tag)
+    return fetch_championship_by_tag(db, championship_tag)
 
 
 @app.post("/api-v2/championships/")
@@ -415,7 +411,7 @@ async def create_protest(
     db: DBSession = Depends(get_db),
 ) -> FileResponse:
 
-    protest_document = await generate_protest_document(protest)
+    protest_document = await generate_protest_document(db, protest)
 
     if not protest.session_name in ("Qualifica", "Gara 1", "Gara 2", "Gara"):
         raise HTTPException(
@@ -619,7 +615,7 @@ async def upload_rre_results(
 ):
     logger.info("upload_rre_results was called.")
 
-    await save_rre_results(results)
+    await save_rre_results(db, results)
 
     access_token = create_access_token({"sub": current_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
