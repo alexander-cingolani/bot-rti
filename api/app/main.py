@@ -57,8 +57,8 @@ app = FastAPI()
 
 origin = r".*"
 
-app.mount("/images", StaticFiles(directory="/api-v2/app/public/images"), name="images")
-app.mount("/fonts", StaticFiles(directory="/api-v2/app/public/fonts"), name="fonts")
+app.mount("/images", StaticFiles(directory="/api/app/public/images"), name="images")
+app.mount("/fonts", StaticFiles(directory="/api/app/public/fonts"), name="fonts")
 
 app.add_middleware(
     CORSMiddleware,
