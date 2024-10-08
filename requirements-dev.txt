@@ -46,7 +46,7 @@ pyjwt==2.9.0
 pytesseract==0.3.10
 python-dotenv==1.0.1
 python-multipart==0.0.9
-python-telegram-bot==21.2
+python-telegram-bot==21.6
 pytz==2024.1
 pytz-deprecation-shim==0.1.0.post0
 PyYAML==6.0.1
