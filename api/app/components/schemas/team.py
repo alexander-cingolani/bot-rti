@@ -8,6 +8,7 @@ class EditTeamSchema(BaseModel):
 class TeamSchema(BaseModel):
     team_id: int
 
+
 class TeamStandingsSchema(BaseModel):
     points: int | float
     logo: str
