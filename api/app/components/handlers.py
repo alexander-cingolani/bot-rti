@@ -95,14 +95,14 @@ def get_categories(
     return categories
 
 
-def get_calendar(db: DBSession, category_id: int) -> CalendarSchema | None:
+def get_calendar(db: DBSession, category_id: int) -> list[RoundInfoSchema] | None:
 
     category = fetch_category(db, category_id=category_id)
 
     if not category:
         return
 
-    calendar = CalendarSchema(rounds=[])
+    calendar: list[RoundInfoSchema] = []
     for championship_round in category.rounds:
         if championship_round.sprint_race:
             info = [
@@ -126,7 +126,7 @@ def get_calendar(db: DBSession, category_id: int) -> CalendarSchema | None:
                 ),
             ]
 
-        calendar.rounds.append(
+        calendar.append(
             RoundInfoSchema(
                 circuit_logo=championship_round.circuit.logo_url,
                 circuit=championship_round.circuit.abbreviated_name,
@@ -168,7 +168,7 @@ def _create_driver_result_list(
 
 def get_standings_with_results(
     db: DBSession, category_id: int
-) -> StandingsSchema | None:
+) -> list[DriverSummary] | None:
 
     category = fetch_category(db, category_id=category_id)
     if not category:
@@ -176,7 +176,7 @@ def get_standings_with_results(
 
     results = category.standings_with_results()
 
-    standings = StandingsSchema(drivers=[])
+    standings:list[DriverSummary] = []
     if not results:
         for driver in category.active_drivers():
             team = driver.driver.current_team()
@@ -184,7 +184,7 @@ def get_standings_with_results(
             if not team:
                 team = driver.driver.contracts[-1].team
 
-            standings.drivers.append(
+            standings.append(
                 DriverSummary(
                     driver_id=driver.driver_id,
                     driver_name=driver.driver.abbreviated_name,
