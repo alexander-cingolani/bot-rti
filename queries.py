@@ -6,6 +6,7 @@ such as Protests, Categories and Drivers.
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
+import logging
 
 import sqlalchemy as sa
 import trueskill as ts
@@ -390,7 +391,8 @@ def save_results(
     """"""
 
     driver_points: defaultdict[Driver, float] = defaultdict(float)
-
+    category = qualifying_results[0].category
+    
     # Calculates points earned in qualifying by each driver.
     db.add_all(qualifying_results)
     for quali_result in qualifying_results:
@@ -399,8 +401,26 @@ def save_results(
 
         # Should never be None, since every driver who takes part in a race/qualifying session
         # must also be part of a team.
-        team_championship: TeamChampionship = quali_result.driver.current_team().current_championship()  # type: ignore
-        team_championship.points += points_earned
+        team = quali_result.driver.current_team()
+
+        if team is None:
+            logging.error(
+                "Driver {d} is not associated with a category".format(
+                    quali_result.driver.id
+                )
+            )
+            raise ValueError(
+                "Driver {d} is not associated with a category".format(
+                    quali_result.driver.id
+                )
+            )
+
+        for team_championship in team.championships:
+            if team_championship.championship_id == category.championship_id:
+                team_championship.points += float(points_earned)
+                break
+
+
 
     # Calculates points earned across all race sessions by each driver.
     for _, race_results in races.items():
@@ -410,12 +430,26 @@ def save_results(
             points_earned = race_result.points_earned
             driver_points[race_result.driver] += points_earned
 
-            current_team = race_result.driver.current_team()
+            team = race_result.driver.current_team()
+            if team is None:
+                logging.error(
+                    "Driver {d} is not associated with a category".format(
+                        race_result.driver.id
+                    )
+                )
+                raise ValueError(
+                    "Driver {d} is not associated with a category".format(
+                        race_result.driver.id
+                    )
+                )
 
-            team_championship: TeamChampionship = (
-                current_team.current_championship()  #  type: ignore
-            )
-            team_championship.points += float(points_earned)
+            for team_championship in team.championships:
+                if (
+                    team_championship.championship_id
+                    == category#.championship_id
+                ):
+                    team_championship.points += float(points_earned)
+                    break
 
     drivers = qualifying_results[0].category.drivers
 
@@ -425,11 +459,11 @@ def save_results(
 
     # Remaining drivers are reserves who are covering in this category for the first time
     if driver_points:
-        current_category = qualifying_results[0].category
+        category = qualifying_results[0].category
         for driver, points in driver_points.items():
             dc = DriverCategory(
                 driver=driver,
-                category=current_category,
+                category=category,
                 race_number=0,
                 points=points,
             )
@@ -519,6 +553,7 @@ def save_and_apply_penalty(db: DBSession, penalty: Penalty) -> None:
                 ):
                     race_result.total_racetime += penalty.time_penalty  # type: ignore
                     penalised_race_result = race_result
+                    break
 
         elif penalty.session.name in ("Gara", "Gara 2"):
             category = penalty.category
@@ -547,16 +582,32 @@ def save_and_apply_penalty(db: DBSession, penalty: Penalty) -> None:
         driver = race_result.driver
 
         driver_category: DriverCategory = driver.current_category()  # type: ignore
-        team: TeamChampionship = driver.current_team().current_championship()  # type: ignore
 
+        team = driver.current_team()
+
+        if team is None:
+            logging.error(
+                "Driver {d} is not associated with a category".format(
+                    race_result.driver.id
+                )
+            )
+            raise ValueError(
+                "Driver {d} is not associated with a category".format(
+                    race_result.driver.id
+                )
+            )
         drivers.append(driver_category)
 
-        driver_category.points -= driver_points[driver]
-        team.points -= driver_points[driver]
+        for team_championship in team.championships:
+            if team_championship.championship_id == driver_category.driver_id:
 
-        points_earned = race_result.points_earned
-        driver_category.points += points_earned
-        team.points += points_earned
+                driver_category.points -= driver_points[driver]
+                team_championship.points -= driver_points[driver]
+
+                points_earned = race_result.points_earned
+                driver_category.points += points_earned
+                team_championship.points += points_earned
+                break
 
     drivers.sort(key=lambda d: d.points, reverse=True)
 
