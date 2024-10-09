@@ -176,7 +176,7 @@ def get_standings_with_results(
 
     results = category.standings_with_results()
 
-    standings:list[DriverSummary] = []
+    standings: list[DriverSummary] = []
     if not results:
         for driver in category.active_drivers():
             team = driver.driver.current_team()
