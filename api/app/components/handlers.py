@@ -10,14 +10,12 @@ from sqlalchemy.orm import Session as DBSession
 from app.components.schemas.team import TeamStandingsSchema
 from app.components.schemas.category import CategorySchema
 from app.components.schemas.calendar import (
-    CalendarSchema,
     RoundInfoSchema,
     SessionInfoSchema,
 )
 from app.components.schemas.standings import (
     DriverStandingsResultInfo,
     DriverSummary,
-    StandingsSchema,
 )
 from app.components.schemas.resultsfile import (
     RaceRoomResultsSchema,
@@ -209,7 +207,7 @@ def get_standings_with_results(
             team=team.name,
             info=_create_driver_result_list(driver_results),
         )
-        standings.drivers.append(driver_summary)
+        standings.append(driver_summary)
 
     return standings
 
@@ -847,6 +845,4 @@ async def generate_protest_document_old(
     return protest_document.generate_document()
 
 
-async def fetch_standings(
-    db: DBSession, championship_tag: str | None
-) -> list[StandingsSchema]: ...
+async def fetch_standings(db: DBSession, championship_tag: str | None): ...
