@@ -11,7 +11,3 @@ class RoundInfoSchema(BaseModel):
     circuit_logo: str
     circuit: str
     info: list[SessionInfoSchema]
-
-
-class CalendarSchema(BaseModel):
-    rounds: list[RoundInfoSchema]

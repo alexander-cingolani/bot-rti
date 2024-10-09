@@ -14,7 +14,3 @@ class DriverSummary(BaseModel):
     points: float | int
     team: str
     info: list[DriverStandingsResultInfo]
-
-
-class StandingsSchema(BaseModel):
-    drivers: list[DriverSummary]

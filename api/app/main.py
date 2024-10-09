@@ -6,8 +6,8 @@ from typing import Annotated, Any, Awaitable, Callable
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine
-from app.components.schemas.calendar import CalendarSchema
-from app.components.schemas.standings import StandingsSchema
+from app.components.schemas.calendar import RoundInfoSchema
+from app.components.schemas.standings import DriverSummary
 from queries import (
     fetch_championship_by_tag,
     fetch_championships,
@@ -652,12 +652,12 @@ async def categories(championship_id: int = Form(), db: DBSession = Depends(get_
     return get_categories(db, championship_id)
 
 
-@app.post("/api/calendar", response_model=CalendarSchema)
+@app.post("/api/calendar", response_model=list[RoundInfoSchema])
 async def calendar(category_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_calendar(db, int(category_id))
 
 
-@app.post("/api/standings", response_model=StandingsSchema)
+@app.post("/api/standings", response_model=list[DriverSummary])
 async def standings(category_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_standings_with_results(db, int(category_id))
 
