@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image, ImageFilter
 from pytesseract import image_to_string  # type: ignore
 
-from models import DriverCategory
+from models import DriverCategory, SessionCompletionStatus
 
 LEFT_1, RIGHT_1 = 410 * 3, 580 * 3
 LEFT_2, RIGHT_2 = 1320 * 3, 1405 * 3
@@ -33,11 +33,17 @@ class Result:
             return f"(driver_name={self.driver.driver.psn_id_or_full_name}, position={self.position})"
         return f"(driver_name=None, position={self.position})"
 
-    def __init__(self, driver: DriverCategory, seconds: int | None):
+    def __init__(
+        self,
+        driver: DriverCategory,
+        seconds: int | None,
+        status: SessionCompletionStatus = SessionCompletionStatus.dns,
+    ):
         self.driver = driver
         self.seconds = seconds
         self.position = 0
         self.fastest_lap = False
+        self.status = status
 
     def __hash__(self) -> int:
         return hash(str(self))
@@ -94,8 +100,9 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
 
         if driver_name:
             driver_category = driver_map.pop(driver_name)
-            seconds = string_to_seconds(gap)
-            result = Result(driver_category, seconds)
+            seconds, status = string_to_seconds(gap)
+
+            result = Result(driver_category, seconds, status)
             results.append(result)
 
     # Add unrecognized drivers to the results list.
@@ -153,7 +160,7 @@ def image_to_results(
         driver_psn_id: str = image_to_string(name_box).strip()
 
         seconds_str: str = image_to_string(laptime_box)
-        seconds = string_to_seconds(seconds_str)
+        seconds, status = string_to_seconds(seconds_str)
         matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0)
 
         if matches and len(driver_psn_id) >= 3:
@@ -178,7 +185,7 @@ def results_to_text(results: list[Result]) -> str:
         if result.seconds:
             gap = seconds_to_text(result.seconds)
         else:
-            gap = "ASSENTE"
+            gap = result.status.value
 
         if result.driver:
             driver_name = result.driver.driver.psn_id_or_full_name.replace(" ", "")
@@ -206,28 +213,26 @@ def seconds_to_text(seconds: int) -> str:
     )
 
 
-def string_to_seconds(string: str) -> int | None:
+def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
-    None is returned when the driver did not finish the race
-
-    Returns:
-        float: Number of seconds.
+    SessionCompletionsStatus.dnf, dns or dsq is returne when one of those values is
+    entered by the user.
+    None is returned if the user didn't input anything, and the driver probably didn't
+    complete the race.
     """
+    string = string.lower()
     match = re.search(
         r"([0-9]{1,2}:)?([0-9]{1,2}:){0,2}[0-9]{1,2}(\.|,)[0-9]{1,3}", string
     )
     if not match:
-        if (
-            "gir" in string
-            or "gar" in string
-            or "/" == string
-            or "1" in string
-            or "2" in string
-        ):
-            return 0
-        # if string is equals to "ASSENTE" None is retured.
-        return None
+        if string == "dns":
+            return None, SessionCompletionStatus.dns
+        if string == "dnf":
+            return None, SessionCompletionStatus.dnf
+        if string == "dsq":
+            return None, SessionCompletionStatus.dsq
+        return None, SessionCompletionStatus.dnf
 
     matched_string = match.group(0)
     matched_string = matched_string.replace(",", ".")
@@ -243,9 +248,9 @@ def string_to_seconds(string: str) -> int | None:
     elif "." in matched_string:
         t = datetime.strptime(matched_string, "%S.%f").time()
     else:
-        return int(matched_string * 1000)
+        return int(matched_string * 1000), SessionCompletionStatus.finished
 
     seconds = (t.hour * 60 + t.minute) * 60 + t.second
     decimal_part = t.microsecond / 1_000_000
 
-    return int((seconds + decimal_part) * 1000)
+    return int((seconds + decimal_part) * 1000), SessionCompletionStatus.finished
