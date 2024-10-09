@@ -58,12 +58,12 @@ from telegram.ext import (
 from models import Chat, Driver, Participation, RoundParticipant
 from queries import (
     delete_chat,
-    get_admins,
-    get_all_drivers,
-    get_championship,
-    get_driver,
-    get_participants_from_round,
-    get_team_leaders,
+    fetch_admins,
+    fetch_driver_by_telegram_id,
+    fetch_drivers,
+    fetch_championship,
+    fetch_round_participants,
+    fetch_team_leaders,
     update_participant_status,
 )
 
@@ -87,8 +87,8 @@ session = DBSession()
 
 async def set_commands(application: Application) -> None:
     session = DBSession()
-    leaders = get_team_leaders(session)
-    admins = get_admins(session)
+    leaders = fetch_team_leaders(session)
+    admins = fetch_admins(session)
     session.close()
 
     # Set private chat commands for regular drivers.
@@ -226,7 +226,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     user = update.effective_user
-    driver = get_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, user.id)
     if not driver:
         website_link = "<a href='https://racingteamitalia.it/'>Racing Team Italia</a>"
         await chat.send_message(
@@ -265,7 +265,7 @@ async def greet_new_chat_members(
             return
 
         session = DBSession()
-        driver = get_driver(session, telegram_id=user.id)
+        driver = fetch_driver_by_telegram_id(session, user.id)
         session.close()
 
         if not driver:
@@ -304,7 +304,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "e <i>classifiche</i> dei nostri campionati."
     )
 
-    driver = get_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, user.id)
     if not driver:
         website_link = "<a href='https://racingteamitalia.it/#user-registration-form-1115'>sito</a>"
         instagram_link = "<a href='https://www.instagram.com/rti_racingteamitalia/'>rti_racingteamitalia</a>"
@@ -350,7 +350,7 @@ async def next_event(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     session = DBSession()
     user = update.effective_user
-    driver = get_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, telegram_id=user.id)
 
     if not driver:
         message = (
@@ -383,7 +383,7 @@ async def inline_query_driver_search(
     query = update.inline_query.query.lower()
     session = DBSession()
     results: list[InlineQueryResultArticle] = []
-    championship = get_championship(session)
+    championship = fetch_championship(session)
 
     if not championship:
         return
@@ -417,7 +417,7 @@ async def championship_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     """
     session = DBSession()
     user = update.effective_user
-    user_driver = get_driver(session, telegram_id=user.id)
+    user_driver = fetch_driver_by_telegram_id(session, user.id)
     if not user_driver:
         await update.message.reply_text(
             "Per usare questa funzione devi essere registrato.\n"
@@ -463,12 +463,12 @@ async def complete_championship_standings(
     the current championship standings for the category the user is in.
     """
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
-    user_driver = get_driver(session=sqla_session, telegram_id=update.effective_user.id)
+    championship = fetch_championship(sqla_session)
+    user_driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not championship:
         return
 
-    message = f"<b>CLASSIFICHE #{championship.abbreviated_name}</b>"
+    message = f"<b>CLASSIFICHE #{championship.tag}</b>"
     if not championship:
         await update.message.reply_text("Il campionato è finito.")
         sqla_session.close()
@@ -510,16 +510,16 @@ async def constructors_standings(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     who called this function is highlighted in bold."""
 
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         return
 
-    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
 
     teams = sorted(championship.teams, key=lambda t: t.points, reverse=True)
 
-    message = f"<b>CLASSIFICA COSTRUTTORI #{championship.abbreviated_name}</b>\n\n"
+    message = f"<b>CLASSIFICA COSTRUTTORI #{championship.tag}</b>\n\n"
     for pos, team in enumerate(teams, start=1):
         if driver:
             current_team = driver.current_team()
@@ -538,7 +538,7 @@ async def last_race_results(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
 
     sqla_session = DBSession()
     user = update.effective_user
-    driver = get_driver(sqla_session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, user.id)
 
     if not driver:
         await update.message.reply_text(
@@ -580,7 +580,7 @@ async def complete_last_race_results(
     round in each category of the current championship."""
 
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
     message = ""
 
     if not championship:
@@ -612,7 +612,7 @@ async def announce_protests(context: ContextTypes.DEFAULT_TYPE) -> None:
     has opened for a specific category.
     """
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         sqla_session.close()
@@ -623,7 +623,7 @@ async def announce_protests(context: ContextTypes.DEFAULT_TYPE) -> None:
             text = (
                 f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
                 f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
-                f"#{championship.abbreviated_name}Tappa{rnd.number}"
+                f"#{championship.tag}Tappa{rnd.number}"
                 f" #{rnd.category.tag}"
             )
 
@@ -639,7 +639,7 @@ async def close_protest_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     """
 
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if championship:
         if rounds := championship.protesting_rounds():
@@ -672,7 +672,7 @@ async def send_participants_list(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     sqla_session = DBSession()
 
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
     chat_data = cast(dict[str, Any], context.chat_data)
     chat_data["participants_list_sqlasession"] = sqla_session
 
@@ -751,7 +751,7 @@ async def update_participants_list(
     if not session:
         session = DBSession()
 
-    championship = get_championship(session)
+    championship = fetch_championship(session)
     if not championship:
         await update.callback_query.answer(
             "Il campionato a cui è legata questa lista è terminato.",
@@ -772,7 +772,7 @@ async def update_participants_list(
         return
 
     if not chat_data.get("participants"):
-        participants = get_participants_from_round(session, rnd.id)
+        participants = fetch_round_participants(session, rnd.id)
         participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
@@ -785,7 +785,9 @@ async def update_participants_list(
     if not chat_data.get("participants_list_message"):
         chat_data["participants_list_message"] = update.message
 
-    driver: Driver | None = get_driver(session, telegram_id=update.effective_user.id)
+    driver: Driver | None = fetch_driver_by_telegram_id(
+        session, telegram_id=update.effective_user.id
+    )
     if not driver:
         await update.callback_query.answer(
             "Non ti sei ancora registrato! Puoi farlo tramite il comando /registrami in privato.",
@@ -871,7 +873,7 @@ async def participants_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> None
         session = DBSession()
 
     if not chat_data.get("participants"):
-        championship = get_championship(session)
+        championship = fetch_championship(session)
         if not championship:
             return
 
@@ -882,7 +884,7 @@ async def participants_list_reminder(context: ContextTypes.DEFAULT_TYPE) -> None
         rnd = category.next_round()
         if not rnd:
             return
-        participants = get_participants_from_round(session, rnd.id)
+        participants = fetch_round_participants(session, rnd.id)
         participants.sort(key=lambda p: p.driver.full_name.lower())
         chat_data["participants"] = participants
 
@@ -919,7 +921,7 @@ async def calendar(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the list of rounds yet to be completed in the user's category.
     This command is only available for registered and currently active users."""
     session = DBSession()
-    driver = get_driver(session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(session, update.effective_user.id)
 
     message = ""
 
@@ -969,7 +971,9 @@ async def non_existant_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> 
 async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     sqla_session = DBSession()
 
-    if not (driver := get_driver(sqla_session, telegram_id=update.effective_user.id)):
+    if not (
+        driver := fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
+    ):
         await update.message.reply_text(
             "Per usare questo comando occorre prima essersi registrati."
         )
@@ -981,7 +985,7 @@ async def user_stats(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 async def top_ten(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a list containing the top 10 drivers by rating."""
     session = DBSession()
-    drivers = get_all_drivers(session)
+    drivers = fetch_drivers(session)
 
     drivers.sort(key=lambda d: d.rating, reverse=True)
 

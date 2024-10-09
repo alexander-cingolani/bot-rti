@@ -26,11 +26,11 @@ from telegram.ext import (
 
 from models import Category, Driver, Penalty, Protest
 from queries import (
-    get_championship,
-    get_driver,
-    get_last_penalty_number,
-    get_protests,
-    get_reprimand_types,
+    fetch_championship,
+    fetch_driver_by_telegram_id,
+    fetch_last_penalty_number,
+    fetch_protests,
+    fetch_reprimand_types,
     save_and_apply_penalty,
 )
 
@@ -59,7 +59,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Allows admins to create penalties without a pre-existing protest made by a leader."""
 
     sqla_session = DBSession()
-    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             text="Non hai il permesso per usare questa funzione."
@@ -75,7 +75,7 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
 
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
     if not championship:
         sqla_session.close()
         user_data.clear()
@@ -152,7 +152,7 @@ async def ask_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             int(update.callback_query.data.removeprefix("R"))
         ]
         penalty.number = (
-            get_last_penalty_number(
+            fetch_last_penalty_number(
                 sqla_session,
                 round_id=penalty.round_id,
             )
@@ -276,12 +276,11 @@ async def protest_processing_entry_point(
     after the /start_reviewing command is issued."""
 
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
 
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = sqla_session
 
-    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             text="Non hai il permesso per usare questa funzione."
@@ -294,7 +293,7 @@ async def protest_processing_entry_point(
         )
         return ConversationHandler.END
 
-    protests = get_protests(sqla_session, is_reviewed=False)
+    protests = fetch_protests(sqla_session, is_reviewed=False)
 
     if not protests:
         text = "Non ci sono segnalazioni da processare."
@@ -367,7 +366,7 @@ async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         penalty = Penalty.from_protest(protest)
 
         penalty.number = (
-            get_last_penalty_number(
+            fetch_last_penalty_number(
                 sqla_session,
                 round_id=penalty.round.id,
             )
@@ -514,7 +513,7 @@ async def ask_reprimand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         user_data["point_penalty_text"] = f"Sottratti {points} punti in campionato"
 
     text = "Se data, seleziona la reprimenda:"
-    reprimand_types = get_reprimand_types(sqla_session)
+    reprimand_types = fetch_reprimand_types(sqla_session)
     user_data["reprimand_types"] = {r.id: r for r in reprimand_types}
     buttons: list[list[InlineKeyboardButton]] = []
     for reprimand in reprimand_types:

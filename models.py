@@ -85,6 +85,7 @@ class Championship(Base):
         Date, nullable=False, default=datetime.datetime.now().date()
     )
     end: Mapped[datetime.date | None] = mapped_column(Date)
+    tag: Mapped[str] = mapped_column(String(7))
 
     categories: Mapped[list[Category]] = relationship(
         back_populates="championship", order_by="Category.id"
@@ -121,14 +122,6 @@ class Championship(Base):
             if not rnd.is_completed:
                 rounds.append(rnd)
         return rounds
-
-    @property
-    def abbreviated_name(self) -> str:
-        """Short version of the championship's name created by taking the first letter
-        of each word in it.
-        E.G. "eSports Championship 1" -> "EC1"
-        """
-        return "".join(i[0] for i in self.name.split()).upper()
 
     @property
     def driver_list(self) -> list[Driver]:
@@ -1087,9 +1080,13 @@ class Driver(Base):
     id: Mapped[int] = mapped_column("driver_id", SmallInteger, primary_key=True)
     name: Mapped[str | None] = mapped_column(String(30))
     surname: Mapped[str | None] = mapped_column(String(30))
-    rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
+    email: Mapped[str | None] = mapped_column(String(320))
+    hashed_password: Mapped[str] = mapped_column(String)
+    joined_on: Mapped[datetime.date | None] = mapped_column(Date)
+    left_on: Mapped[datetime.date | None] = mapped_column(Date)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     psn_id: Mapped[str | None] = mapped_column(String(16), unique=True)
+    rre_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     mu: Mapped[Decimal] = mapped_column(
         Numeric(precision=7, scale=5), nullable=False, default=25
     )
@@ -1258,7 +1255,17 @@ class Driver(Base):
     @property
     def is_active(self) -> bool:
         """A driver is considered active if he is currently competing in a championship."""
-        return not self.categories[-1].left_on
+        if self.categories:
+            return not self.categories[-1].left_on
+        return False
+
+    @property
+    def is_current_member(self) -> bool:
+        if not self.left_on:
+            return True
+        elif self.left_on < datetime.datetime.now().date():
+            return False
+        return False
 
     @cached(cache=TTLCache(maxsize=50, ttl=240))  # type: ignore
     def stats(self) -> dict[str, int | float]:

@@ -4,6 +4,7 @@ such as Protests, Categories and Drivers.
 """
 
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -11,7 +12,7 @@ import trueskill as ts
 from cachetools import TTLCache, cached
 from sqlalchemy import delete, desc, select, update
 from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.orm import Session as SQLASession
+from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.orm import joinedload
 
 from models import (
@@ -39,13 +40,13 @@ TrueSkillEnv = ts.TrueSkill(
 )
 
 
-def get_championship(
-    session: SQLASession, championship_id: int | None = None
+def fetch_championship(
+    db: DBSession, championship_id: int | None = None
 ) -> Championship | None:
     """If not given a championship_id, returns the most recent one.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         championship_id (int, optional): ID of the championship to retrieve.
             Defaults to None.
 
@@ -59,27 +60,56 @@ def get_championship(
     else:
         statement = select(Championship).order_by(desc(Championship.start))
 
-    result = session.execute(statement).first()
+    result = db.execute(statement).first()
     if result:
         return result[0]
     return None
 
 
-def get_team_leaders(
-    session: SQLASession, championship_id: int | None = None
+def fetch_championships(db: DBSession, active: bool | None) -> list[Championship]:
+    statement = select(Championship)
+    if active is None:
+        pass
+    elif active:
+        statement.where(Championship.end.is_(None)).where(
+            Championship.end > datetime.now().date()
+        )
+    else:
+        statement.where(Championship.end.isnot(None)).where(
+            Championship.end < datetime.now().date()
+        )
+
+    result = db.execute(statement).all()
+
+    if result:
+        return [row[0] for row in result]
+    return []
+
+
+def fetch_championship_by_tag(db: DBSession, tag: str) -> Championship | None:
+    statement = select(Championship).where(Championship.tag.lower() == tag.lower())
+    result = db.execute(statement).one_or_none()
+
+    if result:
+        return result[0]
+    return None
+
+
+def fetch_team_leaders(
+    db: DBSession, championship_id: int | None = None
 ) -> list[Driver]:
     """Returns a list of the team leaders in the championship specified by championship_id.
     If championship_id is not given, the function defaults to the latest championship.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         championship_id (int, optional): _description_. Defaults to None.
 
     Returns:
         list[Driver]: List of drivers who were team leaders in the championship.
     """
     if not championship_id:
-        championship = get_championship(session)
+        championship = fetch_championship(db)
         if championship:
             championship_id = championship.id
         else:
@@ -94,28 +124,28 @@ def get_team_leaders(
         .where(TeamChampionship.championship_id == championship_id)
     )
 
-    result = session.execute(statement).all()
+    result = db.execute(statement).all()
     if result:
         return [row[0] for row in result]
     return []
 
 
-def get_admins(session: SQLASession) -> list[Driver]:
+def fetch_admins(db: DBSession) -> list[Driver]:
     statement = (
         select(Driver)
         .join(DriverRole, Driver.id == DriverRole.driver_id)
         .where(DriverRole.role_id == 4)
     )
 
-    result = session.execute(statement).all()
+    result = db.execute(statement).all()
 
     if result:
         return [row[0] for row in result]
     return []
 
 
-def get_protests(
-    session: SQLASession,
+def fetch_protests(
+    db: DBSession,
     round_id: int | None = None,
     is_reviewed: bool | None = None,
 ) -> list[Protest]:
@@ -132,7 +162,7 @@ def get_protests(
     if is_reviewed is not None:
         statement = statement.where(Protest.is_reviewed == is_reviewed)
 
-    result = session.execute(statement.order_by(Protest.number)).all()
+    result = db.execute(statement.order_by(Protest.number)).all()
     protests: list[Protest] = [res[0] for res in result]
 
     protests.sort(key=lambda r: r.round.date)
@@ -140,60 +170,51 @@ def get_protests(
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
-def get_driver(
-    session: SQLASession,
-    psn_id: str | None = None,
-    telegram_id: int | str | None = None,
-    rre_id: str | None = None,
-    discord_id: int | None = None,
-) -> Driver | None:
-    """Retrieves a single Driver object from the database given his PSN or Telegram id.
-    Either psn_id or telegram are optional, but at least one must be given.
-    Args:
-        session (SQLASession): Session to execute the query with.
-        psn_id (str, optional): Driver's PSN ID. Defaults to None.
-        telegram_id (str, optional): Driver's Telegram ID. Defaults to None.
+def fetch_driver_by_psn_id(db: DBSession, psn_id: str) -> Driver | None:
 
-    Returns:
-        Driver | None: None if no driver/multiple drivers matching the given ID were found.
-    """
-    statement = select(Driver)
-    if psn_id:
-        statement = statement.where(Driver.psn_id == psn_id)
-    elif telegram_id:
-        statement = statement.where(Driver._telegram_id == str(telegram_id))  # type: ignore
-    elif rre_id:
-        statement = statement.where(Driver.rre_id == rre_id)
-    elif discord_id:
-        statement = statement.where(Driver.discord_id == discord_id)
-    else:
-        raise ValueError("No search criteria given.")
-
+    statement = select(Driver).where(Driver.psn_id == psn_id)
     try:
-        result = session.execute(statement).one_or_none()
+        result = db.execute(statement).one_or_none()
     except MultipleResultsFound:
         return None
 
     return result[0] if result else None
 
 
-def get_drivers(session: SQLASession):
-    statement = select(Driver)
-    result = session.execute(statement).all()
-
-    drivers: list[Driver] = []
-    if result:
-        for row in result:
-            drivers.append(row[0])
-    return drivers
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_telegram_id(db: DBSession, telegram_id: str) -> Driver | None:
+    statement = select(Driver).where(Driver._telegram_id == str(telegram_id))  # type: ignore
+    result = db.execute(statement).first()
+    return result[0] if result else None
 
 
-def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_rre_id(db: DBSession, rre_id: int) -> Driver | None:
+    statement = select(Driver).where(Driver.rre_id == rre_id)
+    result = db.execute(statement).first()
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_discord_id(db: DBSession, discord_id: int) -> Driver | None:
+    statement = select(Driver).where(Driver.discord_id == discord_id)
+    result = db.execute(statement).first()
+    return result[0] if result else None
+
+
+@cached(cache=TTLCache(maxsize=50, ttl=30))  # type: ignore
+def fetch_driver_by_email(db: DBSession, email: str) -> Driver | None:
+    statement = select(Driver).where(Driver.email == email)
+    result = db.execute(statement).first()
+    return result[0] if result else None
+
+
+def fetch_teams(db: DBSession, championship_id: int) -> list[Team]:
     """Returns the list of teams participating to the given championship, ordered by
     championship position.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         championship_id (int): ID of the championship to get the teams of.
 
     Returns:
@@ -207,8 +228,8 @@ def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
         .order_by(desc(TeamChampionship.points))
     )
 
-    result = session.execute(statement).all()
-    session.commit()
+    result = db.execute(statement).all()
+    db.commit()
 
     teams: list[Team] = []
     if result:
@@ -217,36 +238,34 @@ def get_teams(session: SQLASession, championship_id: int) -> list[Team]:
     return teams
 
 
-def get_protest(session: SQLASession, protest_id: str) -> Protest | None:
+def fetch_protest(db: DBSession, protest_id: str) -> Protest | None:
     """Returns the protest matching the given protest_id.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         protest_id (int): ID of the protest to fetch.
 
     Returns:
         Protest | None: None if no matching protest_id was found in the database.
         Protest | None: None if no matching protest_id was found in the database.
     """
-    result = session.execute(
-        select(Protest).where(Protest.id == protest_id)
-    ).one_or_none()
+    result = db.execute(select(Protest).where(Protest.id == protest_id)).one_or_none()
     if result:
         return result[0]
     return None
 
 
-def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
+def fetch_similar_driver(db: DBSession, psn_id: str) -> Driver | None:
     """Returns the Driver object with a psn_id similar to the one given.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         psn_id (str): ID to search for.
 
     Returns:
         Driver | None: None if no driver with a psn_id similar enough was found.
     """
-    result = session.execute(
+    result = db.execute(
         select(Driver).where(sa.func.similarity(Driver.psn_id, psn_id) > 0.4)
     ).first()
 
@@ -255,7 +274,7 @@ def get_similar_driver(session: SQLASession, psn_id: str) -> Driver | None:
     return None
 
 
-def get_last_protest_number(session: SQLASession, round_id: int) -> int:
+def fetch_last_protest_number(db: DBSession, category_id: int, round_id: int) -> int:
     """Gets the number of the last protest made in a specific category and round.
 
     Args:
@@ -266,7 +285,7 @@ def get_last_protest_number(session: SQLASession, round_id: int) -> int:
         int: Number of the last protest made in the given round.
     """
 
-    result = session.execute(
+    result = db.execute(
         select(Protest)
         .where(Protest.round_id == round_id)
         .order_by(desc(Protest.number))
@@ -277,18 +296,18 @@ def get_last_protest_number(session: SQLASession, round_id: int) -> int:
     return 0
 
 
-def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
+def fetch_last_penalty_number(db: DBSession, round_id: int) -> int:
     """Returns the last penalty number for any given round.
     0 is returned if no penalties have been applied in that round.
 
     Args:
-        session (SQLASession): Session to execute the query from.
+        db (DBSession): Session to execute the query from.
         round_id (int): ID of the round in which you're looking for the
             last penalty number.
     Returns:
         int: 0 if no penalties have been applied yet in that round.
     """
-    result = session.execute(
+    result = db.execute(
         select(Penalty.number)
         .where(Penalty.round_id == round_id)
         .order_by(desc(Penalty.number))
@@ -299,18 +318,18 @@ def get_last_penalty_number(session: SQLASession, round_id: int) -> int:
     return 0
 
 
-def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
+def save_qualifying_penalty(db: DBSession, penalty: Penalty) -> None:
     """Saves a protest and applies the penalties inside it (if any)
     modifying the results of the session the penalty is referred to.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         penalty (Penalty): Penalty object to persist to the database.
 
     Raises:
         ValueError: Raised when the qualifying result record couldn't be found.
     """
-    result = session.execute(
+    result = db.execute(
         select(QualifyingResult)
         .where(QualifyingResult.driver_id == penalty.driver_id)
         .where(QualifyingResult.session_id == penalty.session_id)
@@ -320,8 +339,8 @@ def save_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
         raise ValueError("QualifyingResult not in database.")
 
     # penalty.protested_driver_id = penalty.driver.driver_id
-    session.add(penalty)
-    session.commit()
+    db.add(penalty)
+    db.commit()
 
 
 def _update_ratings(results: list[RaceResult]) -> None:
@@ -344,9 +363,9 @@ def _update_ratings(results: list[RaceResult]) -> None:
         result.sigma = result.driver.sigma = Decimal(str(rating_group[0].sigma))
 
 
-def reverse_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
+def reverse_qualifying_penalty(db: DBSession, penalty: Penalty) -> None:
     """Reverses a qualifying penalty."""
-    result = session.execute(
+    result = db.execute(
         select(QualifyingResult)
         .where(QualifyingResult.driver_id == penalty.driver_id)
         .where(QualifyingResult.session_id == penalty.session_id)
@@ -360,11 +379,11 @@ def reverse_qualifying_penalty(session: SQLASession, penalty: Penalty) -> None:
             driver_category.licence_points += penalty.licence_points
             driver_category.warnings -= penalty.warnings
 
-    session.commit()
+    db.commit()
 
 
 def save_results(
-    sqla_session: SQLASession,
+    db: DBSession,
     qualifying_results: list[QualifyingResult],
     races: dict[Session, list[RaceResult]],
 ) -> None:
@@ -373,7 +392,7 @@ def save_results(
     driver_points: defaultdict[Driver, float] = defaultdict(float)
 
     # Calculates points earned in qualifying by each driver.
-    sqla_session.add_all(qualifying_results)
+    db.add_all(qualifying_results)
     for quali_result in qualifying_results:
         points_earned = quali_result.points_earned
         driver_points[quali_result.driver] += points_earned
@@ -385,7 +404,7 @@ def save_results(
 
     # Calculates points earned across all race sessions by each driver.
     for _, race_results in races.items():
-        sqla_session.add_all(race_results)
+        db.add_all(race_results)
         _update_ratings(race_results)
         for race_result in race_results:
             points_earned = race_result.points_earned
@@ -414,7 +433,7 @@ def save_results(
                 race_number=0,
                 points=points,
             )
-            sqla_session.add(dc)
+            db.add(dc)
             drivers.append(dc)
 
     drivers.sort(key=lambda d: d.points, reverse=True)
@@ -422,16 +441,16 @@ def save_results(
     for p, driver in enumerate(drivers, 1):
         driver.position = p
 
-    sqla_session.commit()
+    db.commit()
 
 
-def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
+def save_and_apply_penalty(db: DBSession, penalty: Penalty) -> None:
     """Saves a protest and applies the penalties inside it (if any)
     modifying the results of the session the penalty is referred to, while also
     deducting lost points from the driver's team points tally.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         penalty (Penalty): Penalty object to persist to the database.
     """
 
@@ -454,16 +473,16 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
 
     # If no time penalty was issued there aren't any changes left to make, so it saves and returns.
     if not penalty.time_penalty:
-        sqla_session.add(penalty)
-        sqla_session.commit()
+        db.add(penalty)
+        db.commit()
         return
 
     if penalty.session.is_quali:
-        save_qualifying_penalty(sqla_session, penalty)
+        save_qualifying_penalty(db, penalty)
         return
 
     # Gets the race results from the relevant session ordered by finishing position.
-    rows = sqla_session.execute(
+    rows = db.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session.id)
         .where(RaceResult.status == SessionCompletionStatus.finished)
@@ -507,10 +526,10 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
             index = category.rounds.index(session.round) + 1
 
             if len(category.rounds) == index:
-                sqla_session.commit()
+                db.commit()
                 return
 
-            sqla_session.commit()
+            db.commit()
             return
 
     # Sorts the race results after the time penalty has been applied
@@ -547,23 +566,23 @@ def save_and_apply_penalty(sqla_session: SQLASession, penalty: Penalty) -> None:
         if driver.driver_id == penalty.driver_id:
             break
 
-    sqla_session.add(penalty)
-    sqla_session.commit()
+    db.add(penalty)
+    db.commit()
     return
 
 
-def get_category(session: SQLASession, category_id: int) -> Category | None:
+def fetch_category(db: DBSession, category_id: int) -> Category | None:
     """Returns a Category given an id.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         category_id (int): ID of the category to fetch.
 
     Returns:
         Category | None: None if no matching category is found.
     """
 
-    result = session.execute(
+    result = db.execute(
         select(Category).where(Category.id == category_id)
     ).one_or_none()
 
@@ -572,46 +591,44 @@ def get_category(session: SQLASession, category_id: int) -> Category | None:
     return None
 
 
-def delete_protest(session: SQLASession, protest_id: str) -> None:
+def delete_protest(db: DBSession, protest_id: str) -> None:
     """Deletes the protest matching the protest_id from the database.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
         protest_id (str): ID of the protest to delete.
     """
-    session.execute(delete(Protest).where(Protest.id == protest_id))
-    session.commit()
-    session.expire_all()
+    db.execute(delete(Protest).where(Protest.id == protest_id))
+    db.commit()
+    db.expire_all()
 
 
-def get_all_drivers(session: SQLASession) -> list[Driver]:
+def fetch_drivers(db: DBSession) -> list[Driver]:
     """Returns a list containing all the drivers currently saved in the database.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
     """
 
-    result = session.execute(select(Driver)).all()
+    result = db.execute(select(Driver)).all()
 
     return [r[0] for r in result]
 
 
-def get_participants_from_round(
-    session: SQLASession, round_id: int
-) -> list[RoundParticipant]:
+def fetch_round_participants(db: DBSession, round_id: int) -> list[RoundParticipant]:
     """Returns a list containing the participants to a particular round.
 
     Args:
-        session (SQLASession): Session to execute the query with.
+        db (DBSession): Session to execute the query with.
     """
-    result = session.execute(
+    result = db.execute(
         select(RoundParticipant).where(RoundParticipant.round_id == round_id)
     ).all()
 
     return [r[0] for r in result]
 
 
-def update_participant_status(session: SQLASession, participant: RoundParticipant):
+def update_participant_status(db: DBSession, participant: RoundParticipant):
     stmt = (
         update(RoundParticipant)
         .where(
@@ -621,44 +638,24 @@ def update_participant_status(session: SQLASession, participant: RoundParticipan
         .values(participating=participant.participating)
     )
 
-    session.execute(stmt)
-    session.commit()
+    db.execute(stmt)
+    db.commit()
 
 
-def delete_chat(session: SQLASession, chat_id: int):
+def delete_chat(db: DBSession, chat_id: int):
     stmt = delete(Chat).where(Chat.id == chat_id)
-    session.execute(stmt)
-    session.commit()
-
-
-def update_participant_status(session: SQLASession, participant: RoundParticipant):
-    stmt = (
-        update(RoundParticipant)
-        .where(
-            RoundParticipant.driver_id == participant.driver_id,
-            RoundParticipant.round_id == participant.round_id,
-        )
-        .values(participating=participant.participating)
-    )
-
-    session.execute(stmt)
-    session.commit()
-
-
-def delete_chat(session: SQLASession, chat_id: int):
-    stmt = delete(Chat).where(Chat.id == chat_id)
-    session.execute(stmt)
-    session.commit()
+    db.execute(stmt)
+    db.commit()
 
 
 @cached(cache=TTLCache(maxsize=50, ttl=20000))  # type: ignore
-def get_reprimand_types(session: SQLASession) -> list[Reprimand]:
-    result = session.execute(select(Reprimand)).all()
+def fetch_reprimand_types(db: DBSession) -> list[Reprimand]:
+    result = db.execute(select(Reprimand)).all()
 
     return [r[0] for r in result]
 
 
-def reverse_penalty(session: SQLASession, penalty: Penalty):
+def reverse_penalty(db: DBSession, penalty: Penalty):
     """Reverses and deletes the given penalty."""
 
     delete_penalty_stmt = delete(Penalty).where(Penalty.id == penalty.id)
@@ -692,12 +689,12 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
                 if driver_team.id == team.team_id:
                     team.points += penalty.points
 
-        session.execute(delete_penalty_stmt)
-        session.commit()
+        db.execute(delete_penalty_stmt)
+        db.commit()
         return
 
     # Gets the race results from the relevant session ordered by finishing position.
-    rows = session.execute(
+    rows = db.execute(
         select(RaceResult)
         .where(RaceResult.session_id == penalty.session_id)
         .where(RaceResult.status == SessionCompletionStatus.finished)
@@ -723,8 +720,8 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
                 len(row) < i + 1
                 and rows[i - 1][0].gap_to_first < race_result.gap_to_first
             ):
-                session.execute(delete_penalty_stmt)
-                session.commit()
+                db.execute(delete_penalty_stmt)
+                db.commit()
                 return
 
     race_results.sort(key=lambda x: x.total_racetime)  # type: ignore
@@ -753,6 +750,6 @@ def reverse_penalty(session: SQLASession, penalty: Penalty):
     for position, driver_category in enumerate(drivers):
         driver_category.position = position
 
-    session.execute(delete_penalty_stmt)
-    session.commit()
+    db.execute(delete_penalty_stmt)
+    db.commit()
     return

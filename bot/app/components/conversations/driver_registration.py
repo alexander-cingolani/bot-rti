@@ -19,7 +19,11 @@ from telegram.ext import (
 )
 
 from models import Driver
-from queries import get_driver, get_similar_driver
+from queries import (
+    fetch_driver_by_psn_id,
+    fetch_driver_by_telegram_id,
+    fetch_similar_driver,
+)
 
 CHECK_ID, ID = range(2)
 
@@ -39,7 +43,7 @@ async def driver_registration_entry_point(
     user_data = cast(dict[str, Any], context.user_data)
     user_data["sqla_session"] = session
 
-    driver = get_driver(session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(session, str(user.id))
     if not driver:
         text = "Per registrarti, scrivimi il tuo <i>PSN ID</i>:"
         await update.message.reply_text(text)
@@ -80,7 +84,7 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             user_data.clear()
             return ConversationHandler.END
 
-    driver_obj = get_driver(sqla_session, psn_id=update.message.text)
+    driver_obj = fetch_driver_by_psn_id(sqla_session, update.message.text)
     if driver_obj:
         # Checks that no other user is registered to the requested psn_id
         if driver_obj.telegram_id:
@@ -101,7 +105,9 @@ async def check_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         user_data.clear()
         return ConversationHandler.END
 
-    if suggested_driver := get_similar_driver(sqla_session, psn_id=update.message.text):
+    if suggested_driver := fetch_similar_driver(
+        sqla_session, psn_id=update.message.text
+    ):
         if not suggested_driver.telegram_id:
             user_data["suggested_driver"] = suggested_driver.psn_id
             text = f'Ho trovato un ID simile: "<code>{suggested_driver.psn_id}</code>", sei tu?'
@@ -139,7 +145,8 @@ async def verify_correction(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if update.callback_query.data == "y":
         driver = cast(
-            Driver, get_driver(sqla_session, psn_id=user_data["suggested_driver"])
+            Driver,
+            fetch_driver_by_psn_id(sqla_session, psn_id=user_data["suggested_driver"]),
         )
         if driver.telegram_id and driver.telegram_id != update.effective_user.id:
             text = (

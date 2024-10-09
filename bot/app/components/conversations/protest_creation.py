@@ -29,10 +29,10 @@ from telegram.ext import (
 from models import Category, Protest, Round, Team
 from queries import (
     delete_protest,
-    get_championship,
-    get_driver,
-    get_last_protest_number,
-    get_protest,
+    fetch_championship,
+    fetch_driver_by_telegram_id,
+    fetch_last_protest_number,
+    fetch_protest,
 )
 
 (
@@ -63,13 +63,13 @@ async def create_late_protest(
     user_data.clear()
 
     sqla_session = DBSession()
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     user_data["sqla_session"] = sqla_session
     user_data["championship"] = championship
     user_data["categories"] = {}
 
-    driver = get_driver(sqla_session, telegram_id=update.effective_user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, update.effective_user.id)
     if not driver:
         await update.message.reply_text(
             "Come utente non registrato, non hai accesso a questa funzione."
@@ -201,7 +201,7 @@ async def create_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     chat_data = cast(dict[str, Any], context.chat_data)
     user_data.clear()
     sqla_session = DBSession()
-    driver = get_driver(sqla_session, telegram_id=user.id)
+    driver = fetch_driver_by_telegram_id(sqla_session, user.id)
     chat_data["late_protest"] = False
     if not driver:
         await update.message.reply_text(
@@ -232,7 +232,7 @@ async def create_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_data["protesting_team"] = current_contract.team
     user_data["sqla_session"] = sqla_session
 
-    championship = get_championship(sqla_session)
+    championship = fetch_championship(sqla_session)
 
     if not championship:
         text = "Il campionato è terminato! Non puoi più fare segnalazioni."
@@ -617,7 +617,9 @@ async def send_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     protest.round = championship_round
     protest.protested_team = protest.protested_driver.current_team()  # type: ignore
     protest.protesting_team = user_data["protesting_team"]
-    protest.number = get_last_protest_number(sqla_session, protest.round.id) + 1
+    protest.number = (
+        fetch_last_protest_number(sqla_session, category.id, protest.round_id) + 1
+    )
     channel = (
         config.LATE_PROTEST_CHAT
         if chat_data.get("late_protest")
@@ -728,7 +730,7 @@ async def withdraw_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         protest_id = update.callback_query.data.removeprefix("withdraw_protest_")
 
-    protest = get_protest(sqla_session, protest_id)
+    protest = fetch_protest(sqla_session, protest_id)
     if protest:
         if (
             datetime.now(tz=ZoneInfo("Europe/Rome")) - protest.protest_time
