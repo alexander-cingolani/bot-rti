@@ -41,7 +41,17 @@ from app.components.handlers import (
     get_teams_list,
     save_rre_results_old,
 )
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -651,15 +661,14 @@ async def standings(category_id: int = Form(), db: DBSession = Depends(get_db)):
 
 
 @app.post("/api/driver-points")
-async def driver_points(
-    championship_id: int = Form(), db: DBSession = Depends(get_db)
-):
+async def driver_points(championship_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_drivers_points(db, int(championship_id))
 
 
 @app.post("/api/token", response_model=TokenSchema)
 async def login(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: DBSession = Depends(get_db)
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: DBSession = Depends(get_db),
 ):
     logger.info("login was called")
     user = authenticate_user(db, form_data.username, form_data.password)
@@ -679,7 +688,9 @@ async def login(
 
 @app.post("/api/upload-rre-results", response_model=TokenSchema)
 async def upload_rre_results(
-    current_user: Annotated[DriverSchema, Depends(get_current_user)], file: UploadFile = File(), db: DBSession = Depends(get_db)
+    current_user: Annotated[DriverSchema, Depends(get_current_user)],
+    file: UploadFile = File(),
+    db: DBSession = Depends(get_db),
 ):
     logger.info("upload_rre_results was called.")
 
@@ -698,10 +709,11 @@ async def upload_protest(
     protest_reason: str = Form(),
     incident_time: str = Form(),
     session_name: str = Form(),
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
 ) -> FileResponse:
 
-    protest_document = await generate_protest_document_old(db, 
+    protest_document = await generate_protest_document_old(
+        db,
         protesting_driver_discord_id,
         protested_driver_discord_id,
         protest_reason,

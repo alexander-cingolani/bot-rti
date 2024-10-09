@@ -26,8 +26,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 def get_db(request: Request) -> DBSession:
     return request.state.db
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -65,7 +67,9 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     return encoded_jwt
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DBSession = Depends(get_db)):
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)], db: DBSession = Depends(get_db)
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -76,7 +80,6 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DB
         email: str | None = payload.get("sub")
         if email is None:
             raise credentials_exception
-
 
     except InvalidTokenError:
         raise credentials_exception

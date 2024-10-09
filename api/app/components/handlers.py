@@ -566,8 +566,7 @@ async def save_rre_results_old(db: DBSession, json_str: bytes) -> None:
     expected_player_ids = reserves + list(drivers.keys())
 
     for session in data["Sessions"]:
-        session["Players"] = remove_wild_cards(expected_player_ids, session["Players"]
-        )
+        session["Players"] = remove_wild_cards(expected_player_ids, session["Players"])
 
     qualifying_results: list[QualifyingResult] = []
     races: defaultdict[Session, list[RaceResult]] = defaultdict(list)
@@ -626,7 +625,7 @@ async def save_rre_results_old(db: DBSession, json_str: bytes) -> None:
                     round_id=current_round.id,
                     session=session,
                     category_id=category.id,
-                    category=category
+                    category=category,
                 )
             )
 
