@@ -612,7 +612,7 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -667,7 +667,7 @@ async def driver_points(championship_id: int = Form(), db: DBSession = Depends(g
 
 
 @app.post("/api/token", response_model=TokenSchema)
-async def login(
+async def login_old(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DBSession = Depends(get_db),
 ):
@@ -682,13 +682,13 @@ async def login(
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/api/upload-rre-results", response_model=TokenSchema)
-async def upload_rre_results(
+async def upload_rre_results_old(
     current_user: Annotated[DriverSchema, Depends(get_current_user)],
     file: UploadFile = File(),
     db: DBSession = Depends(get_db),
