@@ -374,7 +374,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         driver=result.driver.driver,
                         round=session.round,
                         session=session,
-                        status=result.status
+                        status=result.status,
                     )
                 )
             continue
@@ -408,7 +408,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     round=session.round,
                     session=session,
                     fastest_lap=fastest_lap,
-                    status=result.status
+                    status=result.status,
                 )
             )
 
