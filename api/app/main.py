@@ -39,6 +39,7 @@ from app.components.handlers import (
     get_drivers_points,
     get_standings_with_results,
     get_teams_list,
+    save_rre_results,
     save_rre_results_old,
 )
 from fastapi import (
@@ -631,7 +632,7 @@ async def upload_rre_results(
 ):
     logger.info("upload_rre_results was called.")
 
-    await save_rre_results_old(db, results)
+    await save_rre_results(db, results)
 
     access_token = create_access_token({"sub": current_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
