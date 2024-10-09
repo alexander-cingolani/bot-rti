@@ -392,7 +392,7 @@ def save_results(
 
     driver_points: defaultdict[Driver, float] = defaultdict(float)
     category = qualifying_results[0].category
-    
+
     # Calculates points earned in qualifying by each driver.
     db.add_all(qualifying_results)
     for quali_result in qualifying_results:
@@ -420,8 +420,6 @@ def save_results(
                 team_championship.points += float(points_earned)
                 break
 
-
-
     # Calculates points earned across all race sessions by each driver.
     for _, race_results in races.items():
         db.add_all(race_results)
@@ -444,10 +442,7 @@ def save_results(
                 )
 
             for team_championship in team.championships:
-                if (
-                    team_championship.championship_id
-                    == category#.championship_id
-                ):
+                if team_championship.championship_id == category:  # .championship_id
                     team_championship.points += float(points_earned)
                     break
 
