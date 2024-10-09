@@ -442,7 +442,7 @@ def save_results(
                 )
 
             for team_championship in team.championships:
-                if team_championship.championship_id == category:  # .championship_id
+                if team_championship.championship_id == category.championship_id:
                     team_championship.points += float(points_earned)
                     break
 
