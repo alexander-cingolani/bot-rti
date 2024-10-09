@@ -372,9 +372,9 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         laptime=result.seconds,
                         gap_to_first=gap_to_first,
                         driver=result.driver.driver,
-                        participated=bool(result.seconds),
                         round=session.round,
                         session=session,
+                        status=result.status,
                     )
                 )
             continue
@@ -405,10 +405,10 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     total_racetime=result.seconds,
                     gap_to_first=gap_to_first,
                     driver=result.driver.driver,
-                    participated=participated,
                     round=session.round,
                     session=session,
                     fastest_lap=fastest_lap,
+                    status=result.status,
                 )
             )
 
