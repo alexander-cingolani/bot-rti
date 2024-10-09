@@ -7,6 +7,7 @@ from typing import Any, cast
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DBSession
 
+from app.components.schemas.team import TeamStandingsSchema
 from app.components.schemas.category import CategorySchema
 from app.components.schemas.calendar import (
     CalendarSchema,
@@ -227,14 +228,18 @@ def get_drivers_points(db: DBSession, championship_id: int):
     return result
 
 
-def get_teams_list(db: DBSession, championship_id: int) -> list[dict[str, Any]]:
+def get_teams_list(db: DBSession, championship_id: int) -> list[TeamStandingsSchema]:
     """Returns the teams participating to the championship ordered by position."""
     team_objs = fetch_teams(db, championship_id)
 
-    teams: list[dict[str, Any]] = []
+    teams: list[TeamStandingsSchema] = []
     for team in team_objs:
         teams.append(
-            {"points": team.current_championship().points, "logo": team.logo_url}
+            TeamStandingsSchema(
+                points=team.current_championship().points,
+                logo=team.logo_url,
+                name=team.logo_url,
+            )
         )
 
     return teams

@@ -6,6 +6,7 @@ from typing import Annotated, Any, Awaitable, Callable
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import create_engine
+from app.components.schemas.calendar import CalendarSchema
 from app.components.schemas.standings import StandingsSchema
 from queries import (
     fetch_championship_by_tag,
@@ -20,7 +21,7 @@ from app.components.schemas.protest import ProtestSchema, CreateProtestSchema
 from app.components.schemas.qualifyingresult import QualifyingResultSchema
 from app.components.schemas.raceresult import RaceResultSchema
 from app.components.schemas.resultsfile import RaceRoomResultsSchema
-from app.components.schemas.team import EditTeamSchema, TeamSchema
+from app.components.schemas.team import EditTeamSchema, TeamSchema, TeamStandingsSchema
 from app.components.schemas.session import SessionSchema
 from app.components.schemas.round import RoundSchema
 from app.components.schemas.token import TokenSchema
@@ -641,7 +642,7 @@ async def upload_rre_results(
 ##### Old endpoints left for temporary backwards compatibility
 
 
-@app.post("/api/teams", response_model=list[TeamSchema])
+@app.post("/api/teams", response_model=list[TeamStandingsSchema])
 async def teams(championship_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_teams_list(db, int(championship_id))
 
@@ -651,12 +652,12 @@ async def categories(championship_id: int = Form(), db: DBSession = Depends(get_
     return get_categories(db, championship_id)
 
 
-@app.post("/api/calendar", response_model=list[RoundSchema])
+@app.post("/api/calendar", response_model=CalendarSchema)
 async def calendar(category_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_calendar(db, int(category_id))
 
 
-@app.post("/api/standings", response_model=list[StandingsSchema])
+@app.post("/api/standings", response_model=StandingsSchema)
 async def standings(category_id: int = Form(), db: DBSession = Depends(get_db)):
     return get_standings_with_results(db, int(category_id))
 
