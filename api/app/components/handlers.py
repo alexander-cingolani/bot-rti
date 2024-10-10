@@ -236,7 +236,7 @@ def get_teams_list(db: DBSession, championship_id: int) -> list[TeamStandingsSch
             TeamStandingsSchema(
                 points=team.get_championship(championship_id).points,  # type: ignore
                 logo=team.logo_url,
-                name=team.logo_url,
+                name=team.name,
             )
         )
 
