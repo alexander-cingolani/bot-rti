@@ -802,8 +802,9 @@ class Session(Base):
 
             message += f"{position} - {result.driver.abbreviated_name} {gap}"
 
-            if result.fastest_lap_points:
-                message += " GV"
+            if type(result) != QualifyingResult:
+                if result.fastest_lap_points:
+                    message += " GV"
             message += "\n"
 
         return message + "\n"

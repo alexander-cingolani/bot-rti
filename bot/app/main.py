@@ -648,7 +648,7 @@ async def close_protest_window(context: ContextTypes.DEFAULT_TYPE) -> None:
             for rnd in rounds:
                 if rnd.category.game_id == config.RACEROOM_GAME_ID:
                     continue
-                
+
                 if not rnd.protests:
                     await context.bot.send_message(
                         chat_id=config.PROTEST_CHANNEL,
