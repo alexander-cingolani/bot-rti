@@ -620,6 +620,8 @@ async def announce_protests(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if rounds := championship.protesting_rounds():
         for rnd in rounds:
+            if rnd.category.game_id == config.RACEROOM_GAME_ID:
+                continue
             text = (
                 f"<b>Segnalazioni Categoria {rnd.category.name}</b>\n"
                 f"{rnd.number}ª Tappa - {rnd.circuit.abbreviated_name}\n"
@@ -644,6 +646,9 @@ async def close_protest_window(context: ContextTypes.DEFAULT_TYPE) -> None:
     if championship:
         if rounds := championship.protesting_rounds():
             for rnd in rounds:
+                if rnd.category.game_id == config.RACEROOM_GAME_ID:
+                    continue
+                
                 if not rnd.protests:
                     await context.bot.send_message(
                         chat_id=config.PROTEST_CHANNEL,
