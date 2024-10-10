@@ -50,6 +50,10 @@ class RaceRoomSession(BaseModel):
         fastest_lap = float("inf")
         driver_with_fastest_lap = 0
         for player in self.players:
+
+            if player.finish_status.lower() in ("finished", "disqualified"):
+                continue
+
             for lap in player.laps:
                 if lap.time <= 0:
                     continue
