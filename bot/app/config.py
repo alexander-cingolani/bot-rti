@@ -7,6 +7,7 @@ import os
 from datetime import time
 from decimal import Decimal
 
+RACEROOM_GAME_ID = 3
 PARTICIPANT_LIST_OPENING = time(7)
 PARTICIPATION_LIST_REMINDER = time(19)
 PROTEST_WINDOW_OPENING = time(0)
