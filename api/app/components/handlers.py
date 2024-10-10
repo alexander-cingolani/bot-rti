@@ -140,7 +140,7 @@ def _create_driver_result_list(
 ) -> list[DriverStandingsResultInfo]:
     driver_results: list[DriverStandingsResultInfo] = []
     for race_result in race_results:
-        if "1" in race_result.session.name or race_result.round.has_sprint_race:
+        if "1" in race_result.session.name:
             info_gp = f"SR{race_result.round_id}"
 
             extra_points: int | float = race_result.fastest_lap_points
