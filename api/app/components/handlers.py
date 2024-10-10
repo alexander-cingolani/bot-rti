@@ -234,7 +234,7 @@ def get_teams_list(db: DBSession, championship_id: int) -> list[TeamStandingsSch
     for team in team_objs:
         teams.append(
             TeamStandingsSchema(
-                points=team.current_championship().points,
+                points=team.get_championship(championship_id).points,  # type: ignore
                 logo=team.logo_url,
                 name=team.logo_url,
             )

@@ -492,8 +492,10 @@ def save_and_apply_penalty(db: DBSession, penalty: Penalty) -> None:
 
             if penalty.points:
                 if team := driver_category.driver.current_team():
-                    team_championship = team.current_championship()
-                    team_championship.points -= penalty.points
+                    team_championship = team.get_championship(
+                        driver_category.category.championship_id
+                    )
+                    team_championship.points -= penalty.points  # type:  ignore
                 # Sort drivers in case standings changed
                 drivers = [d for d in driver_category.category.drivers]
                 drivers.sort(key=lambda d: d.points, reverse=True)
@@ -789,7 +791,7 @@ def reverse_penalty(db: DBSession, penalty: Penalty):
                 - driver_points_after_penalty_deletion[driver]
             )
             driver_category.points -= delta
-            driver.current_team().current_championship().points -= delta  # type: ignore
+            driver.current_team().get_championship(category.championship_id).points -= delta  # type: ignore
 
     drivers.sort(key=lambda d: d.points, reverse=True)
 

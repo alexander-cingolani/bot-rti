@@ -1469,9 +1469,11 @@ class Team(Base):
         filename = self.name.lower().replace(" ", "_").replace("#", "") + ".png"
         return IMAGE_DIR_URL + filename
 
-    def current_championship(self) -> TeamChampionship:
-        """Returns the most recent championship."""
-        return self.championships[-1]
+    def get_championship(self, championship_id: int) -> TeamChampionship | None:
+        for team_championship in self.championships:
+            if team_championship.championship_id == championship_id:
+                return team_championship
+        return None
 
     def reserves(self) -> list[DriverContract]:
         """Returns all drivers who are currently contracted as reserves."""
