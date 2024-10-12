@@ -148,6 +148,7 @@ def fetch_admins(db: DBSession) -> list[Driver]:
 def fetch_protests(
     db: DBSession,
     round_id: int | None = None,
+    category_id: int | None = None,
     is_reviewed: bool | None = None,
 ) -> list[Protest]:
     """Returns a list of protests matching the given arguments.
@@ -160,6 +161,9 @@ def fetch_protests(
     statement = select(Protest)
     if round_id:
         statement = statement.where(Protest.round_id == round_id)
+    elif category_id:
+        statement = statement.where(Protest.category_id == category_id)
+
     if is_reviewed is not None:
         statement = statement.where(Protest.is_reviewed == is_reviewed)
 
