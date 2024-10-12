@@ -11,14 +11,13 @@ from pydantic import BaseModel
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session as DBSession
 
+from models import Driver
 from queries import fetch_driver_by_email
 
 SECRET_KEY = os.environ.get("SECRET_API_KEY", "")
-USERNAME = os.environ.get("RRE_SERVER_USERNAME", "")
-RRE_SERVER_PASSWORD = os.environ.get("RRE_SERVER_PASSWORD", "")
 ALGORITHM = "HS256"
 
-if not any((SECRET_KEY, USERNAME, RRE_SERVER_PASSWORD)):
+if not SECRET_KEY:
     raise RuntimeError("Environment variables not set correctly")
 
 
@@ -33,8 +32,6 @@ def get_db(request: Request) -> DBSession:
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-HASHED_USER_PASSWORD = pwd_context.hash(RRE_SERVER_PASSWORD)
 
 app = FastAPI()
 
@@ -69,7 +66,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: DBSession = Depends(get_db)
-):
+) -> Driver:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
