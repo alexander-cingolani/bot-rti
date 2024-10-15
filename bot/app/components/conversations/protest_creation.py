@@ -618,7 +618,7 @@ async def send_protest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     protest.protested_team = protest.protested_driver.current_team()  # type: ignore
     protest.protesting_team = user_data["protesting_team"]
     protest.number = (
-        fetch_last_protest_number(sqla_session, category.id, protest.round_id) + 1
+        fetch_last_protest_number(sqla_session, category.id, protest.round.id) + 1
     )
     channel = (
         config.LATE_PROTEST_CHAT
