@@ -181,7 +181,7 @@ async def save_session(
     else:
         return ConversationHandler.END
 
-    text = "Inviami i risultati di <b>{current_session.name}</b>."
+    text = f"Inviami i risultati di <b>{current_session.name}</b>."
     await update.callback_query.edit_message_text(text)
     return SAVE_RESULTS
 

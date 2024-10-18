@@ -57,7 +57,7 @@ class Result:
             self.position = position
 
 
-def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[Result]:
+def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> tuple[list[Result], list[str]]:
     """This is a helper function for ask_fastest_lap callbacks.
     It receives the block of text sent by the user to correct race/qualifying results
     and transforms it into a list of Result objects. Driver psn id's don't have to be
@@ -77,18 +77,19 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         driver.driver.psn_id_or_full_name.replace(" ", ""): driver
         for driver in expected_drivers
     }
-
+    not_matched: list[str] = []
     results: list[Result] = []
     for line in text.splitlines():
         given_driver_name, gap = line.split()
         if given_driver_name not in driver_map:
             matches = get_close_matches(
-                given_driver_name, driver_map.keys(), cutoff=0.2
+                given_driver_name, driver_map.keys(), cutoff=0.3
             )
             if matches:
                 driver_name = matches[0]
             else:
                 driver_name = ""
+                not_matched.append(given_driver_name)
         else:
             driver_name = given_driver_name
 
@@ -105,7 +106,7 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         result = Result(driver_category, 0)
         results.append(result)
 
-    return results
+    return results, not_matched
 
 
 def results_to_text(results: list[Result]) -> str:
