@@ -341,21 +341,21 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         best_time = 0
         if result_objects:
-            best_time = cast(int, result_objects[0].seconds)
+            best_time = cast(int, result_objects[0].milliseconds)
 
         if session.is_quali:
             for pos, result in enumerate(result_objects, start=1):
                 result.prepare_result(best_time=best_time, position=pos)
 
                 gap_to_first = None
-                if result.seconds:
-                    gap_to_first = result.seconds - best_time
+                if result.milliseconds:
+                    gap_to_first = result.milliseconds - best_time
 
                 quali_results.append(
                     QualifyingResult(
                         position=result.position,
                         category=category,
-                        laptime=result.seconds,
+                        laptime=result.milliseconds,
                         gap_to_first=gap_to_first,
                         driver=result.driver.driver,
                         round=session.round,
@@ -376,9 +376,11 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             result.prepare_result(best_time=best_time, position=pos)
 
-            gap_to_first = (result.seconds - best_time) if result.seconds else None
+            gap_to_first = (
+                (result.milliseconds - best_time) if result.milliseconds else None
+            )
 
-            participated = bool(result.seconds)
+            participated = bool(result.milliseconds)
 
             if not participated:
                 result.position = None
@@ -388,7 +390,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 RaceResult(
                     position=result.position,
                     category=category,
-                    total_racetime=result.seconds,
+                    total_racetime=result.milliseconds,
                     gap_to_first=gap_to_first,
                     driver=result.driver.driver,
                     round=session.round,

@@ -30,11 +30,11 @@ class Result:
     def __init__(
         self,
         driver: DriverCategory,
-        seconds: int | None,
+        milliseconds: int | None,
         status: SessionCompletionStatus = SessionCompletionStatus.dns,
     ):
         self.driver = driver
-        self.seconds = seconds
+        self.milliseconds = milliseconds
         self.position = 0
         self.fastest_lap = False
         self.status = status
@@ -44,20 +44,22 @@ class Result:
 
     def prepare_result(self, best_time: int, position: int):
         """Modifies Result to contain valid data for a RaceResult."""
-        if self.seconds is None:
+        if self.milliseconds is None:
             self.position = None
-        elif self.seconds == 0:
-            self.seconds = None
+        elif self.milliseconds == 0:
+            self.milliseconds = None
             self.position = position
         elif position == 1:
             self.position = position
-            self.seconds = best_time
+            self.milliseconds = best_time
         else:
-            self.seconds = self.seconds + best_time
+            self.milliseconds = self.milliseconds + best_time
             self.position = position
 
 
-def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> tuple[list[Result], list[str]]:
+def text_to_results(
+    text: str, expected_drivers: list[DriverCategory]
+) -> tuple[list[Result], list[str]]:
     """This is a helper function for ask_fastest_lap callbacks.
     It receives the block of text sent by the user to correct race/qualifying results
     and transforms it into a list of Result objects. Driver psn id's don't have to be
@@ -95,9 +97,9 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> tuple[
 
         if driver_name:
             driver_category = driver_map.pop(driver_name)
-            seconds, status = string_to_seconds(gap)
+            milliseconds, status = string_to_milliseconds(gap)
 
-            result = Result(driver_category, seconds, status)
+            result = Result(driver_category, milliseconds, status)
             results.append(result)
 
     # Add unrecognized drivers to the results list.
@@ -113,8 +115,8 @@ def results_to_text(results: list[Result]) -> str:
     """Takes a list of results and converts it to a user-friendly message."""
     text = ""
     for result in results:
-        if result.seconds:
-            gap = seconds_to_text(result.seconds)
+        if result.milliseconds:
+            gap = seconds_to_text(result.milliseconds)
         else:
             gap = result.status.value
 
@@ -144,7 +146,7 @@ def seconds_to_text(seconds: int) -> str:
     )
 
 
-def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
+def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     SessionCompletionsStatus.dnf, dns or dsq is returne when one of those values is
@@ -152,10 +154,10 @@ def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]
     None is returned if the user didn't input anything, and the driver probably didn't
     complete the race.
     """
-    string = string.lower()
-    match = re.search(
-        r"([0-9]{1,2}:)?([0-9]{1,2}:){0,2}[0-9]{1,2}(\.|,)[0-9]{1,3}", string
-    )
+
+    pattern = re.compile(r"(?:(\d+):)?(?:(\d+):)?(\d+)(?:\.(\d+))?")
+    match = pattern.match(string.strip())
+
     if not match:
         if string == "dns":
             return None, SessionCompletionStatus.dns
@@ -165,23 +167,11 @@ def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]
             return None, SessionCompletionStatus.dsq
         return None, SessionCompletionStatus.dnf
 
-    matched_string = match.group(0)
-    matched_string = matched_string.replace(",", ".")
+    hours = int(match.group(1)) if match.group(1) else 0
+    minutes = int(match.group(2)) if match.group(2) else 0
+    seconds = int(match.group(3)) if match.group(3) else 0
+    milliseconds = int(match.group(4).ljust(3, "0")) if match.group(4) else 0
 
-    if matched_string.count(":") == 2 and "." in matched_string:
-        t = datetime.strptime(matched_string, "%H:%M:%S.%f").time()
-    elif matched_string.count(":") == 2:
-        t = datetime.strptime(matched_string, "%H:%M:%S").time()
-    elif ":" in matched_string and "." in matched_string:
-        t = datetime.strptime(matched_string, "%M:%S.%f").time()
-    elif ":" in matched_string:
-        t = datetime.strptime(matched_string, "%H:%M:%S").time()
-    elif "." in matched_string:
-        t = datetime.strptime(matched_string, "%S.%f").time()
-    else:
-        return int(matched_string * 1000), SessionCompletionStatus.finished
+    milliseconds += (hours * 3600 + minutes * 60 + seconds) * 1000
 
-    seconds = (t.hour * 60 + t.minute) * 60 + t.second
-    decimal_part = t.microsecond / 1_000_000
-
-    return int((seconds + decimal_part) * 1000), SessionCompletionStatus.finished
+    return milliseconds, SessionCompletionStatus.finished
