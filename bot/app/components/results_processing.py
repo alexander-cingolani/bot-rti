@@ -4,7 +4,6 @@ Contains functions used to operate on results or parts of results.
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from difflib import get_close_matches
 
 from models import DriverCategory, SessionCompletionStatus
