@@ -77,7 +77,6 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ConversationHandler.END
 
-    # Checks if it's possible to save results.
     if not championship.is_active():
         await update.message.reply_text("Non c'è alcun campionato attivo al momento.")
         return ConversationHandler.END
@@ -86,7 +85,6 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data["championship"] = championship
     user_data["results"] = {}
 
-    # Creates keyboard with the available categories in the championship.
     reply_markup = InlineKeyboardMarkup(
         [
             [
@@ -145,7 +143,6 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data = cast(dict[str, Any], context.user_data)
 
-    # Saves the category selected by the user.
     category = cast(
         Category,
         user_data["championship"].categories[
@@ -174,7 +171,7 @@ async def save_session(
     user_data = cast(dict[str, Any], context.user_data)
     round = cast(Round, user_data["round"])
     session_id = int(update.callback_query.data.removeprefix("S"))
-    # Saves the session selected by the user.
+
     current_session = None
     for session in round.sessions:
         if session.id == session_id:
@@ -184,9 +181,7 @@ async def save_session(
     else:
         return ConversationHandler.END
 
-    text = (
-        "Inviami i risultati di <b>{current_session.name}</b>."
-    )
+    text = "Inviami i risultati di <b>{current_session.name}</b>."
     await update.callback_query.edit_message_text(text)
     return SAVE_RESULTS
 
@@ -201,34 +196,43 @@ async def recognise_results(
     category = cast(Category, user_data["category"])
     expected_drivers = category.active_drivers()
 
+    text: str = update.message.text  # type: ignore
 
-    text: str = update.message.text # type: ignore
     try:
-        results = text_to_results(text, expected_drivers)
+        results, not_found = text_to_results(text, expected_drivers)
     except ValueError:
         await update.message.reply_text(
             "C'è un errore nella formattazione del messaggio, correggilo e riprova."
         )
         return None
 
-    # Saves the results to the correct session
     user_data["results"][user_data["current_session"]]["result_objects"] = results
 
-    # Sends the recognised results.
     results_text = results_to_text(results)
     await update.message.reply_text(results_text)
 
-    # Asks if the recognized results are correct.
-    if "NON_RICONOSCIUTO" in results_text or "/" in results_text:
-        check_results_text = (
-            "Non sono riuscito a leggere tutto, correggi ciò che non va perfavore."
-        )
+    if not_found:
+        if len(not_found) > 1:
+            check_results_text = (
+                f"I piloti {", ".join(not_found)} non sono registrati come partecipanti alla categoria."
+                "\nSe gli ID PSN sono sbagliati, copia il messaggio e inviamelo di nuovo con gli ID corretti."
+                "\nSe invece gli ID PSN sono corretti, probabilmente si tratta di un errore di configurazione "
+                "della categoria nel database."
+            )
+        else:
+            check_results_text = (
+                f"{not_found[0]} non è registrato come pilota partecipante alla categoria."
+                "\nSe l'ID PSN è sbagliato, copia il messaggio e inviamelo di nuovo con l'ID corretto."
+                "\nSe invece l'ID PSN è corretto, probabilmente si tratta di un errore di "
+                "configurazione della categoria nel database."
+            )
         await update.message.reply_text(check_results_text)
     else:
         check_results_text = (
-            "Mi pare di aver letto tutto correttamente, "
-            "verifica rapidamente che i distacchi siano giusti perfavore."
+            "Sono i risultati corretti?\nSe no, copia il messaggio "
+            "e inviamelo di nuovo con le correzioni necessarie."
         )
+
         reply_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(text="✅", callback_data="results-ok")]]
         )
@@ -246,12 +250,10 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     results = cast(list[Result], user_data["results"][session]["result_objects"])
     expected_drivers = category.active_drivers()
 
-    # Saves any corrections made to the results.
     if update.message:
-        results = text_to_results(update.message.text, expected_drivers)
+        results, _ = text_to_results(update.message.text, expected_drivers)
         user_data["results"][session]["result_objects"] = results
 
-    # The fastest lap driver is not needed for qualifying sessions.
     if session.is_quali:
         await __ask_session(update, session.round, user_data["results"])
         return SAVE_SESSION
@@ -264,7 +266,7 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def __ask_fastest_lap_driver(
     update: Update, drivers: list[DriverCategory], session: Session
 ) -> None:
-    """This function updates the current message to ask which driver scored the fastest lap of the session."""
+    """Updates the current message to ask which driver scored the fastest lap of the session."""
     text = f"Inserisci il pilota che ha segnato il giro più veloce in {session.name}"
 
     driver_buttons: list[InlineKeyboardButton] = []
@@ -300,7 +302,6 @@ async def save_fastest_driver(
 
     expected_drivers = category.active_drivers()
 
-    # Saves the given driver.
     driver_id = int(update.callback_query.data.removeprefix("FL"))
     for driver_category in expected_drivers:
         if driver_id == driver_category.driver_id:
@@ -434,6 +435,5 @@ save_results_conv = ConversationHandler(
             "salva_risultati",
             entry_point,
         ),
-        # CallbackQueryHandler(change_conversation_state, r"^2[7-9]$|^3[0-8]$"),
     ],
 )
