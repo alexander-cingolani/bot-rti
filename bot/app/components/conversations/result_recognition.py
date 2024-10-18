@@ -5,13 +5,12 @@ by sending screenshots captured from the game or live stream.
 """
 
 import os
-from io import BytesIO
+
 from typing import Any, cast
 
 from app import config
 from app.components.results_processing import (
     Result,
-    image_to_results,
     results_to_text,
     text_to_results,
 )
@@ -185,10 +184,8 @@ async def save_session(
     else:
         return ConversationHandler.END
 
-    # Asks the user for the text/screenshot of the results from the selected session.
     text = (
-        "Inviami il testo o lo screenshot contenente"
-        f" i risultati di <b>{current_session.name}</b>."
+        "Inviami i risultati di <b>{current_session.name}</b>."
     )
     await update.callback_query.edit_message_text(text)
     return SAVE_RESULTS
@@ -204,25 +201,13 @@ async def recognise_results(
     category = cast(Category, user_data["category"])
     expected_drivers = category.active_drivers()
 
-    # Saves image or text depending on what the user decided to send.
-    if getattr(update.message, "document", ""):
-        file = await update.message.document.get_file()
-        image = BytesIO(await file.download_as_bytearray())
-        results = image_to_results(image, expected_drivers)
 
-    elif update.message.text:
-        text = update.message.text
-
-        try:
-            results = text_to_results(text, expected_drivers)
-        except ValueError:
-            await update.message.reply_text(
-                "C'è un errore nella formattazione del messaggio, correggilo e riprova."
-            )
-            return None
-    else:
+    text: str = update.message.text # type: ignore
+    try:
+        results = text_to_results(text, expected_drivers)
+    except ValueError:
         await update.message.reply_text(
-            "Si è verificato un errore inaspettato, riprova."
+            "C'è un errore nella formattazione del messaggio, correggilo e riprova."
         )
         return None
 
@@ -436,7 +421,6 @@ save_results_conv = ConversationHandler(
         ],
         SAVE_RESULTS: [
             CallbackQueryHandler(recognise_results, r"^confirm_quali_results$"),
-            MessageHandler(filters.ATTACHMENT, recognise_results),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), recognise_results),
         ],
         SAVE_CHANGES: [
