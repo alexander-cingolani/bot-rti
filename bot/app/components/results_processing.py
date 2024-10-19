@@ -2,6 +2,7 @@
 Contains functions used to operate on results or parts of results.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from difflib import get_close_matches
@@ -115,7 +116,7 @@ def results_to_text(results: list[Result]) -> str:
     text = ""
     for result in results:
         if result.milliseconds:
-            gap = seconds_to_text(result.milliseconds)
+            gap = milliseconds_to_text(result.milliseconds)
         else:
             gap = result.status.value
 
@@ -128,7 +129,7 @@ def results_to_text(results: list[Result]) -> str:
     return text
 
 
-def seconds_to_text(seconds: int) -> str:
+def milliseconds_to_text(ms: int) -> str:
     """Converts seconds to a user-friendly string format.
 
     Args:
@@ -138,11 +139,21 @@ def seconds_to_text(seconds: int) -> str:
     Returns:
         str: User-friendly string.
     """
-    seconds, milliseconds = divmod(seconds, 1000)
-    minutes, seconds = divmod(seconds, 60)
-    return (
-        f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"
-    )
+    hours = ms // (3600 * 1000)
+    ms = ms % (3600 * 1000)
+
+    minutes = ms // (60 * 1000)
+    ms = ms % (60 * 1000)
+
+    seconds = ms // 1000
+    milliseconds = ms % 1000
+
+    if hours > 0:
+        return f"{hours}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+    elif minutes > 0:
+        return f"{minutes}:{seconds:02}.{milliseconds:03}"
+    else:
+        return f"{seconds}.{milliseconds:03}"
 
 
 def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
@@ -154,7 +165,9 @@ def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionSt
     complete the race.
     """
 
-    pattern = re.compile(r"(?:(\d+):)?(?:(\d+):)?(\d+)(?:\.(\d+))?")
+    pattern = re.compile(
+        r"(?:(?P<minutes>\d+):)?(?P<seconds>\d+)\.(?P<milliseconds>\d+)"
+    )
     match = pattern.match(string.strip())
 
     if not match:
@@ -166,11 +179,10 @@ def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionSt
             return None, SessionCompletionStatus.dsq
         return None, SessionCompletionStatus.dnf
 
-    hours = int(match.group(1)) if match.group(1) else 0
-    minutes = int(match.group(2)) if match.group(2) else 0
-    seconds = int(match.group(3)) if match.group(3) else 0
-    milliseconds = int(match.group(4).ljust(3, "0")) if match.group(4) else 0
+    minutes = int(match.group("minutes") or 0)
+    seconds = int(match.group("seconds") or 0)
+    milliseconds = int(match.group("milliseconds") or 0)
 
-    milliseconds += (hours * 3600 + minutes * 60 + seconds) * 1000
+    milliseconds += (minutes * 60 + seconds) * 1000
 
     return milliseconds, SessionCompletionStatus.finished
