@@ -166,7 +166,7 @@ def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionSt
     """
 
     pattern = re.compile(
-        r"(?:(?P<minutes>\d+):)?(?P<seconds>\d+)\.(?P<milliseconds>\d+)"
+        r"(?:(?P<minutes>\d+):)?(?P<seconds>\d+)(?:\.(?P<milliseconds>\d+))?"
     )
     match = pattern.match(string.strip())
 
