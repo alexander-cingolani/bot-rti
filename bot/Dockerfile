@@ -25,13 +25,13 @@ COPY ./bot/app /bot/app
 
 
 # DEBUGGER ############################
-FROM base as debugger
+FROM base AS debugger
 
 RUN pip install debugpy
 
 CMD [ "python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "-m", "app.main", "-Xfrozen_modules=off" ]
 
 # PRIMARY #############################
-FROM base as primary
+FROM base AS primary
 
 CMD [ "python", "-m", "app.main" ]
