@@ -5,13 +5,12 @@ by sending screenshots captured from the game or live stream.
 """
 
 import os
-from io import BytesIO
+
 from typing import Any, cast
 
 from app import config
 from app.components.results_processing import (
     Result,
-    image_to_results,
     results_to_text,
     text_to_results,
 )
@@ -78,7 +77,6 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ConversationHandler.END
 
-    # Checks if it's possible to save results.
     if not championship.is_active():
         await update.message.reply_text("Non c'è alcun campionato attivo al momento.")
         return ConversationHandler.END
@@ -87,7 +85,6 @@ async def entry_point(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data["championship"] = championship
     user_data["results"] = {}
 
-    # Creates keyboard with the available categories in the championship.
     reply_markup = InlineKeyboardMarkup(
         [
             [
@@ -146,7 +143,6 @@ async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     user_data = cast(dict[str, Any], context.user_data)
 
-    # Saves the category selected by the user.
     category = cast(
         Category,
         user_data["championship"].categories[
@@ -175,7 +171,7 @@ async def save_session(
     user_data = cast(dict[str, Any], context.user_data)
     round = cast(Round, user_data["round"])
     session_id = int(update.callback_query.data.removeprefix("S"))
-    # Saves the session selected by the user.
+
     current_session = None
     for session in round.sessions:
         if session.id == session_id:
@@ -185,11 +181,7 @@ async def save_session(
     else:
         return ConversationHandler.END
 
-    # Asks the user for the text/screenshot of the results from the selected session.
-    text = (
-        "Inviami il testo o lo screenshot contenente"
-        f" i risultati di <b>{current_session.name}</b>."
-    )
+    text = f"Inviami i risultati di <b>{current_session.name}</b>."
     await update.callback_query.edit_message_text(text)
     return SAVE_RESULTS
 
@@ -204,46 +196,43 @@ async def recognise_results(
     category = cast(Category, user_data["category"])
     expected_drivers = category.active_drivers()
 
-    # Saves image or text depending on what the user decided to send.
-    if getattr(update.message, "document", ""):
-        file = await update.message.document.get_file()
-        image = BytesIO(await file.download_as_bytearray())
-        results = image_to_results(image, expected_drivers)
+    text: str = update.message.text  # type: ignore
 
-    elif update.message.text:
-        text = update.message.text
-
-        try:
-            results = text_to_results(text, expected_drivers)
-        except ValueError:
-            await update.message.reply_text(
-                "C'è un errore nella formattazione del messaggio, correggilo e riprova."
-            )
-            return None
-    else:
+    try:
+        results, not_found = text_to_results(text, expected_drivers)
+    except ValueError:
         await update.message.reply_text(
-            "Si è verificato un errore inaspettato, riprova."
+            "C'è un errore nella formattazione del messaggio, correggilo e riprova."
         )
         return None
 
-    # Saves the results to the correct session
     user_data["results"][user_data["current_session"]]["result_objects"] = results
 
-    # Sends the recognised results.
     results_text = results_to_text(results)
     await update.message.reply_text(results_text)
 
-    # Asks if the recognized results are correct.
-    if "NON_RICONOSCIUTO" in results_text or "/" in results_text:
-        check_results_text = (
-            "Non sono riuscito a leggere tutto, correggi ciò che non va perfavore."
-        )
+    if not_found:
+        if len(not_found) > 1:
+            check_results_text = (
+                f"I piloti {", ".join(not_found)} non sono registrati come partecipanti alla categoria."
+                "\nSe gli ID PSN sono sbagliati, copia il messaggio e inviamelo di nuovo con gli ID corretti."
+                "\nSe invece gli ID PSN sono corretti, probabilmente si tratta di un errore di configurazione "
+                "della categoria nel database."
+            )
+        else:
+            check_results_text = (
+                f"{not_found[0]} non è registrato come pilota partecipante alla categoria."
+                "\nSe l'ID PSN è sbagliato, copia il messaggio e inviamelo di nuovo con l'ID corretto."
+                "\nSe invece l'ID PSN è corretto, probabilmente si tratta di un errore di "
+                "configurazione della categoria nel database."
+            )
         await update.message.reply_text(check_results_text)
     else:
         check_results_text = (
-            "Mi pare di aver letto tutto correttamente, "
-            "verifica rapidamente che i distacchi siano giusti perfavore."
+            "Sono i risultati corretti?\nSe no, copia il messaggio "
+            "e inviamelo di nuovo con le correzioni necessarie."
         )
+
         reply_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(text="✅", callback_data="results-ok")]]
         )
@@ -261,12 +250,10 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     results = cast(list[Result], user_data["results"][session]["result_objects"])
     expected_drivers = category.active_drivers()
 
-    # Saves any corrections made to the results.
     if update.message:
-        results = text_to_results(update.message.text, expected_drivers)
+        results, _ = text_to_results(update.message.text, expected_drivers)
         user_data["results"][session]["result_objects"] = results
 
-    # The fastest lap driver is not needed for qualifying sessions.
     if session.is_quali:
         await __ask_session(update, session.round, user_data["results"])
         return SAVE_SESSION
@@ -279,7 +266,7 @@ async def save_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def __ask_fastest_lap_driver(
     update: Update, drivers: list[DriverCategory], session: Session
 ) -> None:
-    """This function updates the current message to ask which driver scored the fastest lap of the session."""
+    """Updates the current message to ask which driver scored the fastest lap of the session."""
     text = f"Inserisci il pilota che ha segnato il giro più veloce in {session.name}"
 
     driver_buttons: list[InlineKeyboardButton] = []
@@ -315,7 +302,6 @@ async def save_fastest_driver(
 
     expected_drivers = category.active_drivers()
 
-    # Saves the given driver.
     driver_id = int(update.callback_query.data.removeprefix("FL"))
     for driver_category in expected_drivers:
         if driver_id == driver_category.driver_id:
@@ -355,21 +341,21 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         best_time = 0
         if result_objects:
-            best_time = cast(int, result_objects[0].seconds)
+            best_time = cast(int, result_objects[0].milliseconds)
 
         if session.is_quali:
             for pos, result in enumerate(result_objects, start=1):
                 result.prepare_result(best_time=best_time, position=pos)
 
                 gap_to_first = None
-                if result.seconds:
-                    gap_to_first = result.seconds - best_time
+                if result.milliseconds:
+                    gap_to_first = result.milliseconds - best_time
 
                 quali_results.append(
                     QualifyingResult(
                         position=result.position,
                         category=category,
-                        laptime=result.seconds,
+                        laptime=result.milliseconds,
                         gap_to_first=gap_to_first,
                         driver=result.driver.driver,
                         round=session.round,
@@ -390,9 +376,11 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             result.prepare_result(best_time=best_time, position=pos)
 
-            gap_to_first = (result.seconds - best_time) if result.seconds else None
+            gap_to_first = (
+                (result.milliseconds - best_time) if result.milliseconds else None
+            )
 
-            participated = bool(result.seconds)
+            participated = bool(result.milliseconds)
 
             if not participated:
                 result.position = None
@@ -402,7 +390,7 @@ async def __persist_results(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 RaceResult(
                     position=result.position,
                     category=category,
-                    total_racetime=result.seconds,
+                    total_racetime=result.milliseconds,
                     gap_to_first=gap_to_first,
                     driver=result.driver.driver,
                     round=session.round,
@@ -436,7 +424,6 @@ save_results_conv = ConversationHandler(
         ],
         SAVE_RESULTS: [
             CallbackQueryHandler(recognise_results, r"^confirm_quali_results$"),
-            MessageHandler(filters.ATTACHMENT, recognise_results),
             MessageHandler(filters.Regex(r"^[^/][\s\S]{70,}$"), recognise_results),
         ],
         SAVE_CHANGES: [
@@ -450,6 +437,5 @@ save_results_conv = ConversationHandler(
             "salva_risultati",
             entry_point,
         ),
-        # CallbackQueryHandler(change_conversation_state, r"^2[7-9]$|^3[0-8]$"),
     ],
 )

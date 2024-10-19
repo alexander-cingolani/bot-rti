@@ -5,13 +5,7 @@ Contains functions used to operate on results or parts of results.
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from difflib import get_close_matches
-from io import BytesIO
-from pathlib import Path
-
-from PIL import Image, ImageFilter
-from pytesseract import image_to_string  # type: ignore
 
 from models import DriverCategory, SessionCompletionStatus
 
@@ -36,11 +30,11 @@ class Result:
     def __init__(
         self,
         driver: DriverCategory,
-        seconds: int | None,
+        milliseconds: int | None,
         status: SessionCompletionStatus = SessionCompletionStatus.dns,
     ):
         self.driver = driver
-        self.seconds = seconds
+        self.milliseconds = milliseconds
         self.position = 0
         self.fastest_lap = False
         self.status = status
@@ -50,20 +44,22 @@ class Result:
 
     def prepare_result(self, best_time: int, position: int):
         """Modifies Result to contain valid data for a RaceResult."""
-        if self.seconds is None:
+        if self.milliseconds is None:
             self.position = None
-        elif self.seconds == 0:
-            self.seconds = None
+        elif self.milliseconds == 0:
+            self.milliseconds = None
             self.position = position
         elif position == 1:
             self.position = position
-            self.seconds = best_time
+            self.milliseconds = best_time
         else:
-            self.seconds = self.seconds + best_time
+            self.milliseconds = self.milliseconds + best_time
             self.position = position
 
 
-def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[Result]:
+def text_to_results(
+    text: str, expected_drivers: list[DriverCategory]
+) -> tuple[list[Result], list[str]]:
     """This is a helper function for ask_fastest_lap callbacks.
     It receives the block of text sent by the user to correct race/qualifying results
     and transforms it into a list of Result objects. Driver psn id's don't have to be
@@ -83,26 +79,27 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         driver.driver.psn_id_or_full_name.replace(" ", ""): driver
         for driver in expected_drivers
     }
-
+    not_matched: list[str] = []
     results: list[Result] = []
     for line in text.splitlines():
         given_driver_name, gap = line.split()
         if given_driver_name not in driver_map:
             matches = get_close_matches(
-                given_driver_name, driver_map.keys(), cutoff=0.2
+                given_driver_name, driver_map.keys(), cutoff=0.3
             )
             if matches:
                 driver_name = matches[0]
             else:
                 driver_name = ""
+                not_matched.append(given_driver_name)
         else:
             driver_name = given_driver_name
 
         if driver_name:
             driver_category = driver_map.pop(driver_name)
-            seconds, status = string_to_seconds(gap)
+            milliseconds, status = string_to_milliseconds(gap)
 
-            result = Result(driver_category, seconds, status)
+            result = Result(driver_category, milliseconds, status)
             results.append(result)
 
     # Add unrecognized drivers to the results list.
@@ -111,79 +108,15 @@ def text_to_results(text: str, expected_drivers: list[DriverCategory]) -> list[R
         result = Result(driver_category, 0)
         results.append(result)
 
-    return results
-
-
-def image_to_results(
-    image: str | BytesIO | Path, expected_drivers: list[DriverCategory]
-) -> list[Result]:
-    """Transforms the results of a race or qualifying session from a screenshot
-    of the results taken from the game or the live stream.
-
-    Args:
-        session (SQLASession): SQLAlchemy orm session to use.
-        image (str): Screenshot containing the qualifying or race results.
-        expected_drivers (list[str]): Drivers which are expected to be found in
-            the screenshot. Drivers given in this list will be marked as absent if
-            not found/recognized.
-
-    Returns:
-        list[Result]: List of recognized results. Non recognized drivers
-        will have None in the driver attribute, similarly, non recognized laptimes
-        will have None in the seconds attribute.
-    """
-
-    image_file = Image.open(fp=image)
-
-    image_file = image_file.convert("L").resize(
-        [3 * _ for _ in image_file.size], Image.BICUBIC  # type: ignore
-    )
-    image_file = image_file.point(lambda p: p > 100 and p + 100)  # type: ignore
-    image_file = image_file.filter(ImageFilter.MinFilter(3))
-    # image_file = image_file.convert("L")
-    # image_file = Brightness(image_file).enhance(0.3)
-    # image_file.save("../debug/brightness.png", format="png")
-    # image_file = Contrast(image_file).enhance(2)
-    # image_file = ImageOps.grayscale(image_file)
-    # image_file = ImageOps.invert(image_file)
-    # image_file = Contrast(image_file).enhance(2)
-    # image_file = image_file.convert('1')
-    top = TOP_START
-    bottom = BOTTOM_START
-    results: list[Result] = []
-    remaining_drivers = {driver.driver.psn_id: driver for driver in expected_drivers}
-
-    for _ in range(len(expected_drivers)):
-        name_box = image_file.crop((LEFT_1, top, RIGHT_1, bottom))
-        laptime_box = image_file.crop((LEFT_2, top, RIGHT_2, bottom))
-
-        driver_psn_id: str = image_to_string(name_box).strip()
-
-        seconds_str: str = image_to_string(laptime_box)
-        seconds, status = string_to_seconds(seconds_str)
-        matches = get_close_matches(driver_psn_id, remaining_drivers.keys(), cutoff=0)
-
-        if matches and len(driver_psn_id) >= 3:
-            driver_category = remaining_drivers.pop(matches[0])
-            race_res = Result(driver_category, seconds)
-            results.append(race_res)
-
-        top += INCREMENT
-        bottom += INCREMENT
-
-    for driver_category in remaining_drivers.values():
-        race_res = Result(driver_category, None)
-        results.append(race_res)
-
-    return results
+    return results, not_matched
 
 
 def results_to_text(results: list[Result]) -> str:
     """Takes a list of results and converts it to a user-friendly message."""
     text = ""
     for result in results:
-        if result.seconds:
-            gap = seconds_to_text(result.seconds)
+        if result.milliseconds:
+            gap = milliseconds_to_text(result.milliseconds)
         else:
             gap = result.status.value
 
@@ -196,7 +129,7 @@ def results_to_text(results: list[Result]) -> str:
     return text
 
 
-def seconds_to_text(seconds: int) -> str:
+def milliseconds_to_text(ms: int) -> str:
     """Converts seconds to a user-friendly string format.
 
     Args:
@@ -206,14 +139,24 @@ def seconds_to_text(seconds: int) -> str:
     Returns:
         str: User-friendly string.
     """
-    seconds, milliseconds = divmod(seconds, 1000)
-    minutes, seconds = divmod(seconds, 60)
-    return (
-        f"{str(minutes) + ':' if minutes else ''}{int(seconds):02d}.{milliseconds:0>3}"
-    )
+    hours = ms // (3600 * 1000)
+    ms = ms % (3600 * 1000)
+
+    minutes = ms // (60 * 1000)
+    ms = ms % (60 * 1000)
+
+    seconds = ms // 1000
+    milliseconds = ms % 1000
+
+    if hours > 0:
+        return f"{hours}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+    elif minutes > 0:
+        return f"{minutes}:{seconds:02}.{milliseconds:03}"
+    else:
+        return f"{seconds}.{milliseconds:03}"
 
 
-def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
+def string_to_milliseconds(string: str) -> tuple[int | None, SessionCompletionStatus]:
     """Converts a string formatted as "mm:ss:SSS" to seconds.
     0 is returned when the gap to the winner wasn't available.
     SessionCompletionsStatus.dnf, dns or dsq is returne when one of those values is
@@ -221,10 +164,12 @@ def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]
     None is returned if the user didn't input anything, and the driver probably didn't
     complete the race.
     """
-    string = string.lower()
-    match = re.search(
-        r"([0-9]{1,2}:)?([0-9]{1,2}:){0,2}[0-9]{1,2}(\.|,)[0-9]{1,3}", string
+
+    pattern = re.compile(
+        r"(?:(?P<minutes>\d+):)?(?P<seconds>\d+)(?:\.(?P<milliseconds>\d+))?"
     )
+    match = pattern.match(string.strip())
+
     if not match:
         if string == "dns":
             return None, SessionCompletionStatus.dns
@@ -234,23 +179,10 @@ def string_to_seconds(string: str) -> tuple[int | None, SessionCompletionStatus]
             return None, SessionCompletionStatus.dsq
         return None, SessionCompletionStatus.dnf
 
-    matched_string = match.group(0)
-    matched_string = matched_string.replace(",", ".")
+    minutes = int(match.group("minutes") or 0)
+    seconds = int(match.group("seconds") or 0)
+    milliseconds = int(match.group("milliseconds") or 0)
 
-    if matched_string.count(":") == 2 and "." in matched_string:
-        t = datetime.strptime(matched_string, "%H:%M:%S.%f").time()
-    elif matched_string.count(":") == 2:
-        t = datetime.strptime(matched_string, "%H:%M:%S").time()
-    elif ":" in matched_string and "." in matched_string:
-        t = datetime.strptime(matched_string, "%M:%S.%f").time()
-    elif ":" in matched_string:
-        t = datetime.strptime(matched_string, "%H:%M:%S").time()
-    elif "." in matched_string:
-        t = datetime.strptime(matched_string, "%S.%f").time()
-    else:
-        return int(matched_string * 1000), SessionCompletionStatus.finished
+    milliseconds += (minutes * 60 + seconds) * 1000
 
-    seconds = (t.hour * 60 + t.minute) * 60 + t.second
-    decimal_part = t.microsecond / 1_000_000
-
-    return int((seconds + decimal_part) * 1000), SessionCompletionStatus.finished
+    return milliseconds, SessionCompletionStatus.finished
