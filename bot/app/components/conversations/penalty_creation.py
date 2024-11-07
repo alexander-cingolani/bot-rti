@@ -83,10 +83,14 @@ async def create_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if update.message:
         user_data["penalty"] = Penalty()
+        user_data["penalty"].licence_points = 0
+        user_data["penalty"].warnings = 0
     text = "In quale categoria è avvenuta l'infrazione?"
 
     buttons: list[InlineKeyboardButton] = []
+    user_data["categories"] = []
     for i, category in enumerate(championship.categories):
+        user_data["categories"].append(category)
         buttons.append(InlineKeyboardButton(category.name, callback_data=f"C{i}"))
 
     chunked_buttons = list(chunked(buttons, 3))

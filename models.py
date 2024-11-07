@@ -1780,7 +1780,7 @@ class RaceResult(Base):
         nullable=False,
     )
     gap_to_first: Mapped[int | None] = mapped_column(Integer)
-    total_racetime: Mapped[Integer | None] = mapped_column(Integer)
+    total_racetime: Mapped[int | None] = mapped_column(Integer)
     mu: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
     sigma: Mapped[Decimal | None] = mapped_column(Numeric(precision=6, scale=3))
 
