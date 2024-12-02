@@ -45,7 +45,7 @@ Pygments==2.18.0
 pyjwt==2.9.0
 
 python-dotenv==1.0.1
-python-multipart==0.0.9
+python-multipart==0.0.18
 python-telegram-bot==21.6
 pytz==2024.1
 pytz-deprecation-shim==0.1.0.post0
